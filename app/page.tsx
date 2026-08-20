@@ -45,6 +45,15 @@ const REMOTE_MODELS_STORAGE_KEY = "findjoy:remote-models";
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
 const CHILDHOOD_BOUNDARY = 15;
 
+type LifeSummary = {
+  lifeId: string;
+  age: number;
+  city: string;
+  events: number;
+  dead: boolean;
+  updatedAt: string;
+};
+
 const defaultModelConfig: ModelConfig = {
   providerId: "openai",
   apiKey: "",
@@ -173,6 +182,9 @@ export default function Home() {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showGenderDialog, setShowGenderDialog] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyLives, setHistoryLives] = useState<LifeSummary[] | null>(null);
+  const [historyDetail, setHistoryDetail] = useState<import("../lib/life").LifeState | null>(null);
   const [remoteModels, setRemoteModels] = useState<Record<string, ModelOption[]>>(loadRemoteModels);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [modelRefreshMessage, setModelRefreshMessage] = useState("");
@@ -324,10 +336,31 @@ export default function Home() {
     setPhase("start");
   }
 
+  async function openHistory() {
+    setHistoryDetail(null);
+    setShowHistory(true);
+    if (historyLives !== null) return;
+    try {
+      const response = await fetch("/api/lives");
+      const payload = (await response.json()) as { lives?: LifeSummary[] };
+      setHistoryLives(Array.isArray(payload.lives) ? payload.lives : []);
+    } catch {
+      setHistoryLives([]);
+    }
+  }
+
+  async function loadLifeDetail(lifeId: string) {
+    try {
+      const response = await fetch(`/api/life/${lifeId}`);
+      const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
+      if (payload.state) setHistoryDetail(payload.state);
+    } catch { /* keep list visible */ }
+  }
+
   return (
     <main className={`page page--${phase}`}>
       <header className="topbar" aria-label="Primary navigation">
-        {phase === "event" ? <p className="current-age">{life.age} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></>}
+        {phase === "event" ? <p className="current-age">{life.age} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><button className="history-link" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></>}
       </header>
 
       {showSettings && (
@@ -343,6 +376,45 @@ export default function Home() {
       )}
 
       {requestError && <p className="request-error" role="alert">{requestError}</p>}
+
+      {showHistory && (
+        <div className="history-modal" role="dialog" aria-modal="true" aria-label="过往人生">
+          <div className="history-card">
+            <div className="history-head">
+              <p className="eyebrow">PAST LIVES</p>
+              <button className="history-close" onClick={() => { setHistoryDetail(null); setShowHistory(false); }} aria-label="关闭过往人生">×</button>
+            </div>
+            {historyDetail ? (
+              <div className="history-detail">
+                <button className="text-button" onClick={() => setHistoryDetail(null)}>← 返回列表</button>
+                <p className="history-detail-meta">{historyDetail.basic.city} · {historyDetail.basic.age} 岁 · {historyDetail.history.length} 个节点{historyDetail.dead ? " · 已故" : " · 在世"}</p>
+                {historyDetail.history.length === 0 && <p className="history-note">这局人生还没有留下任何事件。</p>}
+                {historyDetail.history.map((h, index) => (
+                  <article className="history-event" key={index}>
+                    <p className="history-event-title"><strong>{h.age} 岁</strong> · {h.title}</p>
+                    <p>{h.story}</p>
+                    {h.choiceText && <p className="history-choice">你选择了：「{h.choiceText}」</p>}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="history-list">
+                {historyLives === null
+                  ? <p className="history-note">正在读取…</p>
+                  : historyLives.length === 0
+                    ? <p className="history-note">还没有人生记录，去开始第一段人生吧。</p>
+                    : historyLives.map((item) => (
+                      <button className="history-item" key={item.lifeId} onClick={() => loadLifeDetail(item.lifeId)}>
+                        <span className="history-item-time">{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="history-item-main">{item.city} · {item.age} 岁 · {item.events} 个节点</span>
+                        <span className={`history-item-status ${item.dead ? "is-dead" : ""}`}>{item.dead ? "已故" : "在世"}</span>
+                      </button>
+                    ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showGenderDialog && (
         <div className="gender-modal" role="dialog" aria-modal="true" aria-label="选择性别">
