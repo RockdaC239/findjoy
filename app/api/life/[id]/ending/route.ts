@@ -7,6 +7,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const state = lifeStore.get(id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
   const body = await request.json().catch(() => ({}));
-  const ending = await generateEnding(state, sanitizeModelConfig(body.modelConfig));
-  return NextResponse.json({ ending });
+  try {
+    const ending = await generateEnding(state, sanitizeModelConfig(body.modelConfig));
+    return NextResponse.json({ ending });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "人生回顾生成失败";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }

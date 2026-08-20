@@ -42,7 +42,7 @@ type ModelOption = { id: string; label: string };
 
 const MODEL_CONFIG_STORAGE_KEY = "findjoy:model-config";
 const REMOTE_MODELS_STORAGE_KEY = "findjoy:remote-models";
-const LIFE_REQUEST_TIMEOUT_MS = 35_000;
+const LIFE_REQUEST_TIMEOUT_MS = 90_000;
 
 const defaultModelConfig: ModelConfig = {
   providerId: "openai",
@@ -265,7 +265,11 @@ export default function Home() {
       }
       throw new Error("Life stream ended before completion");
     } catch (error) {
-      setRequestError(error instanceof DOMException && error.name === "TimeoutError" ? "模型响应超时，请检查供应商、Key 和模型；你也可以暂时清空 Key 使用本地剧情。" : "人生服务暂时不可用，请检查模型设置后重试。");
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        setRequestError("模型响应超时（超过 90 秒），请稍后重试或更换模型。");
+      } else {
+        setRequestError(error instanceof Error && error.message ? error.message : "人生服务暂时不可用，请检查模型设置后重试。");
+      }
       return null;
     } finally {
       setIsLoading(false);
