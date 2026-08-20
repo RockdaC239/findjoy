@@ -1,5 +1,6 @@
 import { applyNextEvent, createStarterLife } from "../../../../lib/life";
-import { buildTranscriptUserContent, OPENING_GENRES, sanitizeModelConfig, serializeTranscriptEvent, streamNextEvent, type TranscriptMessage } from "../../../../lib/model-adapter";
+import { backgroundToFinance, backgroundToFlags, rollBackground } from "../../../../lib/background";
+import { buildTranscriptUserContent, sanitizeModelConfig, serializeTranscriptEvent, streamNextEvent, type TranscriptMessage } from "../../../../lib/model-adapter";
 import { lifeStore } from "../../../../lib/life-store";
 import { encodeSseMessage } from "../../../../lib/sse";
 
@@ -7,10 +8,15 @@ const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cac
 
 export async function POST(request: Request) {
   const input = await request.json().catch(() => ({}));
-  // 开局基调随机轮换（安稳日常/机会降临/家庭变故/平静起点），写入 flags 后本局固定，
-  // 系统提示词据此生成开局，避免"变故型开局"成为默认。
-  const openingGenre = OPENING_GENRES[Math.floor(Math.random() * OPENING_GENRES.length)];
-  const state = lifeStore.set({ ...createStarterLife(input), flags: { openingGenre } });
+  // 四维出身档案随机生成（家庭经济 × 家庭结构 × 开局事件 × 天赋，600 种组合），
+  // 经济底色写入初始财务状态，档案写入 flags 并作为本局系统提示词的固定后缀。
+  const background = rollBackground();
+  const starter = createStarterLife(input);
+  const state = lifeStore.set({
+    ...starter,
+    finance: { ...starter.finance, ...backgroundToFinance(background) },
+    flags: backgroundToFlags(background),
+  });
   const transcript: TranscriptMessage[] = [];
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

@@ -391,7 +391,12 @@ export default function Home() {
             {historyDetail ? (
               <div className="history-detail">
                 <button className="text-button" onClick={() => setHistoryDetail(null)}>← 返回列表</button>
-                <p className="history-detail-meta">{historyDetail.basic.city} · {historyDetail.basic.age} 岁 · {historyDetail.history.length} 个节点{historyDetail.dead ? " · 已故" : " · 在世"}</p>
+                <p className="history-detail-meta">{historyDetail.basic.city} · {historyDetail.basic.age} 岁 · {historyDetail.history.length} 个节点{historyDetail.dead ? " · 已故" : " · 在世"}
+                  {(() => {
+                    const bg = [historyDetail.flags.bgEconomy, historyDetail.flags.bgStructure, historyDetail.flags.bgEvent, historyDetail.flags.bgTalent].filter((v): v is string => typeof v === "string");
+                    return bg.length === 4 ? ` · 出身 ${bg.join("·")}` : "";
+                  })()}
+                </p>
                 {historyDetail.history.length === 0 && <p className="history-note">这局人生还没有留下任何事件。</p>}
                 {historyDetail.history.map((h, index) => (
                   <article className="history-event" key={index}>

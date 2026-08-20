@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, OPENING_GENRES, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
 describe("model configuration", () => {
@@ -143,9 +144,43 @@ describe("model configuration", () => {
   it("diagnoses the exact contract gate that failed", () => {
     expect(diagnoseGeneratedEvent({ timePassed: 2, event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBe("story 缺失或为空");
     expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBe("event.title 缺失或为空");
-    expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "事业" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toContain("event.type 非法");
+    expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "xyz" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toContain("event.type 非法");
     expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }] })).toContain("choices 少于 2");
     expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBeNull();
+  });
+
+  it("maps Chinese or alias event types to the English enum instead of failing the contract", () => {
+    const base = { timePassed: 2, story: "s", event: { title: "x", type: "事业" as string }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] };
+    expect(diagnoseGeneratedEvent(base)).toBeNull();
+    expect(normalizeGeneratedEvent(base)?.event.type).toBe("career");
+
+    const cases: Array<[string, string]> = [
+      ["职业", "career"], ["家庭", "family"], ["健康", "health"], ["身体", "health"],
+      ["爱情", "relationship"], ["感情", "relationship"], ["财务", "finance"], ["经济", "finance"],
+      ["其他", "random"], ["意外", "random"], ["Career", "career"], [" career ", "career"],
+    ];
+    for (const [alias, expected] of cases) {
+      expect(normalizeGeneratedEvent({ ...base, event: { title: "x", type: alias } })?.event.type).toBe(expected);
+    }
+    // 完全未知的值仍然严格失败
+    expect(diagnoseGeneratedEvent({ ...base, event: { title: "x", type: "命运之外" } })).toContain("event.type 非法");
+  });
+
+  it("accepts a choices object map as well as an array", () => {
+    const normalized = normalizeGeneratedEvent({
+      timePassed: 2,
+      story: "s",
+      event: { type: "career", title: "x" },
+      choices: { A: "选择一", B: "选择二" },
+    });
+    expect(normalized?.choices).toEqual([{ id: "A", text: "选择一" }, { id: "B", text: "选择二" }]);
+  });
+
+  it("repairs fenced or padded JSON before parsing instead of retrying", () => {
+    expect(parseGeneratedJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+    expect(parseGeneratedJson('前缀文字 {"a":1} 后缀文字')).toEqual({ a: 1 });
+    expect(parseGeneratedJson('  {"a":1}  ')).toEqual({ a: 1 });
+    expect(() => parseGeneratedJson("完全不是 JSON")).toThrow(ModelError);
   });
 
   it("diagnoses a well-formed ending as passing", () => {
@@ -277,30 +312,25 @@ describe("model configuration", () => {
   });
 });
 
-describe("opening genre", () => {
-  it("returns the base prompt without a genre directive", () => {
+describe("life background system prompt", () => {
+  it("returns the base prompt without a background profile", () => {
     expect(buildSystemPrompt(true)).toBe(buildSystemPrompt(true, undefined));
     expect(buildSystemPrompt(true)).toContain("开局第一个事件更要重要");
   });
 
-  it("appends the fixed per-game genre directive to the system prompt", () => {
-    const prompt = buildSystemPrompt(true, "安稳日常");
-    expect(prompt).toContain("【本局开局基调】安稳日常");
-    expect(prompt).toContain("不写家庭困境，不写亲人患病");
-  });
-
-  it("covers all four genres and keeps 家庭变故 as only one of them", () => {
-    expect(OPENING_GENRES).toHaveLength(4);
-    expect(OPENING_GENRES).toContain("家庭变故");
-    for (const genre of OPENING_GENRES) {
-      expect(buildSystemPrompt(false, genre)).toContain(`【本局开局基调】${genre}`);
-    }
-  });
-
-  it("reads the per-game genre from state flags when building the request", () => {
-    const state = { ...createStarterLife(), flags: { openingGenre: "机会降临" } };
-    const prompt = buildSystemPrompt(false, state.flags.openingGenre as "机会降临");
-    expect(prompt).toContain("【本局开局基调】机会降临");
+  it("appends the fixed per-game background profile to the system prompt", () => {
+    const background: LifeBackground = { economy: "小康", structure: "双亲完整", event: "机会降临", talent: "学业" };
+    const prompt = buildSystemPrompt(true, background);
+    expect(prompt).toContain("【本局出身档案】");
+    expect(prompt).toContain("家庭经济：小康");
+    expect(prompt).toContain("开局事件基调：机会降临");
     expect(prompt).toContain("机会如何落到你面前");
+  });
+
+  it("reads the per-game background from state flags", () => {
+    const state = { ...createStarterLife(), flags: backgroundToFlags({ economy: "大富", structure: "收养", event: "家庭变故", talent: "无" }) };
+    const prompt = buildSystemPrompt(false, flagsToBackground(state.flags));
+    expect(prompt).toContain("家庭经济：大富");
+    expect(prompt).toContain("家庭结构：收养");
   });
 });
