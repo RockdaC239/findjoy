@@ -70,7 +70,7 @@ describe("model configuration", () => {
       history: [{ age: 18, title: "离开家" }, { age: 22, title: "第一次工作" }],
       majorMemories: ["你在离开家时感到不舍。"],
       psychology: { valueProfile: { 关系: 0.8 }, behaviorPatterns: ["会为重要关系停留"] },
-    } as never;
+    } as unknown as import("./life").LifeState;
     const prompt = JSON.parse(buildModelPrompt(state, { id: "A", text: "接受新的工作机会" })) as Record<string, unknown>;
 
     expect(prompt.life_state).toEqual(state);
