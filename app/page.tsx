@@ -416,7 +416,7 @@ export default function Home() {
                     return (
                       <button className={`choice-card ${choice ? "choice-card--revealed" : ""}`} key={id} disabled={!choice || isLoading} onClick={() => choice && choose(choice.id)}>
                         <span className="choice-card-back" aria-hidden="true">?</span>
-                        <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{selectedChoice === choice?.id ? "人生正在继续" : choice?.text}</strong><b aria-hidden="true">↗</b></span>
+                        <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{selectedChoice === choice?.id ? "人生正在继续" : `“${choice?.text ?? ""}”`}</strong><b aria-hidden="true">↗</b></span>
                       </button>
                     );
                   })}
