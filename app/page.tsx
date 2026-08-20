@@ -396,13 +396,7 @@ export default function Home() {
             {life.age < CHILDHOOD_BOUNDARY ? (
               <>
                 <p className="decision-label">命运在继续。</p>
-                <div className="choice-cards">
-                  {[0, 1, 2].map((index) => (
-                    <div className="choice-card choice-card--placeholder" key={index} aria-hidden="true">
-                      <span className="choice-card-back">?</span>
-                    </div>
-                  ))}
-                </div>
+                <div className="fate-spacer" aria-hidden="true"></div>
                 <button className="continue-button" onClick={continueLife} disabled={isLoading}>
                   {isLoading ? "命运正在展开…" : "继续"}
                 </button>
