@@ -118,6 +118,28 @@ describe("model configuration", () => {
     expect(result).not.toBeNull();
   });
 
+  it("accepts a childhood event without choices (no-choice phase)", () => {
+    const result = normalizeGeneratedEvent({
+      timePassed: 5,
+      story: "五岁那年，父亲下了岗，家里一夜之间变得安静。",
+      event: { type: "family", title: "父亲下岗", importance: 0.8 },
+      objectiveChanges: { incomeYearly: 30000 },
+      memory: "父亲下岗那年，你第一次感受到家里的安静。",
+    }, false);
+
+    expect(result).not.toBeNull();
+    expect(result!.choices).toEqual([]);
+  });
+
+  it("rejects a childhood event that forgot its story", () => {
+    const result = normalizeGeneratedEvent({
+      timePassed: 5,
+      event: { type: "family", title: "父亲下岗", importance: 0.8 },
+    }, false);
+
+    expect(result).toBeNull();
+  });
+
   it("diagnoses the exact contract gate that failed", () => {
     expect(diagnoseGeneratedEvent({ timePassed: 2, event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBe("story 缺失或为空");
     expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBe("event.title 缺失或为空");

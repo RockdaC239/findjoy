@@ -43,6 +43,7 @@ type ModelOption = { id: string; label: string };
 const MODEL_CONFIG_STORAGE_KEY = "findjoy:model-config";
 const REMOTE_MODELS_STORAGE_KEY = "findjoy:remote-models";
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
+const CHILDHOOD_BOUNDARY = 15;
 
 const defaultModelConfig: ModelConfig = {
   providerId: "openai",
@@ -304,6 +305,19 @@ export default function Home() {
     setSelectedChoice(null);
   }
 
+  async function continueLife() {
+    setSelectedChoice("continuing");
+    const payload = await requestLife(`/api/life/${life.lifeId}/next`);
+    if (isRecord(payload) && payload.ended === true) {
+      const ending = await requestLife(`/api/life/${life.lifeId}/ending`);
+      setReview(parseReview(ending, life));
+      setPhase("review");
+    } else if (payload) {
+      setLife(parseLife(payload));
+    }
+    setSelectedChoice(null);
+  }
+
   function restart() {
     setLife(demoLife);
     setReview(demoReview);
@@ -379,18 +393,29 @@ export default function Home() {
             </p>
           </div>
           <div className="decision-area" aria-label="人生决策">
-            <p className="decision-label">做出你的选择。</p>
-            <div className="choice-cards">
-              {["A", "B", "C"].map((id, index) => {
-                const choice = isLoading ? streamingEvent.choices[index] : life.choices[index];
-                return (
-                  <button className={`choice-card ${choice ? "choice-card--revealed" : ""}`} key={id} disabled={!choice || isLoading} onClick={() => choice && choose(choice.id)}>
-                    <span className="choice-card-back" aria-hidden="true">?</span>
-                    <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{selectedChoice === choice?.id ? "人生正在继续" : choice?.text}</strong><b aria-hidden="true">↗</b></span>
-                  </button>
-                );
-              })}
-            </div>
+            {life.age < CHILDHOOD_BOUNDARY ? (
+              <>
+                <p className="decision-label">命运在继续。</p>
+                <button className="continue-button" onClick={continueLife} disabled={isLoading}>
+                  {isLoading ? "命运正在展开…" : "继续"}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="decision-label">做出你的选择。</p>
+                <div className="choice-cards">
+                  {["A", "B", "C"].map((id, index) => {
+                    const choice = isLoading ? streamingEvent.choices[index] : life.choices[index];
+                    return (
+                      <button className={`choice-card ${choice ? "choice-card--revealed" : ""}`} key={id} disabled={!choice || isLoading} onClick={() => choice && choose(choice.id)}>
+                        <span className="choice-card-back" aria-hidden="true">?</span>
+                        <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{selectedChoice === choice?.id ? "人生正在继续" : choice?.text}</strong><b aria-hidden="true">↗</b></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
             <button className="rebirth-button" onClick={restart} type="button">重生</button>
           </div>
         </section>

@@ -16,7 +16,22 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
 - choices：这个事件带来的 2 至 3 个真正不同且合理的关键抉择，每项必须包含 id 和 text。
 - objectiveChanges：本次事件造成的客观变化，可为空对象。
 - memory：一句话浓缩这次事件。`;
+
+const CHILDHOOD_SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实、复杂、不确定的人生，不定义幸福。全程只用第二人称“你”称呼玩家。禁止出现任何人物姓名、昵称、英文名、姓名占位符；其他人物只能使用关系或角色称谓，例如父亲、母亲、同学、伴侣、老师、邻居。
+
+你正处在童年阶段（15 岁以下）。这个阶段的孩子无法决定人生走向：家庭变故、迁徙、升学、经济状况都由命运和大人的决定塑造。因此绝对不要生成任何 choices（选择），只推进命运本身。人生会自然过渡到成年后的自主选择阶段。
+
+只返回一个 JSON 对象，不要 Markdown 代码块，不要任何额外文字或解释。必须严格使用下面的 camelCase 字段（注意：没有 choices 字段），并按此顺序输出（story 在前、event 在后）：
+{"timePassed":5,"story":"...","event":{"type":"family","title":"...","importance":0.8},"objectiveChanges":{},"memory":"..."}
+字段含义：
+- story：这段童年里，你的人生现状精准速写（60 至 150 字）。只描述“命运把你带到了哪里、你长成了什么样”，不写任何选择。
+- event：这段童年里发生的最重要的一件事（家庭变故、迁徙、入学、亲人生病等），必须是重要节点；title 用一句话点题，展示在 story 之后。
+- event.type 只能是英文枚举值之一：career、relationship、health、finance、random、family（不要使用中文或其它单词）。
+- timePassed：时间跳跃（建议 4~7 年，童年可以大幅跳跃）。
+- objectiveChanges：这段童年造成的客观变化，可为空对象。
+- memory：一句话浓缩这段童年。`;
 const occupations = ["产品经理", "软件工程师", "教师", "设计师", "研究员"];
+export const CHILDHOOD_BOUNDARY = 15;
 export const MODEL_REQUEST_TIMEOUT_MS = 60_000;
 export const MAX_MODEL_ATTEMPTS = 3;
 
@@ -160,7 +175,8 @@ function camelToSnake(key: string) {
 }
 
 // 诊断哪一道契约关卡失败：返回 null 表示通过，否则返回具体原因。
-export function diagnoseGeneratedEvent(value: unknown): string | null {
+// expectChoices=false 表示童年阶段，不要求 choices 字段。
+export function diagnoseGeneratedEvent(value: unknown, expectChoices = true): string | null {
   if (!value || typeof value !== "object") return "返回内容不是 JSON 对象";
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
@@ -168,7 +184,7 @@ export function diagnoseGeneratedEvent(value: unknown): string | null {
   if (typeof candidate.story !== "string" || !candidate.story.trim()) return "story 缺失或为空";
   if (typeof event.title !== "string" || !event.title.trim()) return "event.title 缺失或为空";
   if (!EVENT_TYPES.includes(event.type as (typeof EVENT_TYPES)[number])) return `event.type 非法：${String(event.type)}（应为 career/relationship/health/finance/random/family 之一）`;
-  if (normalizeChoices(candidate.choices).length < 2) return "choices 少于 2 个有效选项（每项需 id + 非空 text）";
+  if (expectChoices && normalizeChoices(candidate.choices).length < 2) return "choices 少于 2 个有效选项（每项需 id + 非空 text）";
   const texts = [candidate.story, candidate.memory, event.title, ...normalizeChoices(candidate.choices).map((item) => item.text)]
     .filter((item): item is string => typeof item === "string");
   if (texts.some(containsNameInstruction)) return "文本含姓名指示词（名叫/名字叫/叫作…）";
@@ -176,14 +192,14 @@ export function diagnoseGeneratedEvent(value: unknown): string | null {
 }
 
 // 严格契约：任何关键字段缺失、类型非法或含姓名指示词都返回 null，调用方抛错。
-export function normalizeGeneratedEvent(value: unknown): NextEvent | null {
-  if (diagnoseGeneratedEvent(value) !== null) return null;
+export function normalizeGeneratedEvent(value: unknown, expectChoices = true): NextEvent | null {
+  if (diagnoseGeneratedEvent(value, expectChoices) !== null) return null;
   const candidate = value as Record<string, unknown>;
   const event = candidate.event as Record<string, unknown>;
   const story = (candidate.story as string).trim();
   const title = (event.title as string).trim();
   const type = event.type as NextEvent["event"]["type"];
-  const choices = normalizeChoices(candidate.choices);
+  const choices = expectChoices ? normalizeChoices(candidate.choices) : [];
   return {
     timePassed: Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
     story,
@@ -221,13 +237,15 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const config = resolveModelConfig(requestConfig);
   const { apiKey, baseUrl, model } = config;
   if (!apiKey) throw new ModelError("未配置 API Key，请在模型设置中填写后重试");
+  const expectChoices = state.basic.age >= CHILDHOOD_BOUNDARY;
+  const systemPrompt = expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
   const prompt = buildModelPrompt(state, choice);
   let lastError: ModelError = new ModelError("模型请求失败");
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
     try {
-      const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS), body: JSON.stringify({ model, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }] }) });
+      const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS), body: JSON.stringify({ model, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }] }) });
       if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
       if (!response.body) throw new ModelError("模型服务未返回内容");
       const reader = response.body.getReader();
@@ -262,18 +280,18 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       } catch {
         throw new ModelError("模型返回内容无法解析为 JSON");
       }
-      const reason = diagnoseGeneratedEvent(generated);
+      const reason = diagnoseGeneratedEvent(generated, expectChoices);
       if (reason) {
-        logModelDiagnostic("event-contract-fail", { age: state.basic.age, attempt, reason, raw: generatedText });
-        throw new ModelError(`模型返回内容未满足事件契约：${reason}`);
+        logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason, raw: generatedText });
+        throw new ModelError(`模型返回内容未满足${expectChoices ? "事件" : "童年"}契约：${reason}`);
       }
-      const parsed = normalizeGeneratedEvent(generated);
+      const parsed = normalizeGeneratedEvent(generated, expectChoices);
       if (!parsed) throw new ModelError("模型返回内容未满足事件契约");
       const usage: ModelUsage = { promptTokens: num(usageRaw.prompt_tokens), completionTokens: num(usageRaw.completion_tokens), totalTokens: num(usageRaw.total_tokens), estimatedCostUsd: num(usageRaw.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageRaw.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model };
       return { ...parsed, usage };
     } catch (error) {
       lastError = toModelError(error);
-      logModelDiagnostic("event-attempt-fail", { age: state.basic.age, attempt, error: lastError.message, raw: generatedText });
+      logModelDiagnostic("event-attempt-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, error: lastError.message, raw: generatedText });
     }
     if (attempt < MAX_MODEL_ATTEMPTS) yield { retry: true };
   }
