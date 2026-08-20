@@ -1,4 +1,4 @@
-import type { LifeState, LifeChoice, NextEvent, ModelUsage, LifeEnding } from "./life";
+import type { LifeState, LifeChoice, LifeEvent, NextEvent, ModelUsage, LifeEnding } from "./life";
 import { getProvider, resolveProviderModel } from "./provider-catalog";
 import { buildBackgroundDirective, flagsToBackground, type LifeBackground } from "./background";
 
@@ -18,7 +18,8 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
 - event.type 只能是英文枚举值之一：career、relationship、health、finance、random、family（不要使用中文或其它单词）。
 - choices：这个事件带来的 2 至 3 个真正不同且合理的关键抉择，每项必须包含 id 和 text。
   **硬约束：三个选项之间必须有清晰的价值张力，每个选项必须代表一种不同的人生价值或方向**（例如放弃/坚持、个人/家庭、安稳/冒险、服从/反叛、理性/感性、短利/长利、逃避/面对、向内/向外等），不能是同一种态度的不同措辞（例如不能三个都是"接受/适应/顺其自然"）。选 A、选 B、选 C，必须让你的人生走向不同分支；如果三个选项读起来意思接近，说明你写错了。
-  价值张力的方向要多样化：除了"离开/留下、个人/家庭、安稳/冒险"，还可以是"理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立"等；不要每次都是"冲出去/留下来/折中"这一套模板，同一局内不同节点的张力轴也要变化。
+  价值张力的方向要多样化：除了"离开/留下、个人/家庭、安稳/冒险"，还可以是"理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对"等；不要每次都是"冲出去/留下来/折中"这一套模板。
+  **张力轴轮换硬约束：本次事件的张力轴必须与上一个事件的张力轴不同。** 上一条事件的选项用的是什么价值轴，这一条就换一条别的轴。例如上一条是"追梦/顾家、闯荡/安稳"，这一条就改写成"理性/感性"（如：按数据和利弊判断 vs 凭直觉和热爱 vs 先不表态再想想）、"名声/自由"（如：要名气和认可 vs 要自在随心 vs 两者都想要一点）、"守成/创新"（如：维持现状 vs 大胆变革 vs 小步试水）、"独行/合作"、"服从/反叛"、"短利/长利"、"逃避/面对"等。同一局内相邻两个节点绝不能用同一条价值轴；连续两三个节点都出现"闯出去/留守/折中"这类三件套，说明你没有换轴。
   写法建议：选项文本里直接点出你要表达的价值立场（如"为了撑住这个家，..."、"我不想被这件事拖住，..."、"找专业的人来帮忙，比我自己扛更靠谱..."），让玩家一眼看出区别。
   **连续性硬约束**：事件必须随时间和玩家的选择推进。严禁原样或近乎原样地复述上一条事件的故事、标题或选项——即使玩家选择了"维持现状、顺其自然"，也要写出新的处境、新的变化和新的选项；连续两个节点绝不能是同一个事件。
 - objectiveChanges：本次事件造成的客观变化，可为空对象。
@@ -226,6 +227,50 @@ function normalizeChoices(value: unknown): LifeChoice[] {
   return choices;
 }
 
+// 价值张力轴检测：把一组选项归类到它所对抗的价值轴（如“闯荡/留守、理性/感性、服从/反叛…”）。
+// 用于“相邻节点不得使用同一条张力轴”的硬契约，阻止模型反复套用“闯出去/留守/折中”同一套模板。
+// 返回主导张力轴的 key（如 "闯荡/留守"），检测不出明显对抗时返回 null（不触发该契约）。
+interface ValueAxis { key: string; poles: [RegExp, RegExp] }
+const VALUE_AXES: ValueAxis[] = [
+  { key: "闯荡/留守", poles: [/闯|出去|外地|大城市|打拼|拼一把|赌一把|闯荡|搏|创业|开店|追梦|追|更大的|见世面|闯一闯/, /留守|留在家|本地|照顾家里|顾家|早工作|减轻家里|安稳|稳定|陪在父母|家里|安家|省钱|托付/] },
+  { key: "理性/感性", poles: [/理性|理智|分析|利弊|数据|现实|稳妥|靠谱|计算|权衡/, /感性|感觉|直觉|热爱|心动|喜欢|感情|冲动|随性/] },
+  { key: "服从/反叛", poles: [/听.{0,3}(父母|家里|老师|家人)|按.{0,4}安排|服从|接受安排|顺着|按部就班/, /反叛|反抗|不听话|坚持自己|自己做主|闹翻|违抗|逆着/] },
+  { key: "短利/长利", poles: [/眼前|当下|短期|尽快|快钱|立刻|马上|省事|现成|先赚/, /长远|长期|未来|积累|沉淀|一辈子|打基础|厚积|一劳永逸|走长远/] },
+  { key: "向内/向外", poles: [/独处|独自|安静|内敛|自己|一个人的|沉默|低调|向内|躲/, /交朋友|社交|人脉|走出去|认识|结伴|加入|融入|外向|主动接近/] },
+  { key: "守成/创新", poles: [/维持|保持现状|守住|不折腾|照旧|现状|稳妥|守成|稳扎稳打/, /创新|突破|转型|尝试新|变革|探索|开辟|开创|试水|扩充/] },
+  { key: "独行/合作", poles: [/自己|独自|单干|一个人扛|自己扛/, /合作|合伙|团队|找人|一起|分担|结盟|联手|入股/] },
+  { key: "名声/自由", poles: [/名声|名气|认可|荣誉|奖项|头衔|地位|别人眼|出名|影响力/, /自由|自在|随心|不被束缚|不被安排|做自己|无拘/] },
+  { key: "合群/独立", poles: [/合群|随大流|跟大家|融入|别人都一样/, /独立|独来独往|不合群|做自己/] },
+  { key: "逃避/面对", poles: [/逃避|回避|躲|拖着|放着不管|不去想|算了/, /面对|直面|正视|承担|面对现实|扛|处理/] },
+];
+
+// 取历史里最近一个有 choices 的节点（即上一轮给过玩家的决策节点），
+// 用于把它的价值张力轴作为本轮“不得重复”的参照。
+export function lastChoiceNode(state: Pick<LifeState, "history">): Pick<LifeEvent, "choices"> | undefined {
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const node = state.history[i];
+    if (node.choices && node.choices.length >= 2) return node;
+  }
+  return undefined;
+}
+export function detectValueAxis(choices: LifeChoice[] | undefined): string | null {
+  if (!choices || choices.length === 0) return null;
+  let best: { key: string; score: number } | null = null;
+  for (const axis of VALUE_AXES) {
+    let hitsA = 0;
+    let hitsB = 0;
+    for (const choice of choices) {
+      if (axis.poles[0].test(choice.text)) hitsA += 1;
+      if (axis.poles[1].test(choice.text)) hitsB += 1;
+    }
+    if (hitsA > 0 && hitsB > 0) {
+      const score = hitsA + hitsB;
+      if (!best || score > best.score) best = { key: axis.key, score };
+    }
+  }
+  return best?.key ?? null;
+}
+
 function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"] {
   if (!value || typeof value !== "object") return {};
   const input = value as Record<string, unknown>;
@@ -275,24 +320,32 @@ function withRetryCorrection(attempt: number, messages: NextEventMessage[], fail
 
 // 诊断哪一道契约关卡失败：返回 null 表示通过，否则返回具体原因。
 // expectChoices=false 表示童年阶段，不要求 choices 字段。
-export function diagnoseGeneratedEvent(value: unknown, expectChoices = true): string | null {
+// previousChoices=上一个节点的选项，用于“相邻节点张力轴不得相同”的轮换硬约束。
+export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined): string | null {
   if (!value || typeof value !== "object") return "返回内容不是 JSON 对象";
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
   if (!event) return "缺少 event 对象";
   if (typeof candidate.story !== "string" || !candidate.story.trim()) return "story 缺失或为空";
   if (typeof event.title !== "string" || !event.title.trim()) return "event.title 缺失或为空";
-  if (!normalizeEventType(event.type)) return `event.type 非法：${String(event.type)}（应为 career/relationship/health/finance/random/family 之一）`;
+  if (!normalizeEventType(event.type)) return "event.type 非法：" + String(event.type) + "（应为 career/relationship/health/finance/random/family 之一）";
   if (expectChoices && normalizeChoices(candidate.choices).length < 2) return "choices 少于 2 个有效选项（每项需 id + 非空 text）";
+  if (expectChoices) {
+    const currentAxis = detectValueAxis(normalizeChoices(candidate.choices));
+    const previousAxis = detectValueAxis(previousChoices);
+    if (currentAxis && previousAxis && currentAxis === previousAxis) {
+      return "价值张力轴与上一节点重复（都是\"" + currentAxis + "\"）。相邻节点必须换一条价值轴：上一节点已是\"" + currentAxis + "\"，本次请改用其它张力轴（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要再用\"闯出去/留守/折中\"同套模板。";
+    }
+  }
   const texts = [candidate.story, candidate.memory, event.title, ...normalizeChoices(candidate.choices).map((item) => item.text)]
     .filter((item): item is string => typeof item === "string");
   if (texts.some(containsNameInstruction)) return "文本含姓名指示词（名叫/名字叫/叫作…）";
   return null;
 }
 
-// 严格契约：任何关键字段缺失、类型非法或含姓名指示词都返回 null，调用方抛错。
-export function normalizeGeneratedEvent(value: unknown, expectChoices = true): NextEvent | null {
-  if (diagnoseGeneratedEvent(value, expectChoices) !== null) return null;
+// 严格契约：任何关键字段缺失、类型非法、含姓名指示词或张力轴重复都返回 null，调用方抛错。
+export function normalizeGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined): NextEvent | null {
+  if (diagnoseGeneratedEvent(value, expectChoices, previousChoices) !== null) return null;
   const candidate = value as Record<string, unknown>;
   const event = candidate.event as Record<string, unknown>;
   const story = (candidate.story as string).trim();
@@ -464,12 +517,13 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
         }
       }
       const generated = parseGeneratedJson(generatedText || "{}");
-      const reason = diagnoseGeneratedEvent(generated, expectChoices);
+      const previousChoices = lastChoiceNode(state)?.choices;
+      const reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices);
       if (reason) {
         logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason, raw: generatedText });
         throw new ModelError(`模型返回内容未满足${expectChoices ? "事件" : "童年"}契约：${reason}`);
       }
-      const parsed = normalizeGeneratedEvent(generated, expectChoices);
+      const parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices);
       if (!parsed) throw new ModelError("模型返回内容未满足事件契约");
       if (!expectChoices && crossesAdulthoodBoundary(state.basic.age, parsed.timePassed)) {
         // 安全兜底：童年提示词要求落地 <15 岁，若模型仍越界，硬钳制落地到 14 岁（不重生成）。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
 import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
@@ -257,6 +257,47 @@ describe("model configuration", () => {
     expect(lean.personality).toBeUndefined();
     expect(lean.current_state).toMatchObject({ age: 20 });
     expect(lean.current_choice).toEqual({ id: "A", text: "接受" });
+  });
+
+
+  it("rejects consecutive decision events that reuse the same value tension axis", () => {
+    const prev = [{ id: "A", text: "去外地大城市闯一闯，拼一把" }, { id: "B", text: "留在本地照顾家里，安稳过日子" }, { id: "C", text: "先上班攒钱，再考虑去留" }];
+    const same = {
+      timePassed: 3,
+      story: "你又一次站在选择的岔路口。",
+      event: { type: "career", title: "又一次去向", importance: 0.7 },
+      choices: [{ id: "A", text: "辞职去大城市创业，赌一把" }, { id: "B", text: "留在家里，找份安稳工作" }, { id: "C", text: "边上班边筹备，两边兼顾" }],
+    };
+    const reason = diagnoseGeneratedEvent(same, true, prev);
+    expect(reason).toContain("张力轴与上一节点重复");
+    expect(normalizeGeneratedEvent(same, true, prev)).toBeNull();
+  });
+
+  it("accepts a decision event that rotates to a different tension axis", () => {
+    const prev = [{ id: "A", text: "去外地大城市闯一闯，拼一把" }, { id: "B", text: "留在本地照顾家里，安稳过日子" }, { id: "C", text: "先上班攒钱，再考虑去留" }];
+    const rotated = {
+      timePassed: 3,
+      story: "一次体检结果让你重新审视生活。",
+      event: { type: "health", title: "身体的提醒", importance: 0.6 },
+      choices: [{ id: "A", text: "理性地按体检数据调整作息和饮食" }, { id: "B", text: "听从内心的感觉，随心生活" }, { id: "C", text: "先观察一段时间再做打算" }],
+    };
+    expect(diagnoseGeneratedEvent(rotated, true, prev)).toBeNull();
+    expect(normalizeGeneratedEvent(rotated, true, prev)).not.toBeNull();
+  });
+
+  it("detects the dominant value axis of a set of choices", () => {
+    expect(detectValueAxis([{ id: "A", text: "去外地闯一闯" }, { id: "B", text: "留在家照顾父母" }, { id: "C", text: "两边兼顾" }])).toBe("闯荡/留守");
+    expect(detectValueAxis([{ id: "A", text: "按数据利弊理性判断" }, { id: "B", text: "凭直觉和热爱" }, { id: "C", text: "先不表态" }])).toBe("理性/感性");
+    expect(detectValueAxis(undefined)).toBeNull();
+  });
+
+  it("finds the most recent node that offered choices", () => {
+    const state = { history: [
+      { age: 6, choices: [] },
+      { age: 18, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] },
+      { age: 22, choices: [{ id: "A", text: "c" }, { id: "B", text: "d" }] },
+    ] } as never;
+    expect(lastChoiceNode(state)?.choices).toEqual([{ id: "A", text: "c" }, { id: "B", text: "d" }]);
   });
 
   it("builds an append-only conversation so each request's prefix is the previous request's full input", () => {
