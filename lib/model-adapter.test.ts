@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
 import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
@@ -176,6 +176,18 @@ describe("model configuration", () => {
     expect(normalized?.choices).toEqual([{ id: "A", text: "选择一" }, { id: "B", text: "选择二" }]);
   });
 
+  it("repairs malformed choices instead of failing the contract", () => {
+    const base = { timePassed: 2, story: "s", event: { type: "career" as const, title: "x" } };
+    // 纯字符串选项 → 按位置补 id
+    expect(normalizeGeneratedEvent({ ...base, choices: ["选择一", "选择二"] })?.choices).toEqual([{ id: "A", text: "选择一" }, { id: "B", text: "选择二" }]);
+    // 缺 id、text 用了 option 字段 → 按位置补 id
+    expect(normalizeGeneratedEvent({ ...base, choices: [{ option: "选择一" }, { option: "选择二" }, { option: "选择三" }] })?.choices).toEqual([{ id: "A", text: "选择一" }, { id: "B", text: "选择二" }, { id: "C", text: "选择三" }]);
+    // id 规范化（选项A → A）+ 重复 id 自动改排
+    expect(normalizeGeneratedEvent({ ...base, choices: [{ id: "选项A", text: "甲" }, { id: "A", text: "乙" }] })?.choices).toEqual([{ id: "A", text: "甲" }, { id: "B", text: "乙" }]);
+    // 空文本条目被剔除；仍不足 2 个有效选项则契约失败（该重试的还是要重试）
+    expect(diagnoseGeneratedEvent({ ...base, choices: [{ id: "A", text: "唯一" }] })).toContain("choices 少于 2");
+  });
+
   it("repairs fenced or padded JSON before parsing instead of retrying", () => {
     expect(parseGeneratedJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(parseGeneratedJson('前缀文字 {"a":1} 后缀文字')).toEqual({ a: 1 });
@@ -332,5 +344,17 @@ describe("life background system prompt", () => {
     const prompt = buildSystemPrompt(false, flagsToBackground(state.flags));
     expect(prompt).toContain("家庭经济：大富");
     expect(prompt).toContain("家庭结构：收养");
+  });
+});
+
+describe("adulthood boundary", () => {
+  it("detects when a childhood node would land at or above 15 (triggers clamping)", () => {
+    expect(crossesAdulthoodBoundary(14, 1)).toBe(true);
+    expect(crossesAdulthoodBoundary(14, 3)).toBe(true);
+    expect(crossesAdulthoodBoundary(11, 4)).toBe(true); // 11+4=15 恰好踩线
+    expect(crossesAdulthoodBoundary(10, 4)).toBe(false);
+    // 已在成年阶段或开局（0~4 岁）不属于跨界
+    expect(crossesAdulthoodBoundary(15, 1)).toBe(false);
+    expect(crossesAdulthoodBoundary(0, 6)).toBe(false);
   });
 });

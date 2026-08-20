@@ -27,7 +27,7 @@ export async function POST(request: Request) {
         let item = await iterator.next();
         while (!item.done) {
           if (item.value.retry) {
-            controller.enqueue(encoder.encode(encodeSseMessage("retry", {})));
+            controller.enqueue(encoder.encode(encodeSseMessage("retry", item.value.reason ? { reason: item.value.reason } : {})));
           } else if (item.value.text) {
             controller.enqueue(encoder.encode(encodeSseMessage("token", item.value)));
           }

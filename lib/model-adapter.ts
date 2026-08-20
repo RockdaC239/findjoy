@@ -11,14 +11,16 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
 只返回一个 JSON 对象，不要 Markdown 代码块，不要任何额外文字或解释。必须严格使用下面的 camelCase 字段，并按此顺序输出（story 在前、event 在后）：
 {"timePassed":3,"story":"...","event":{"type":"family","title":"...","importance":0.8},"choices":[{"id":"A","text":"..."},{"id":"B","text":"..."},{"id":"C","text":"..."}],"objectiveChanges":{},"memory":"..."}
 示例（只演示格式与语气，不要照抄内容）：
-{"timePassed":4,"story":"高中毕业那年，你同时收到两份完全不同的邀请：一张去外地读大学的录取通知，一份留在本地的学徒机会。你第一次站在真正的岔路口。","event":{"type":"career","title":"两份邀请","importance":0.85},"choices":[{"id":"A","text":"去外地读大学，把眼界打开再说"},{"id":"B","text":"留在本地学一门手艺，早点自立"},{"id":"C","text":"先工作一年攒钱，再决定要不要读书"}],"objectiveChanges":{},"memory":"十八岁那年，你第一次为自己的去留做决定。"}
+{"timePassed":3,"story":"大学室友都在互相抄作业、刷绩点，只有你想把这门课真正学懂；老师私下说你有点天赋，劝你考虑往这个方向走。","event":{"type":"career","title":"合群还是认真","importance":0.8},"choices":[{"id":"A","text":"跟大家一样，先保住绩点和关系"},{"id":"B","text":"认真学下去，哪怕被说成不合群"},{"id":"C","text":"表面合群，私下自己认真学"}],"objectiveChanges":{},"memory":"你在图书馆坐到闭馆，出来时月亮已经升得很高了。"}
 字段含义：
 - story：上一次选择之后，人生现状的精准速写（60 至 150 字）。只说明“现在变成了什么样”，不叙述过程、不做铺垫。展示顺序在最前。
 - event：在当前现状下发生的一件事，必须是重要的人生节点；title 用一句话点题，展示在 story 之后。
 - event.type 只能是英文枚举值之一：career、relationship、health、finance、random、family（不要使用中文或其它单词）。
 - choices：这个事件带来的 2 至 3 个真正不同且合理的关键抉择，每项必须包含 id 和 text。
   **硬约束：三个选项之间必须有清晰的价值张力，每个选项必须代表一种不同的人生价值或方向**（例如放弃/坚持、个人/家庭、安稳/冒险、服从/反叛、理性/感性、短利/长利、逃避/面对、向内/向外等），不能是同一种态度的不同措辞（例如不能三个都是"接受/适应/顺其自然"）。选 A、选 B、选 C，必须让你的人生走向不同分支；如果三个选项读起来意思接近，说明你写错了。
+  价值张力的方向要多样化：除了"离开/留下、个人/家庭、安稳/冒险"，还可以是"理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立"等；不要每次都是"冲出去/留下来/折中"这一套模板，同一局内不同节点的张力轴也要变化。
   写法建议：选项文本里直接点出你要表达的价值立场（如"为了撑住这个家，..."、"我不想被这件事拖住，..."、"找专业的人来帮忙，比我自己扛更靠谱..."），让玩家一眼看出区别。
+  **连续性硬约束**：事件必须随时间和玩家的选择推进。严禁原样或近乎原样地复述上一条事件的故事、标题或选项——即使玩家选择了"维持现状、顺其自然"，也要写出新的处境、新的变化和新的选项；连续两个节点绝不能是同一个事件。
 - objectiveChanges：本次事件造成的客观变化，可为空对象。
 - memory：一句话浓缩这次事件。`;
 
@@ -32,15 +34,21 @@ export const CHILDHOOD_SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系�
 {"timePassed":6,"story":"小学三年级那年，你在美术课上第一次画出像样的画，被老师贴在教室后墙。从那以后，你开始喜欢放学后留下来画画。","event":{"type":"random","title":"天赋被发现","importance":0.75},"objectiveChanges":{},"memory":"三年级那幅画，是你第一次被别人认真看见。"}
 字段含义：
 - story：这段童年里，你的人生现状精准速写（60 至 150 字）。只描述“命运把你带到了哪里、你长成了什么样”，不写任何选择。
-- event：这段童年里发生的最重要的一件事（家庭变故、迁徙、入学、亲人生病、交到朋友、学会一件本领等），必须是重要节点；title 用一句话点题，展示在 story 之后。童年同样遵循本局"出身档案"：不是每一局的童年都要写变故或苦难，普通温暖的成长也有分量。
+- event：这段童年里发生的最重要的一件事（家庭变故、迁徙、入学、亲人生病、交到朋友、学会一件本领等），必须是重要节点；title 用一句话点题，展示在 story 之后。story 里必须写到"发生了什么事"（一次驻足、一次搬家、一场比赛、一句夸奖、一次离别……），不能只是氛围、心情或物件的描写（例如"门后那幅全家福"这种画面不是事件）；**连续性硬约束：严禁原样或近乎原样地复述上一条事件的故事、标题或内容——即使这段时间没有大事，也要写出新的细节、新的处境**；童年同样遵循本局"出身档案"：不是每一局的童年都要写变故或苦难，普通温暖的成长也有分量。
 - event.type 只能是英文枚举值之一：career、relationship、health、finance、random、family（不要使用中文或其它单词）。
-- timePassed：时间跳跃（建议 4~7 年，童年可以大幅跳跃）。
+- timePassed：时间跳跃（建议 4~7 年，童年可以大幅跳跃），**落地年龄（当前年龄 + timePassed）必须小于 15 岁**，不要跳到 15 岁及以后；从 15 岁起进入成年决策阶段，届时会切换到另一套指令。
 - objectiveChanges：这段童年造成的客观变化，可为空对象。
 - memory：一句话浓缩这段童年。`;
 const occupations = ["产品经理", "软件工程师", "教师", "设计师", "研究员"];
 export const CHILDHOOD_BOUNDARY = 15;
 export const MODEL_REQUEST_TIMEOUT_MS = 60_000;
 export const MAX_MODEL_ATTEMPTS = 3;
+
+// 童年节点落地后是否跨入成年（≥15 岁）。判定"该不该给选项"必须用落地年龄，
+// 否则会出现"14 岁生成、落到 17 岁却仍是纯叙事节点"的边界错位（17 岁拿不到任何决策）。
+export function crossesAdulthoodBoundary(stateAge: number, timePassed: number): boolean {
+  return stateAge < CHILDHOOD_BOUNDARY && stateAge + Math.max(1, timePassed) >= CHILDHOOD_BOUNDARY;
+}
 
 // 出身档案：见 lib/background.ts。每局开局由 start 路由掷出四维出身并写入 flags，
 // 这里把本局出身档案作为系统提示词的固定后缀；同一局内前缀字节稳定，不破坏 DeepSeek 上下文缓存。
@@ -183,20 +191,39 @@ function normalizeEventType(value: unknown): (typeof EVENT_TYPES)[number] | unde
   return EVENT_TYPE_ALIASES[key];
 }
 
+function normalizeChoiceId(id: string, fallback: string): string {
+  const cleaned = id.trim().replace(/^(选项|option)\s*/i, "").toUpperCase();
+  return /^[A-Z0-9]{1,3}$/.test(cleaned) ? cleaned : fallback;
+}
+
 function normalizeChoices(value: unknown): LifeChoice[] {
+  const entries: Array<Record<string, unknown>> = [];
   if (Array.isArray(value)) {
-    return value
-      .filter((item): item is LifeChoice => Boolean(item) && typeof item === "object" && typeof (item as LifeChoice).id === "string" && typeof (item as LifeChoice).text === "string" && Boolean((item as LifeChoice).text.trim()))
-      .slice(0, 3);
+    for (const item of value) {
+      if (typeof item === "string" && item.trim()) entries.push({ text: item });
+      else if (item && typeof item === "object") entries.push(item as Record<string, unknown>);
+    }
+  } else if (value && typeof value === "object") {
+    // 兼容对象写法 {"A":"选项一","B":"选项二"}
+    for (const [id, text] of Object.entries(value as Record<string, unknown>)) entries.push({ id, text });
   }
-  // 兼容部分模型输出对象写法 {"A":"选项一","B":"选项二"}
-  if (value && typeof value === "object") {
-    return Object.entries(value as Record<string, unknown>)
-      .filter(([, text]) => typeof text === "string" && Boolean(text.trim()))
-      .map(([id, text]) => ({ id, text: (text as string).trim() }))
-      .slice(0, 3);
+  // 修复常见的选项格式瑕疵（缺 id / text 用了 option、label / 纯字符串 / 选项A 这类 id），
+  // 把"格式小错"从整轮重试降级为自动纠正；真正凑不出 2 个有效选项仍由契约把关。
+  const letters = ["A", "B", "C", "D"];
+  const used = new Set<string>();
+  const choices: LifeChoice[] = [];
+  for (const entry of entries) {
+    const text = [entry.text, entry.option, entry.label].find((item): item is string => typeof item === "string" && Boolean(item.trim()))?.trim() ?? "";
+    if (!text) continue;
+    let id = typeof entry.id === "string" && entry.id.trim() ? normalizeChoiceId(entry.id, "") : "";
+    if (!id || used.has(id)) {
+      id = letters.find((letter) => !used.has(letter)) ?? `X${choices.length + 1}`;
+    }
+    used.add(id);
+    choices.push({ id, text });
+    if (choices.length >= 3) break;
   }
-  return [];
+  return choices;
 }
 
 function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"] {
@@ -282,7 +309,7 @@ export function normalizeGeneratedEvent(value: unknown, expectChoices = true): N
   };
 }
 
-export type ModelStreamChunk = { text?: string; retry?: boolean };
+export type ModelStreamChunk = { text?: string; retry?: boolean; reason?: string };
 
 // 持久化的对话转录：每轮请求 = [system, ...转录, user(本轮)]，纯追加式。
 // 这样每一轮请求的输入都是上一轮请求输入的严格前缀，DeepSeek 上下文缓存
@@ -396,15 +423,17 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const config = resolveModelConfig(requestConfig);
   const { apiKey, baseUrl, model } = config;
   if (!apiKey) throw new ModelError("未配置 API Key，请在模型设置中填写后重试");
-  const expectChoices = state.basic.age >= CHILDHOOD_BOUNDARY;
-  const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags));
-  const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
+  // 从 14 岁起直接进入决策阶段：下一次跳跃（timePassed ≥ 1）必然落地 ≥15 岁，
+  // 因此迈入点直接用决策提示词生成带选项的事件，不需要先出童年事件再重生成。
+  const expectChoices = state.basic.age + 1 >= CHILDHOOD_BOUNDARY;
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
     try {
+      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags));
+      const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
       const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS), body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages: withRetryCorrection(attempt, messages, lastFailureReason, "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。") }) });
       if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
       if (!response.body) throw new ModelError("模型服务未返回内容");
@@ -442,6 +471,12 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       }
       const parsed = normalizeGeneratedEvent(generated, expectChoices);
       if (!parsed) throw new ModelError("模型返回内容未满足事件契约");
+      if (!expectChoices && crossesAdulthoodBoundary(state.basic.age, parsed.timePassed)) {
+        // 安全兜底：童年提示词要求落地 <15 岁，若模型仍越界，硬钳制落地到 14 岁（不重生成）。
+        // 正常路径下从 14 岁起已切到决策提示词，这里只防模型违规。
+        parsed.timePassed = CHILDHOOD_BOUNDARY - 1 - state.basic.age;
+        logModelDiagnostic("childhood-landing-clamped", { age: state.basic.age, clampedTo: CHILDHOOD_BOUNDARY - 1 });
+      }
       const usage: ModelUsage = { promptTokens: num(usageRaw.prompt_tokens), completionTokens: num(usageRaw.completion_tokens), totalTokens: num(usageRaw.total_tokens), estimatedCostUsd: num(usageRaw.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageRaw.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, promptCacheHitTokens: num(usageRaw.prompt_cache_hit_tokens), promptCacheMissTokens: num(usageRaw.prompt_cache_miss_tokens) };
       return { ...parsed, usage };
     } catch (error) {
@@ -455,7 +490,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       }
       logModelDiagnostic("event-attempt-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, error: lastError.message, raw: generatedText });
     }
-    if (attempt < MAX_MODEL_ATTEMPTS) yield { retry: true };
+    if (attempt < MAX_MODEL_ATTEMPTS) yield { retry: true, reason: lastFailureReason };
   }
   throw lastError;
 }
