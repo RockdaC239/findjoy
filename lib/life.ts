@@ -24,6 +24,16 @@ export interface LifeState {
 }
 
 export interface LifeChoice { id: string; text: string }
+
+// 把客户端送来的选择规整为模型真正给出的选项文案（按 id 匹配待定节点上的选项）。
+// 脚本或异常客户端可能发送与选项无关的文本；模型收到"不属于任何选项"的选择时
+// 会认为没有真正做决定，进而在下一轮复述上一事件（刚进入决策阶段时节点重复的根因）。
+// 规整后模型永远看到自己给出的 A/B/C 文案，转录里存的也是同一份，保证请求与转录一致。
+export function resolveOfferedChoice(choice: LifeChoice | undefined, pendingNode: LifeEvent | undefined): LifeChoice | undefined {
+  if (!choice || !pendingNode?.choices) return choice;
+  const offered = pendingNode.choices.find((item) => item.id === choice.id);
+  return offered ?? choice;
+}
 export interface LifeEvent {
   id: string;
   age: number;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyNextEvent, buildEnding, createStarterLife, type NextEvent } from "./life";
+import { applyNextEvent, buildEnding, createStarterLife, resolveOfferedChoice, type NextEvent } from "./life";
 import { buildFallbackEvent } from "./model-adapter";
 
 const event: NextEvent = {
@@ -153,5 +153,23 @@ describe("life state", () => {
 
     const noneLife = applyNextEvent(life, { ...event, story: "带 none 选择。" }, { id: "none", text: "继续生活" }, { random: () => 1 });
     expect(noneLife.history[0].choiceText).toBeUndefined();
+  });
+});
+
+describe("resolveOfferedChoice", () => {
+  const pending = { choices: [{ id: "A", text: "去北京追梦" }, { id: "B", text: "留在重庆接班" }, { id: "C", text: "先答应父亲" }] } as never;
+
+  it("maps a client choice to the model-offered text by id", () => {
+    expect(resolveOfferedChoice({ id: "B", text: "在熟悉的节奏里再停留一会儿" }, pending)).toEqual({ id: "B", text: "留在重庆接班" });
+  });
+
+  it("keeps the raw choice when the id has no offered match", () => {
+    const raw = { id: "X", text: "自定义选择" };
+    expect(resolveOfferedChoice(raw, pending)).toEqual(raw);
+  });
+
+  it("passes through undefined choice (childhood) and legacy nodes without choices", () => {
+    expect(resolveOfferedChoice(undefined, pending)).toBeUndefined();
+    expect(resolveOfferedChoice({ id: "A", text: "接受" }, undefined)).toEqual({ id: "A", text: "接受" });
   });
 });
