@@ -367,15 +367,19 @@ export default function Home() {
       {phase === "event" && (
         <section className="life-event" aria-labelledby="event-title" aria-busy={isLoading}>
           <div className="event-story">
-            <p className="event-kicker">{isLoading ? "人生正在展开" : life.occupation}</p>
-            <h1 id="event-title">{isLoading ? streamingEvent.title || "" : life.eventTitle}</h1>
             <div className="event-body" aria-live="polite">
               {(isLoading ? streamingEvent.story : life.story).split("\n\n").filter(Boolean).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               {isLoading && !streamingEvent.story && <span className="story-cursor" aria-label="正在生成" />}
             </div>
+            <p className="event-tagline" id="event-title">
+              {(() => {
+                const title = isLoading ? streamingEvent.title : life.eventTitle;
+                return title ? `“${title}”` : "";
+              })()}
+            </p>
           </div>
           <div className="decision-area" aria-label="人生决策">
-            <p className="decision-label">你的决定</p>
+            <p className="decision-label">做出你的选择。</p>
             <div className="choice-cards">
               {["A", "B", "C"].map((id, index) => {
                 const choice = isLoading ? streamingEvent.choices[index] : life.choices[index];
