@@ -21,7 +21,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const iterator = streamNextEvent(state, choice, sanitizeModelConfig(body.modelConfig));
         let item = await iterator.next();
         while (!item.done) {
-          controller.enqueue(encoder.encode(encodeSseMessage("token", item.value)));
+          if (item.value.retry) {
+            controller.enqueue(encoder.encode(encodeSseMessage("retry", {})));
+          } else if (item.value.text) {
+            controller.enqueue(encoder.encode(encodeSseMessage("token", item.value)));
+          }
           item = await iterator.next();
         }
         const nextState = lifeStore.set(applyNextEvent(state, item.value, choice ?? { id: "none", text: "继续生活" }));

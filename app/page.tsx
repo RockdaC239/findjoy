@@ -247,14 +247,25 @@ export default function Home() {
         buffer = parsed.remainder;
         for (const message of parsed.messages) {
           if (message.event === "status") {
-            const status = JSON.parse(message.data) as { preview?: { story?: string; title?: string; choices?: StreamedChoice[] } };
-            if (status.preview) setStreamingEvent({ story: status.preview.story ?? "", title: status.preview.title ?? "", choices: status.preview.choices ?? [] });
+            const status = JSON.parse(message.data) as { preview?: { story?: string; title?: string; choices?: StreamedChoice[]; background?: string } };
+            if (status.preview) {
+              const background = status.preview.background;
+              setStreamingEvent({ story: status.preview.story ?? "", title: status.preview.title ?? "", choices: status.preview.choices ?? [] });
+              if (background) {
+                setLife((current) => ({ ...current, background }));
+                setPhase("birth");
+                setSelectedChoice(null);
+              }
+            }
           } else if (message.event === "token") {
             const token = JSON.parse(message.data) as { text?: string };
             if (typeof token.text === "string") {
               generated += token.text;
               setStreamingEvent(readStreamedEvent(generated));
             }
+          } else if (message.event === "retry") {
+            generated = "";
+            setStreamingEvent({ story: "", title: "", choices: [] });
           } else if (message.event === "complete") {
             return JSON.parse(message.data) as unknown;
           } else if (message.event === "error") {
@@ -286,7 +297,8 @@ export default function Home() {
       return;
     }
     setLife(parseLife(payload));
-    setPhase("birth");
+    // 若用户已在 status 阶段进入事件页（background 先到），complete 后保持事件页
+    setPhase((current) => (current === "event" ? current : "birth"));
   }
 
   async function choose(choiceId: string) {
@@ -331,14 +343,12 @@ export default function Home() {
 
       {phase === "start" && (
         <section className="intro" aria-labelledby="intro-title">
-          <p className="eyebrow">LIFE, AS IT HAPPENS</p>
-          <h1 id="intro-title">你想活一次<br />看看吗？</h1>
-          <p className="intro-copy">没有正确答案。只有你在每一次转弯时，想要成为怎样的人。</p>
+          <p className="eyebrow">FIND YOUR WAY TO JOY</p>
+          <h1 id="intro-title">人生没有答案，只有选择</h1>
+          <p className="intro-copy">系统会讲述你的故事，你来决定它意味着什么。</p>
           <button className="primary-button" onClick={startLife} disabled={isLoading}>
             {isLoading ? "正在开始..." : "开始人生"}
-            <span aria-hidden="true">↗</span>
           </button>
-          <p className="quiet-note">一次人生，约二十分钟</p>
         </section>
       )}
 

@@ -11,12 +11,16 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(encodeSseMessage("status", { message: "人生正在展开" })));
+      controller.enqueue(encoder.encode(encodeSseMessage("status", { message: "人生正在展开", preview: { background: createBirthBackground(state) } })));
       try {
         const iterator = streamNextEvent(state, undefined, sanitizeModelConfig(input.modelConfig));
         let item = await iterator.next();
         while (!item.done) {
-          controller.enqueue(encoder.encode(encodeSseMessage("token", item.value)));
+          if (item.value.retry) {
+            controller.enqueue(encoder.encode(encodeSseMessage("retry", {})));
+          } else if (item.value.text) {
+            controller.enqueue(encoder.encode(encodeSseMessage("token", item.value)));
+          }
           item = await iterator.next();
         }
         controller.enqueue(encoder.encode(encodeSseMessage("complete", { state, event: item.value, background: createBirthBackground(state) })));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, resolveModelConfig, sanitizeModelConfig } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, resolveModelConfig, sanitizeModelConfig } from "./model-adapter";
 import { createStarterLife } from "./life";
 
 describe("model configuration", () => {
@@ -107,6 +107,37 @@ describe("model configuration", () => {
     expect(result).not.toBeNull();
   });
 
+  it("does not mistake self-introduction narration for a name", () => {
+    const result = normalizeGeneratedEvent({
+      timePassed: 1,
+      story: "轮到你时，你站起身，响亮地说出自己的名字后坐下了。",
+      event: { type: "career", title: "小学第一课", importance: 0.6 },
+      choices: [{ id: "A", text: "再介绍一遍" }, { id: "B", text: "安静坐下" }],
+    });
+
+    expect(result).not.toBeNull();
+  });
+
+  it("diagnoses the exact contract gate that failed", () => {
+    expect(diagnoseGeneratedEvent({ timePassed: 2, event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBe("story 缺失或为空");
+    expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBe("event.title 缺失或为空");
+    expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "事业" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toContain("event.type 非法");
+    expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }] })).toContain("choices 少于 2");
+    expect(diagnoseGeneratedEvent({ timePassed: 2, story: "s", event: { title: "x", type: "career" }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }] })).toBeNull();
+  });
+
+  it("diagnoses a well-formed ending as passing", () => {
+    const value = {
+      age: 70,
+      death: "自然离世",
+      facts: { occupation: "教师", city: "深圳", events: 20 },
+      highlights: [{ age: 27, title: "你放弃了第一次创业机会" }, { age: 45, title: "你选择回到家人身边" }],
+      patterns: ["从你的选择来看，你重视陪伴。"],
+    };
+
+    expect(diagnoseEnding(value)).toBeNull();
+  });
+
   it("includes the complete lived history and current choice in the next-event prompt", () => {
     const state = {
       lifeId: "life",
@@ -134,27 +165,25 @@ describe("model configuration", () => {
   });
 
   it("rejects a generated ending that introduces a name (strict contract)", () => {
-    const state = createStarterLife({ age: 70 });
     const result = normalizeEnding({
       age: 70,
       death: "自然离世",
       facts: { occupation: "教师", city: "深圳", events: 20 },
       highlights: [{ age: 35, title: "你认识了一个名叫小明的朋友" }],
       patterns: ["从你的选择来看，你重视陪伴。"],
-    }, state);
+    });
 
     expect(result).toBeNull();
   });
 
   it("accepts a well-formed generated ending", () => {
-    const state = createStarterLife({ age: 70 });
     const result = normalizeEnding({
       age: 70,
       death: "自然离世",
       facts: { occupation: "教师", city: "深圳", events: 20 },
       highlights: [{ age: 27, title: "你放弃了第一次创业机会" }, { age: 45, title: "你选择回到家人身边" }],
       patterns: ["从你的选择来看，你常常会在真正重要的时刻为关系停下来。"],
-    }, state);
+    });
 
     expect(result).not.toBeNull();
     expect(result!.highlights).toHaveLength(2);
