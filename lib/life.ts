@@ -40,7 +40,11 @@ export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: 
 export interface NextEvent { timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
 export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string }
 
-const cities = ["深圳", "上海", "北京", "杭州", "成都"];
+const cities = ["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"];
+
+function randomCity(random: () => number = Math.random) {
+  return cities[Math.floor(random() * cities.length)] ?? cities[0];
+}
 
 // 年度基础死亡率（近似真实生命表量级），随年龄上升。
 function baseMortalityRate(age: number): number {
@@ -75,7 +79,7 @@ export function createStarterLife(input: Partial<LifeBasics> = {}): LifeState {
   const lifeId = crypto.randomUUID();
   return {
     lifeId,
-    basic: { age: input.age ?? 0, gender: input.gender ?? "unspecified", city: input.city ?? cities[0], education: input.education ?? "未开始" },
+    basic: { age: input.age ?? 0, gender: input.gender ?? "unspecified", city: input.city ?? randomCity(), education: input.education ?? "未开始" },
     career: { occupation: "婴儿", companyType: "家庭", incomeYearly: 0, careerStage: "childhood" },
     finance: { cash: 8000, assets: 8000, debt: 0, housing: "与家人同住" },
     health: { physical: 92, conditions: [], lifestyle: "普通" },

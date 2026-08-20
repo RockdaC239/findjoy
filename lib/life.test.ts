@@ -19,6 +19,13 @@ describe("life state", () => {
     expect(life.career.occupation).toBe("婴儿");
   });
 
+  it("honors a chosen gender and assigns a city from the catalog", () => {
+    const life = createStarterLife({ gender: "female" });
+
+    expect(life.basic.gender).toBe("female");
+    expect(["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"]).toContain(life.basic.city);
+  });
+
   it("opens a newborn life with a childhood event", () => {
     const event = buildFallbackEvent(createStarterLife());
 

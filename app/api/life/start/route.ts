@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(encodeSseMessage("status", { message: "人生正在展开", preview: { background: createBirthBackground(state) } })));
+      controller.enqueue(encoder.encode(encodeSseMessage("status", { message: "人生正在展开", preview: { background: createBirthBackground(state), city: state.basic.city } })));
       try {
         const iterator = streamNextEvent(state, undefined, sanitizeModelConfig(input.modelConfig));
         let item = await iterator.next();

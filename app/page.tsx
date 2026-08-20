@@ -5,6 +5,7 @@ import { getProvider, MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
 import { parseSseMessages } from "../lib/sse";
 import { readStreamedEvent, type StreamedChoice } from "../lib/stream-event";
+import type { Gender } from "../lib/life";
 
 type Phase = "start" | "birth" | "event" | "review";
 
@@ -174,6 +175,7 @@ export default function Home() {
     } catch { return defaultModelConfig; }
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [showGenderDialog, setShowGenderDialog] = useState(false);
   const [remoteModels, setRemoteModels] = useState<Record<string, ModelOption[]>>(loadRemoteModels);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [modelRefreshMessage, setModelRefreshMessage] = useState("");
@@ -247,12 +249,13 @@ export default function Home() {
         buffer = parsed.remainder;
         for (const message of parsed.messages) {
           if (message.event === "status") {
-            const status = JSON.parse(message.data) as { preview?: { story?: string; title?: string; choices?: StreamedChoice[]; background?: string } };
+            const status = JSON.parse(message.data) as { preview?: { story?: string; title?: string; choices?: StreamedChoice[]; background?: string; city?: string } };
             if (status.preview) {
               const background = status.preview.background;
+              const city = status.preview.city;
               setStreamingEvent({ story: status.preview.story ?? "", title: status.preview.title ?? "", choices: status.preview.choices ?? [] });
-              if (background) {
-                setLife((current) => ({ ...current, background }));
+              if (background || city) {
+                setLife((current) => ({ ...current, ...(background ? { background } : {}), ...(city ? { city } : {}) }));
                 setPhase("birth");
                 setSelectedChoice(null);
               }
@@ -288,9 +291,10 @@ export default function Home() {
     }
   }
 
-  async function startLife() {
+  async function startLife(gender: Gender) {
+    setShowGenderDialog(false);
     setSelectedChoice("starting");
-    const payload = await requestLife("/api/life/start");
+    const payload = await requestLife("/api/life/start", { gender });
     setSelectedChoice(null);
     if (!payload) {
       setPhase("start");
@@ -341,12 +345,35 @@ export default function Home() {
 
       {requestError && <p className="request-error" role="alert">{requestError}</p>}
 
+      {showGenderDialog && (
+        <div className="gender-modal" role="dialog" aria-modal="true" aria-label="选择性别">
+          <div className="gender-modal-card">
+            <h2 id="gender-title">选择你的性别</h2>
+            <div className="gender-options">
+              <button className="gender-option" type="button" onClick={() => startLife("female")} aria-label="选择女性">
+                <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+                  <circle cx="12" cy="7" r="4.2" />
+                  <path d="M12 11.2V21M8.6 16.8h6.8" />
+                </svg>
+              </button>
+              <button className="gender-option" type="button" onClick={() => startLife("male")} aria-label="选择男性">
+                <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="9.6" cy="14.4" r="4.4" />
+                  <path d="M12.8 11.2 21 3M16.5 3H21v4.5" />
+                </svg>
+              </button>
+            </div>
+            <button className="gender-close" type="button" onClick={() => setShowGenderDialog(false)}>再想想</button>
+          </div>
+        </div>
+      )}
+
       {phase === "start" && (
         <section className="intro" aria-labelledby="intro-title">
           <p className="eyebrow">FIND YOUR WAY TO JOY</p>
           <h1 id="intro-title">人生没有答案，只有选择</h1>
           <p className="intro-copy">系统会讲述你的故事，你来决定它意味着什么。</p>
-          <button className="primary-button" onClick={startLife} disabled={isLoading}>
+          <button className="primary-button" onClick={() => setShowGenderDialog(true)} disabled={isLoading}>
             {isLoading ? "正在开始..." : "开始人生"}
           </button>
         </section>
