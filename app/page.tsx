@@ -360,10 +360,12 @@ export default function Home() {
   return (
     <main className={`page page--${phase}`}>
       <header className="topbar" aria-label="Primary navigation">
-        {phase === "event" ? <p className="current-age">{life.age} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><button className="history-link" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></>}
+        {phase === "event" ? <p className="current-age">{life.age} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><div className="topbar-actions"><button className="settings-button" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></div></>}
       </header>
 
       {showSettings && (
+        <>
+        <div className="modal-scrim" onClick={() => setShowSettings(false)} aria-hidden="true" />
         <section className="settings-panel" aria-label="模型设置">
           <div className="settings-head"><p className="eyebrow">MODEL CONNECTION</p><button className="settings-close" onClick={() => setShowSettings(false)} aria-label="关闭模型设置">×</button></div>
           <p className="settings-note">只需选择供应商、模型并填写 Key。接口地址和计费规则由系统自动配置，设置保存在当前浏览器。</p>
@@ -373,17 +375,19 @@ export default function Home() {
           <button className="refresh-models" type="button" onClick={refreshModels} disabled={isRefreshingModels}>{isRefreshingModels ? "正在读取模型..." : "刷新该供应商的最新模型"}</button>
           {modelRefreshMessage && <p className="settings-status" role="status">{modelRefreshMessage}</p>}
         </section>
+        </>
       )}
 
       {requestError && <p className="request-error" role="alert">{requestError}</p>}
 
       {showHistory && (
-        <div className="history-modal" role="dialog" aria-modal="true" aria-label="过往人生">
+        <div className="history-modal" role="dialog" aria-modal="true" aria-label="过往人生" onClick={(event) => { if (event.target === event.currentTarget) { setHistoryDetail(null); setShowHistory(false); } }}>
           <div className="history-card">
             <div className="history-head">
               <p className="eyebrow">PAST LIVES</p>
               <button className="history-close" onClick={() => { setHistoryDetail(null); setShowHistory(false); }} aria-label="关闭过往人生">×</button>
             </div>
+            <div className="history-body">
             {historyDetail ? (
               <div className="history-detail">
                 <button className="text-button" onClick={() => setHistoryDetail(null)}>← 返回列表</button>
@@ -391,9 +395,25 @@ export default function Home() {
                 {historyDetail.history.length === 0 && <p className="history-note">这局人生还没有留下任何事件。</p>}
                 {historyDetail.history.map((h, index) => (
                   <article className="history-event" key={index}>
-                    <p className="history-event-title"><strong>{h.age} 岁</strong> · {h.title}</p>
+                    <p className="history-event-title">
+                      <strong>{h.age} 岁</strong> · {h.title}
+                      {h.storedAt && <span className="history-event-time">{new Date(h.storedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                    </p>
                     <p>{h.story}</p>
-                    {h.choiceText && <p className="history-choice">你选择了：「{h.choiceText}」</p>}
+                    {h.choices && h.choices.length > 0 && (
+                      <p className="history-choices">可选项：{h.choices.map((c) => `${c.id}「${c.text}」`).join("　")}</p>
+                    )}
+                    {h.choiceText
+                      ? <p className="history-choice">你选择了：「{h.choiceText}」</p>
+                      : h.choices && h.choices.length > 0
+                        ? <p className="history-choice is-pending">—— 本节点尚未做出选择 ——</p>
+                        : null}
+                    {h.usage && (
+                      <p className="history-event-usage">
+                        tokens {h.usage.promptTokens}/{h.usage.completionTokens} · 缓存命中 {h.usage.promptCacheHitTokens ?? 0}
+                        {h.usage.estimatedCostUsd > 0 ? ` · $${h.usage.estimatedCostUsd.toFixed(4)}` : ""}
+                      </p>
+                    )}
                   </article>
                 ))}
               </div>
@@ -412,6 +432,7 @@ export default function Home() {
                     ))}
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
@@ -443,7 +464,7 @@ export default function Home() {
         <section className="intro" aria-labelledby="intro-title">
           <p className="eyebrow">FIND YOUR WAY TO JOY</p>
           <h1 id="intro-title">人生没有答案，只有选择</h1>
-          <p className="intro-copy">系统会讲述你的故事，你来决定它意味着什么。</p>
+          <p className="intro-copy"><span>这一生会从这里开始，而幸福不在别处，就在你的每一次选择里。</span><span className="intro-copy-line--nowrap">阿德勒说，决定我们的不是经历，而是我们赋予经历的意义——没有统一标准，你怎样定义，就有怎样的幸福。</span><span>直到终点回望时，你看见它如何一点点，变成了你自己。</span></p>
           <button className="primary-button" onClick={() => setShowGenderDialog(true)} disabled={isLoading}>
             {isLoading ? "正在开始..." : "开始人生"}
           </button>
