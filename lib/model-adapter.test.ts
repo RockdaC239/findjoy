@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, normalizeGeneratedEvent, resolveModelConfig, sanitizeModelConfig } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, generateEnding, normalizeEnding, normalizeGeneratedEvent, resolveModelConfig, sanitizeModelConfig } from "./model-adapter";
+import { createStarterLife } from "./life";
 
 describe("model configuration", () => {
   it("uses a supplied provider and model ahead of environment defaults", () => {
@@ -80,5 +81,36 @@ describe("model configuration", () => {
     expect(prompt.hidden_value_profile).toEqual(state.psychology.valueProfile);
     expect(prompt.current_choice).toEqual({ id: "A", text: "接受新的工作机会" });
     expect(prompt.event_context).toEqual({ current_choice: { id: "A", text: "接受新的工作机会" }, previous_event: state.history[1] });
+  });
+
+  it("returns a mechanical fallback ending without an API key", async () => {
+    const state = createStarterLife({ age: 81 });
+    state.career.occupation = "教师";
+    const ending = await generateEnding(state, { providerId: "deepseek", apiKey: "", model: "deepseek-chat" });
+
+    expect(ending.age).toBe(81);
+    expect(ending).not.toHaveProperty("score");
+    expect(ending.question).toContain("再活一次");
+  });
+
+  it("keeps the fallback when a generated ending introduces a name", () => {
+    const state = createStarterLife({ age: 70 });
+    const fallback = {
+      age: 70,
+      death: "自然离世",
+      facts: { occupation: "教师", city: "深圳", events: 20 },
+      highlights: [{ age: 30, title: "你换了城市" }],
+      patterns: ["你按自己的节奏生活。"],
+      question: "如果可以再活一次，你会做出不同的选择吗？",
+    };
+    const result = normalizeEnding({
+      age: 70,
+      death: "自然离世",
+      facts: { occupation: "教师", city: "深圳", events: 20 },
+      highlights: [{ age: 35, title: "你认识了一个名叫小明的朋友" }],
+      patterns: ["从你的选择来看，你重视陪伴。"],
+    }, state, fallback);
+
+    expect(result).toEqual(fallback);
   });
 });

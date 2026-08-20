@@ -26,6 +26,7 @@ type LifeData = {
 
 type Review = {
   age: number;
+  death: string;
   facts: string[];
   moments: string[];
   observation: string;
@@ -81,6 +82,7 @@ const demoLife: LifeData = {
 
 const demoReview: Review = {
   age: 82,
+  death: "在很深的年纪平静离世",
   facts: ["经历过不同的工作与生活阶段", "拥有过重要的关系与告别", "在几座城市留下自己的日常"],
   moments: [
     "你第一次意识到，选择本身也会改变你。",
@@ -151,6 +153,7 @@ function parseReview(payload: unknown, current: LifeData): Review {
   const eventCount = typeof facts.events === "number" ? `经历 ${facts.events} 个重要人生事件` : "经历许多重要的选择";
   return {
     age: typeof ending.age === "number" ? ending.age : demoReview.age,
+    death: getString(ending.death, demoReview.death),
     facts: [getString(facts.occupation, current.occupation), `在${getString(facts.city, current.city)}生活过`, eventCount],
     moments: moments.length ? moments : demoReview.moments,
     observation: patterns.filter((item): item is string => typeof item === "string").join(" ") || demoReview.observation,
@@ -271,16 +274,15 @@ export default function Home() {
   }
 
   async function startLife() {
-    setPhase("event");
     setSelectedChoice("starting");
     const payload = await requestLife("/api/life/start");
+    setSelectedChoice(null);
     if (!payload) {
       setPhase("start");
-      setSelectedChoice(null);
       return;
     }
     setLife(parseLife(payload));
-    setSelectedChoice(null);
+    setPhase("birth");
   }
 
   async function choose(choiceId: string) {
@@ -385,7 +387,7 @@ export default function Home() {
         <section className="review" aria-labelledby="review-title">
           <p className="eyebrow">A LIFE REMEMBERED</p>
           <h1 id="review-title">你的<br />一生。</h1>
-          <p className="lived">享年 <strong>{review.age}</strong> 岁</p>
+          <p className="lived">享年 <strong>{review.age}</strong> 岁<span className="death-cause">，{review.death}</span></p>
           <div className="review-section facts"><p className="section-label">这一生</p>{review.facts.map((fact) => <p key={fact}>{fact}</p>)}</div>
           <div className="review-section"><p className="section-label">改变方向的时刻</p>{review.moments.map((moment) => <p className="moment" key={moment}>{moment}</p>)}</div>
           <div className="reflection"><p className="section-label">回望</p><p>{review.observation}</p></div>

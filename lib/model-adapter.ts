@@ -1,4 +1,5 @@
-import type { LifeState, LifeChoice, NextEvent, ModelUsage } from "./life";
+import type { LifeState, LifeChoice, NextEvent, ModelUsage, LifeEnding } from "./life";
+import { buildEnding } from "./life";
 import { getProvider, resolveProviderModel } from "./provider-catalog";
 
 const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实、复杂、不确定的人生，不定义幸福。全程只用第二人称“你”称呼玩家。禁止出现任何人物姓名、昵称、英文名、姓名占位符；其他人物只能使用关系或角色称谓，例如父亲、母亲、同学、伴侣、老师、邻居。
@@ -204,4 +205,69 @@ export async function generateNextEvent(state: LifeState, choice?: LifeChoice, r
   let item = await iterator.next();
   while (!item.done) item = await iterator.next();
   return item.value;
+}
+
+const ENDING_SYSTEM_PROMPT = `你是一位温和的观察者，正在为一生的选择做一场安静的回顾。
+全程只用第二人称“你”称呼当事人；不出现任何姓名、昵称、英文名或姓名占位符；其他人只能用身份词，如父亲、母亲、伴侣、孩子、朋友。
+不评价人生好坏，不给出分数、等级或“你就是……”这样的断言；使用“似乎、也许、可能、从你的选择来看”这样的语气。
+只返回一个 JSON 对象，不要 Markdown，不要解释。必须严格使用下面的 camelCase 字段：
+{"age":81,"death":"自然离世","facts":{"occupation":"程序员","city":"深圳","events":34},"highlights":[{"age":27,"title":"你放弃了第一次创业机会"},{"age":45,"title":"你选择回到家人身边"}],"patterns":["从你的选择来看，你常常会在真正重要的时刻为关系停下来。","年轻时你也许很在意别人的认可，后来你越来越愿意按照自己的判断生活。"]}
+highlights 必须是 4 至 8 个真正改变人生方向的节点；patterns 必须是 1 至 3 句观察，不带价值判断。`;
+
+export function normalizeEnding(value: unknown, state: LifeState, fallback: LifeEnding): LifeEnding {
+  if (!value || typeof value !== "object") return fallback;
+  const candidate = value as Record<string, unknown>;
+  const facts = candidate.facts && typeof candidate.facts === "object" ? candidate.facts as Record<string, unknown> : {};
+  const highlights = Array.isArray(candidate.highlights)
+    ? candidate.highlights.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const highlight = item as Record<string, unknown>;
+        if (typeof highlight.title !== "string") return [];
+        return [{ age: typeof highlight.age === "number" ? highlight.age : state.basic.age, title: highlight.title }];
+      }).slice(0, 8)
+    : [];
+  const patterns = Array.isArray(candidate.patterns) ? candidate.patterns.filter((item): item is string => typeof item === "string").slice(0, 3) : [];
+  const texts = [...highlights.map((item) => item.title), ...patterns];
+  if (texts.some(containsNameInstruction)) return fallback;
+  return {
+    age: typeof candidate.age === "number" ? candidate.age : fallback.age,
+    death: typeof candidate.death === "string" && candidate.death.trim() ? candidate.death : fallback.death,
+    facts: {
+      occupation: typeof facts.occupation === "string" && facts.occupation.trim() ? facts.occupation : fallback.facts.occupation,
+      city: typeof facts.city === "string" && facts.city.trim() ? facts.city : fallback.facts.city,
+      events: typeof facts.events === "number" ? facts.events : fallback.facts.events,
+    },
+    highlights: highlights.length >= 2 ? highlights : fallback.highlights,
+    patterns: patterns.length ? patterns : fallback.patterns,
+    question: fallback.question,
+  };
+}
+
+export async function generateEnding(state: LifeState, requestConfig?: Partial<ModelConfig>): Promise<LifeEnding> {
+  const fallback = buildEnding(state);
+  const config = resolveModelConfig(requestConfig);
+  const { apiKey, baseUrl, model } = config;
+  if (!apiKey) return fallback;
+  const prompt = JSON.stringify({
+    life_state: state,
+    recent_history: state.history.slice(-12),
+    major_memories: state.majorMemories,
+    behavioral_summary: state.psychology.behaviorPatterns,
+    current_age: state.basic.age,
+    death_cause: state.flags.deathCause ?? "natural",
+  });
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
+      body: JSON.stringify({ model, temperature: 0.7, response_format: { type: "json_object" }, messages: [{ role: "system", content: ENDING_SYSTEM_PROMPT }, { role: "user", content: prompt }] }),
+    });
+    if (!response.ok) throw new Error(`LLM ending request failed: ${response.status}`);
+    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = payload.choices?.[0]?.message?.content ?? "";
+    return normalizeEnding(JSON.parse(content || "{}"), state, fallback);
+  } catch {
+    return fallback;
+  }
 }
