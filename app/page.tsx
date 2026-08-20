@@ -19,7 +19,6 @@ type LifeData = {
   family: string;
   finance: string;
   health: string;
-  background: string;
   eventTitle: string;
   story: string;
   choices: Choice[];
@@ -70,8 +69,6 @@ const demoLife: LifeData = {
   family: "与家人共同生活",
   finance: "由家庭照料",
   health: "正在成长",
-  background:
-    "你来到一个普通的家庭。有人为你的到来忙碌，也有人在窗边默默看着你。此刻的世界还没有答案，只有漫长而未知的日子。",
   eventTitle: "你的童年开始了",
   story: "你第一次睁开眼，看见家人为你忙碌。世界还很大，而你正慢慢学会用自己的方式认识它。",
   choices: [
@@ -132,7 +129,6 @@ function parseLife(payload: unknown): LifeData {
     family: getString(partner.status, demoLife.family),
     finance: getString(finance.housing, demoLife.finance),
     health: getString(health.lifestyle, demoLife.health),
-    background: getString(payload.background, demoLife.background),
     eventTitle: getString(event.title, demoLife.eventTitle),
     story: getString(nextEvent.story, demoLife.story),
     choices: getChoices(nextEvent.choices),
@@ -249,17 +245,7 @@ export default function Home() {
         buffer = parsed.remainder;
         for (const message of parsed.messages) {
           if (message.event === "status") {
-            const status = JSON.parse(message.data) as { preview?: { story?: string; title?: string; choices?: StreamedChoice[]; background?: string; city?: string } };
-            if (status.preview) {
-              const background = status.preview.background;
-              const city = status.preview.city;
-              setStreamingEvent({ story: status.preview.story ?? "", title: status.preview.title ?? "", choices: status.preview.choices ?? [] });
-              if (background || city) {
-                setLife((current) => ({ ...current, ...(background ? { background } : {}), ...(city ? { city } : {}) }));
-                setPhase("birth");
-                setSelectedChoice(null);
-              }
-            }
+            // status 仅作服务端流式开始信号；不再下发背景/城市预览，直接进入事件页
           } else if (message.event === "token") {
             const token = JSON.parse(message.data) as { text?: string };
             if (typeof token.text === "string") {
@@ -294,6 +280,7 @@ export default function Home() {
   async function startLife(gender: Gender) {
     setShowGenderDialog(false);
     setSelectedChoice("starting");
+    setPhase("event");
     const payload = await requestLife("/api/life/start", { gender });
     setSelectedChoice(null);
     if (!payload) {
@@ -301,8 +288,6 @@ export default function Home() {
       return;
     }
     setLife(parseLife(payload));
-    // 若用户已在 status 阶段进入事件页（background 先到），complete 后保持事件页
-    setPhase((current) => (current === "event" ? current : "birth"));
   }
 
   async function choose(choiceId: string) {
@@ -376,23 +361,6 @@ export default function Home() {
           <button className="primary-button" onClick={() => setShowGenderDialog(true)} disabled={isLoading}>
             {isLoading ? "正在开始..." : "开始人生"}
           </button>
-        </section>
-      )}
-
-      {phase === "birth" && (
-        <section className="birth" aria-labelledby="birth-title">
-          <div className="age-mark">0</div>
-          <p className="eyebrow">FROM THE BEGINNING</p>
-          <h1 id="birth-title">你，<br />欢迎来到人间。</h1>
-          <div className="birth-grid">
-            <div className="story-copy"><p>{life.background}</p></div>
-            <dl className="life-facts">
-              <div><dt>起点</dt><dd>{life.city}</dd></div>
-              <div><dt>阶段</dt><dd>出生</dd></div>
-              <div><dt>此刻</dt><dd>童年将要开始</dd></div>
-            </dl>
-          </div>
-          <button className="primary-button" onClick={() => setPhase("event")}>走进这一生 <span aria-hidden="true">↗</span></button>
         </section>
       )}
 

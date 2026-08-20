@@ -1,5 +1,5 @@
 import { createStarterLife } from "../../../../lib/life";
-import { createBirthBackground, sanitizeModelConfig, streamNextEvent } from "../../../../lib/model-adapter";
+import { sanitizeModelConfig, streamNextEvent } from "../../../../lib/model-adapter";
 import { lifeStore } from "../../../../lib/life-store";
 import { encodeSseMessage } from "../../../../lib/sse";
 
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(encodeSseMessage("status", { message: "人生正在展开", preview: { background: createBirthBackground(state), city: state.basic.city } })));
+      controller.enqueue(encoder.encode(encodeSseMessage("status", { message: "人生正在展开" })));
       try {
         const iterator = streamNextEvent(state, undefined, sanitizeModelConfig(input.modelConfig));
         let item = await iterator.next();
@@ -23,7 +23,8 @@ export async function POST(request: Request) {
           }
           item = await iterator.next();
         }
-        controller.enqueue(encoder.encode(encodeSseMessage("complete", { state, event: item.value, background: createBirthBackground(state) })));
+        const openedState = lifeStore.set({ ...state, basic: { ...state.basic, age: Math.min(110, state.basic.age + item.value.timePassed) } });
+        controller.enqueue(encoder.encode(encodeSseMessage("complete", { state: openedState, event: item.value })));
       } catch (error) {
         const message = error instanceof Error ? error.message : "人生服务暂时不可用";
         controller.enqueue(encoder.encode(encodeSseMessage("error", { error: message })));
