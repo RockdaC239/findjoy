@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { LifeState } from "./life";
+import type { TranscriptMessage } from "./model-adapter";
 
 const DEFAULT_DB_FILE = path.join(process.cwd(), ".data", "life.db");
 
@@ -30,7 +31,12 @@ function getDb(): Database.Database {
       life_id    TEXT PRIMARY KEY,
       state      TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    )
+    );
+    CREATE TABLE IF NOT EXISTS transcripts (
+      life_id    TEXT PRIMARY KEY,
+      messages   TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -99,6 +105,35 @@ export const lifeStore = {
 
   delete(id: string): void {
     getDb().prepare("DELETE FROM lives WHERE life_id = ?").run(id);
+    getDb().prepare("DELETE FROM transcripts WHERE life_id = ?").run(id);
+  },
+
+  // 对话转录（DeepSeek 前缀缓存）：没有转录行返回 null（旧存档），
+  // 新人生从第一轮开始由 start/next 路由逐轮追加写入。
+  getTranscript(id: string): TranscriptMessage[] | null {
+    const row = getDb().prepare("SELECT messages FROM transcripts WHERE life_id = ?").get(id) as { messages?: string } | undefined;
+    if (!row || typeof row.messages !== "string") return null;
+    try {
+      const parsed: unknown = JSON.parse(row.messages);
+      return Array.isArray(parsed) ? (parsed as TranscriptMessage[]) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  setTranscript(id: string, messages: TranscriptMessage[]): void {
+    try {
+      getDb()
+        .prepare(
+          `INSERT INTO transcripts (life_id, messages, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(life_id) DO UPDATE SET messages = excluded.messages, updated_at = excluded.updated_at`,
+        )
+        .run(id, JSON.stringify(messages), new Date().toISOString());
+      checkpointIfNeeded();
+    } catch (error) {
+      console.error(`[life-store] failed to persist transcript ${id.slice(0, 8)}…:`, error instanceof Error ? error.message : error);
+      throw error;
+    }
   },
 
   close(): void {

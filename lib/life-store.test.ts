@@ -32,6 +32,35 @@ describe("life store", () => {
     expect(lifeStore.get(life.lifeId)).toBeNull();
   });
 
+  it("persists and overwrites a conversation transcript per life", () => {
+    const life = createStarterLife();
+    const transcript = [
+      { role: "user" as const, content: "第一轮输入" },
+      { role: "assistant" as const, content: "第一轮输出" },
+    ];
+    lifeStore.setTranscript(life.lifeId, transcript);
+    expect(lifeStore.getTranscript(life.lifeId)).toEqual(transcript);
+
+    const extended = [...transcript, { role: "user" as const, content: "第二轮输入" }];
+    lifeStore.setTranscript(life.lifeId, extended);
+    expect(lifeStore.getTranscript(life.lifeId)).toEqual(extended);
+  });
+
+  it("returns null for a transcript of a life that never had one (legacy save)", () => {
+    const life = createStarterLife();
+    lifeStore.set(life);
+
+    expect(lifeStore.getTranscript(life.lifeId)).toBeNull();
+  });
+
+  it("removes the transcript together with the life", () => {
+    const life = createStarterLife();
+    lifeStore.setTranscript(life.lifeId, [{ role: "user" as const, content: "x" }]);
+    lifeStore.delete(life.lifeId);
+
+    expect(lifeStore.getTranscript(life.lifeId)).toBeNull();
+  });
+
   it("lists life summaries with correct fields", () => {
     const first = createStarterLife();
     const second = createStarterLife();

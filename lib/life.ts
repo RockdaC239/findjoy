@@ -30,15 +30,21 @@ export interface LifeEvent {
   type: EventType;
   title: string;
   story: string;
+  /** 该节点展示给玩家的完整选项（2~3 个）；童年纯叙事节点为空数组。缺失表示旧存档。 */
+  choices?: LifeChoice[];
   choiceId?: string;
   choiceText?: string;
   importance: number;
   memory?: string;
   objectiveChanges?: Partial<ObjectiveChanges>;
+  /** 该节点写入时间（UTC ISO），用于逐节点追溯。 */
+  storedAt?: string;
+  /** 生成该节点时的模型调用用量（token/成本/前缀缓存命中），用于追溯与成本审计。 */
+  usage?: ModelUsage;
 }
 export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; occupation: string; partnerStatus: string }
 export interface NextEvent { timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
-export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string }
+export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string; promptCacheHitTokens?: number; promptCacheMissTokens?: number }
 
 const cities = ["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"];
 
@@ -89,7 +95,12 @@ export function createStarterLife(input: Partial<LifeBasics> = {}): LifeState {
   };
 }
 
-export function applyNextEvent(state: LifeState, event: NextEvent, choice: LifeChoice, random: () => number = Math.random): LifeState {
+// applyNextEvent 把一次模型事件推进到状态里：
+// - 玩家本次选择（choice）挂到“给出该选择”的上一个节点上（history 末尾的待定节点），
+//   而不是挂到本节点，消除时间轴上决策错位一格的问题；
+// - 新节点以“待定”状态入列（choiceId/choiceText 暂缺），等玩家做出选择后由下一次调用补齐；
+// - 开局节点（start 路由，无 choice + rollDeath:false）同样以待定节点入列，不再丢失。
+export function applyNextEvent(state: LifeState, event: NextEvent, choice?: LifeChoice, options: { random?: () => number; rollDeath?: boolean } = {}): LifeState {
   const changes = event.objectiveChanges ?? {};
   const age = Math.min(110, state.basic.age + Math.max(1, event.timePassed || 1));
   const next: LifeState = structuredClone(state);
@@ -101,10 +112,35 @@ export function applyNextEvent(state: LifeState, event: NextEvent, choice: LifeC
   if (typeof changes.debt === "number") next.finance.debt = Math.max(0, next.finance.debt + changes.debt);
   if (typeof changes.physical === "number") next.health.physical = Math.max(0, Math.min(100, next.health.physical + changes.physical));
   if (changes.partnerStatus) next.relationships.partner.status = changes.partnerStatus;
-  const record: LifeEvent = { id: crypto.randomUUID(), age, type: event.event.type, title: event.event.title, story: event.story, choiceId: choice.id, choiceText: choice.text, importance: event.event.importance, memory: event.memory, objectiveChanges: changes };
+  const pending = next.history.at(-1);
+  let choiceAttached = false;
+  if (pending && !pending.choiceId && (pending.choices?.length ?? 0) > 0 && choice?.id && choice.id !== "none" && choice.text) {
+    pending.choiceId = choice.id;
+    pending.choiceText = choice.text;
+    choiceAttached = true;
+  }
+  const record: LifeEvent = {
+    id: crypto.randomUUID(),
+    age,
+    type: event.event.type,
+    title: event.event.title,
+    story: event.story,
+    choices: event.choices ?? [],
+    importance: event.event.importance,
+    memory: event.memory,
+    objectiveChanges: changes,
+    storedAt: new Date().toISOString(),
+    usage: event.usage,
+  };
   next.history.push(record);
+  // 兜底：直接调用方（无待定决策节点可挂，如单次生成）把选择挂到本节点上，保持旧语义。
+  if (!choiceAttached && choice?.id && choice.id !== "none" && choice.text) {
+    record.choiceId = choice.id;
+    record.choiceText = choice.text;
+  }
   if (event.memory && event.event.importance >= 0.65) next.majorMemories.push(event.memory);
-  if (!next.dead) {
+  if (!next.dead && options.rollDeath !== false) {
+    const random = options.random ?? Math.random;
     if (next.health.physical <= 0) {
       next.dead = true;
       next.flags.deathCause = "disease";

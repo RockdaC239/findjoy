@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, resolveModelConfig, sanitizeModelConfig } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, ModelError, normalizeEnding, normalizeGeneratedEvent, OPENING_GENRES, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
 import { createStarterLife } from "./life";
 
 describe("model configuration", () => {
@@ -170,13 +170,77 @@ describe("model configuration", () => {
     } as unknown as import("./life").LifeState;
     const prompt = JSON.parse(buildModelPrompt(state, { id: "A", text: "接受新的工作机会" })) as Record<string, unknown>;
 
-    expect(prompt.life_state).toEqual(state);
-    expect(prompt.recent_history).toEqual(state.history);
-    expect(prompt.previous_events).toEqual(state.history);
-    expect(prompt.important_memories).toEqual(state.majorMemories);
-    expect(prompt.hidden_value_profile).toEqual(state.psychology.valueProfile);
+    expect(prompt.history).toEqual(state.history);
+    expect(prompt.major_memories).toEqual(state.majorMemories);
+    expect(prompt.personality).toEqual({
+      value_profile: state.psychology.valueProfile,
+      behavior_patterns: state.psychology.behaviorPatterns,
+      internal_conflicts: state.psychology.internalConflicts,
+    });
+    expect((prompt.current_state as Record<string, unknown>).age).toBe(24);
     expect(prompt.current_choice).toEqual({ id: "A", text: "接受新的工作机会" });
-    expect(prompt.event_context).toEqual({ current_choice: { id: "A", text: "接受新的工作机会" }, previous_event: state.history[1] });
+  });
+
+  it("keeps the prompt prefix byte-stable across turns so DeepSeek's prefix cache can hit", () => {
+    const state = createStarterLife({ age: 20 });
+    state.history = [{ id: "1", age: 20, type: "career", title: "第一份工作", story: "你进入职场。", importance: 0.7 }];
+    const next = structuredClone(state);
+    next.basic.age = 24;
+    next.history.push({ id: "2", age: 24, type: "relationship", title: "遇见伴侣", story: "你认识了一个重要的人。", importance: 0.8 });
+
+    const previous = buildModelPrompt(state);
+    const current = buildModelPrompt(next, { id: "A", text: "接受新的工作机会" });
+    // 上一轮 history 数组中最后一个共享事件（不含结束括号）之前的字节必须与新一轮完全一致：
+    // 这保证 system 提示词 + 身份 + 性格 + 记忆 + 历史数组的公共前缀可以命中 DeepSeek 缓存。
+    const sharedThroughHistory = previous.slice(0, previous.indexOf('],"current_state"'));
+    expect(current.startsWith(sharedThroughHistory)).toBe(true);
+    expect(sharedThroughHistory.length).toBeGreaterThan(200);
+  });
+
+  it("puts identity only in the first transcript user message", () => {
+    const state = createStarterLife({ age: 20 });
+    const first = JSON.parse(buildTranscriptUserContent(state, undefined, true)) as Record<string, unknown>;
+    expect(first.life).toMatchObject({ id: state.lifeId, gender: state.basic.gender, city: state.basic.city });
+    expect(first.personality).toMatchObject({ value_profile: state.psychology.valueProfile });
+    expect(first.major_memories).toEqual(state.majorMemories);
+    expect(first.current_choice).toBeNull();
+
+    const lean = JSON.parse(buildTranscriptUserContent(state, { id: "A", text: "接受" }, false)) as Record<string, unknown>;
+    expect(lean.life).toBeUndefined();
+    expect(lean.personality).toBeUndefined();
+    expect(lean.current_state).toMatchObject({ age: 20 });
+    expect(lean.current_choice).toEqual({ id: "A", text: "接受" });
+  });
+
+  it("builds an append-only conversation so each request's prefix is the previous request's full input", () => {
+    const system = "system-prompt";
+    const start = createStarterLife({ age: 0 });
+    const firstTurn = buildNextEventMessages(system, start, undefined, []);
+    expect(firstTurn).toHaveLength(2);
+    expect(firstTurn[0]).toEqual({ role: "system", content: system });
+
+    // 第一轮完成：转录 = [user(身份+状态), assistant(事件)]
+    const event1 = { timePassed: 6, story: "你开始认识这个世界。", event: { type: "family", title: "童年开始了", importance: 0.7 }, choices: [{ id: "A", text: "a" }, { id: "B", text: "b" }], objectiveChanges: {}, memory: "你最早的记忆。" };
+    const transcript = [
+      { role: "user" as const, content: firstTurn[1].content },
+      { role: "assistant" as const, content: serializeTranscriptEvent(event1 as never) },
+    ];
+
+    const next = structuredClone(start);
+    next.basic.age = 6;
+    next.history.push({ ...event1, id: "e1", age: 6 } as never);
+
+    // 第二轮请求 = [system, ...上一轮完整输入, user(本轮状态+选择)]
+    const secondTurn = buildNextEventMessages(system, next, { id: "A", text: "a" }, transcript);
+    expect(secondTurn.slice(0, -1)).toEqual([{ role: "system", content: system }, ...transcript]);
+    expect(secondTurn.at(-1)).toEqual({ role: "user", content: buildTranscriptUserContent(next, { id: "A", text: "a" }) });
+  });
+
+  it("falls back to the legacy single-shot prompt when no transcript exists", () => {
+    const state = createStarterLife({ age: 30 });
+    const messages = buildNextEventMessages("system", state, undefined, null);
+    expect(messages).toHaveLength(2);
+    expect(JSON.parse(messages[1].content)).toMatchObject({ history: [] });
   });
 
   it("throws a clear error when no API key is configured", async () => {
@@ -210,5 +274,33 @@ describe("model configuration", () => {
     expect(result).not.toBeNull();
     expect(result!.highlights).toHaveLength(2);
     expect(result!.patterns).toHaveLength(1);
+  });
+});
+
+describe("opening genre", () => {
+  it("returns the base prompt without a genre directive", () => {
+    expect(buildSystemPrompt(true)).toBe(buildSystemPrompt(true, undefined));
+    expect(buildSystemPrompt(true)).toContain("开局第一个事件更要重要");
+  });
+
+  it("appends the fixed per-game genre directive to the system prompt", () => {
+    const prompt = buildSystemPrompt(true, "安稳日常");
+    expect(prompt).toContain("【本局开局基调】安稳日常");
+    expect(prompt).toContain("不写家庭困境，不写亲人患病");
+  });
+
+  it("covers all four genres and keeps 家庭变故 as only one of them", () => {
+    expect(OPENING_GENRES).toHaveLength(4);
+    expect(OPENING_GENRES).toContain("家庭变故");
+    for (const genre of OPENING_GENRES) {
+      expect(buildSystemPrompt(false, genre)).toContain(`【本局开局基调】${genre}`);
+    }
+  });
+
+  it("reads the per-game genre from state flags when building the request", () => {
+    const state = { ...createStarterLife(), flags: { openingGenre: "机会降临" } };
+    const prompt = buildSystemPrompt(false, state.flags.openingGenre as "机会降临");
+    expect(prompt).toContain("【本局开局基调】机会降临");
+    expect(prompt).toContain("机会如何落到你面前");
   });
 });
