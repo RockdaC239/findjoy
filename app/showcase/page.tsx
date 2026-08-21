@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BrandLogo } from "../../components/BrandLogo";
+import { ShowcaseLogo } from "./ShowcaseLogo";
 import styles from "./showcase.module.css";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export default function ShowcasePage() {
       <div className={styles.frame} aria-hidden="true" />
       <div className={styles.inner}>
         <header className={styles.topbar}>
-          <BrandLogo href="/" />
+          <ShowcaseLogo />
           <div className={styles.topActions}>
             <span className={styles.topNote}>AI 人生模拟器</span>
             <Link href="/" className={styles.cta}>开始体验 <span aria-hidden="true">↗</span></Link>
