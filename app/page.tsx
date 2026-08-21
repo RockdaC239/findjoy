@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
 import { parseSseMessages } from "../lib/sse";
 import { readStreamedEvent, type StreamedEvent } from "../lib/stream-event";
+import { buildLifeView, type LifeView } from "../lib/life-view";
 import type { Gender } from "../lib/life";
 
 type Phase = "start" | "birth" | "event" | "review";
@@ -40,6 +41,8 @@ type ModelConfig = {
 
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
 const CHILDHOOD_BOUNDARY = 15;
+// 断点恢复：本地记住最近一局的 lifeId，刷新/重开页面后回到起点时提供"继续"入口
+const ACTIVE_LIFE_KEY = "findjoy:active-life";
 
 // 部署在 findfire.club/findjoy 子路径下；客户端 fetch 不会自动带 basePath，需手动加前缀
 const API_BASE = "/findjoy";
@@ -173,6 +176,8 @@ export default function Home() {
   const [historyLives, setHistoryLives] = useState<LifeSummary[] | null>(null);
   const [historyDetail, setHistoryDetail] = useState<import("../lib/life").LifeState | null>(null);
   const [requestError, setRequestError] = useState("");
+  const [resumableLife, setResumableLife] = useState<LifeView | null>(null);
+  const [isResuming, setIsResuming] = useState(false);
   const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
 
   // timePassed 是流式 JSON 的第一个字段：一旦到达，顶栏年龄立即显示落地年龄（旧年龄 + timePassed），
@@ -247,7 +252,10 @@ export default function Home() {
       setPhase("start");
       return;
     }
-    setLife(parseLife(payload));
+    const next = parseLife(payload);
+    setLife(next);
+    setResumableLife(null);
+    try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* storage unavailable */ }
   }
 
   async function choose(choiceId: string) {
@@ -257,8 +265,11 @@ export default function Home() {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
       setReview(parseReview(ending, life));
       setPhase("review");
+      try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
     } else if (payload) {
-      setLife(parseLife(payload));
+      const next = parseLife(payload);
+      setLife(next);
+      try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* ignore */ }
     }
   }
 
@@ -268,8 +279,11 @@ export default function Home() {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
       setReview(parseReview(ending, life));
       setPhase("review");
+      try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
     } else if (payload) {
-      setLife(parseLife(payload));
+      const next = parseLife(payload);
+      setLife(next);
+      try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* ignore */ }
     }
   }
 
@@ -277,6 +291,58 @@ export default function Home() {
     setLife(demoLife);
     setReview(demoReview);
     setPhase("start");
+  }
+
+  // 断点恢复：页面加载时读 localStorage 记住的最近一局，若该局仍在世则提供"继续"入口。
+  useEffect(() => {
+    let cancelled = false;
+    async function loadResumable() {
+      let lifeId: string | null = null;
+      try {
+        lifeId = window.localStorage.getItem(ACTIVE_LIFE_KEY);
+      } catch { /* storage unavailable */ }
+      if (!lifeId) return;
+      try {
+        const response = await fetch(`${API_BASE}/api/life/${lifeId}`);
+        const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
+        if (!cancelled && payload.state && payload.state.dead !== true) {
+          setResumableLife(buildLifeView(payload.state));
+        } else if (!cancelled) {
+          // 该局已结束或不存在：清除记忆，避免每次都提示
+          try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
+        }
+      } catch { /* 网络失败不打扰，下次再来 */ }
+    }
+    loadResumable();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 恢复指定的一局人生：拉取状态并进入事件页。失败或已结束时留在原处并给出提示。
+  async function resumeLife(lifeId?: string) {
+    const targetId = lifeId ?? resumableLife?.lifeId;
+    if (!targetId || isResuming) return;
+    setIsResuming(true);
+    setRequestError("");
+    setShowHistory(false);
+    setPhase("event");
+    try {
+      const response = await fetch(`${API_BASE}/api/life/${targetId}`);
+      const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
+      if (!payload.state || payload.state.dead === true) {
+        setRequestError("这一局人生已经结束，无法继续。");
+        setPhase("start");
+        setResumableLife(null);
+        try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
+        return;
+      }
+      setLife(buildLifeView(payload.state));
+      try { window.localStorage.setItem(ACTIVE_LIFE_KEY, targetId); } catch { /* ignore */ }
+    } catch {
+      setRequestError("恢复这一局人生失败，请重试。");
+      setPhase("start");
+    } finally {
+      setIsResuming(false);
+    }
   }
 
   async function openHistory() {
@@ -370,11 +436,18 @@ export default function Home() {
                   : historyLives.length === 0
                     ? <p className="history-note">还没有人生记录，去开始第一段人生吧。</p>
                     : historyLives.map((item) => (
-                      <button className="history-item" key={item.lifeId} onClick={() => loadLifeDetail(item.lifeId)}>
-                        <span className="history-item-time">{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="history-item-main">{item.city} · {item.age} 岁 · {item.events} 个节点</span>
-                        <span className={`history-item-status ${item.dead ? "is-dead" : ""}`}>{item.dead ? "已故" : "在世"}</span>
-                      </button>
+                      <div className="history-item" key={item.lifeId}>
+                        <button className="history-item-main" onClick={() => loadLifeDetail(item.lifeId)}>
+                          <span className="history-item-time">{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          <span className="history-item-text">{item.city} · {item.age} 岁 · {item.events} 个节点</span>
+                          <span className={`history-item-status ${item.dead ? "is-dead" : ""}`}>{item.dead ? "已故" : "在世"}</span>
+                        </button>
+                        {!item.dead && (
+                          <button className="history-item-resume" onClick={() => resumeLife(item.lifeId)} disabled={isResuming}>
+                            {isResuming ? "恢复中…" : "继续"}
+                          </button>
+                        )}
+                      </div>
                     ))}
               </div>
             )}
@@ -414,6 +487,11 @@ export default function Home() {
           <button className="primary-button" onClick={() => setShowGenderDialog(true)} disabled={isLoading}>
             {isLoading ? "正在开始..." : "开始人生"}
           </button>
+          {resumableLife && !resumableLife.dead && (
+            <button className="resume-button" onClick={() => resumeLife()} disabled={isLoading || isResuming}>
+              {isResuming ? "正在恢复..." : `继续上次的人生（${resumableLife.age} 岁 · ${resumableLife.city}）`}
+            </button>
+          )}
         </section>
       )}
 
