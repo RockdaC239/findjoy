@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
 import { parseSseMessages } from "../lib/sse";
@@ -303,7 +304,7 @@ export default function Home() {
   return (
     <main className={`page page--${phase}`}>
       <header className="topbar" aria-label="Primary navigation">
-        {phase === "event" ? <p className="current-age">{displayAge} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><div className="topbar-actions"><button className="settings-button" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></div></>}
+        {phase === "event" ? <p className="current-age">{displayAge} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><div className="topbar-actions"><Link href="/showcase" className="settings-button">产品展示 <span aria-hidden="true">↗</span></Link><button className="settings-button" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></div></>}
       </header>
 
       {showSettings && (
