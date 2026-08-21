@@ -12,7 +12,7 @@ DEPLOY_USER="${DEPLOY_USER:-rocc}"
 SERVER_PATH="${SERVER_PATH:-/home/${DEPLOY_USER}/apps/${APP_NAME}}"
 SRC_DIR="${SRC_DIR:-${SERVER_PATH}/src}"
 APP_PORT="${APP_PORT:-3001}"
-PUBLIC_BASE="${PUBLIC_BASE:-/findjoy/}"
+PUBLIC_BASE="${PUBLIC_BASE:-/findjoy}"
 SERVER_NAME="${SERVER_NAME:-findfire.club}"
 LISTEN_PORT="${LISTEN_PORT:-80}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}${PUBLIC_BASE}}"
@@ -83,7 +83,7 @@ fi
 
 log "4/5 创建/更新 nginx 反向代理（幂等，内容变化才更新）"
 NGINX_CONF="/etc/nginx/conf.d/${APP_NAME}.conf"
-# 注意：PUBLIC_BASE 以 / 结尾（如 /findjoy/），location 匹配 ${PUBLIC_BASE} 前缀并完整转发
+# location 用无尾斜杠前缀 /findjoy（Next basePath 下 /findjoy 直接 200；/findjoy/ 会 308 一次到 /findjoy）
 NGINX_BODY=$(cat <<'NGEOF'
 server {
     listen 80_PLACEHOLDER;
@@ -91,7 +91,7 @@ server {
 
     client_max_body_size 10m;
 
-    location /findjoy/ {
+    location /findjoy {
         proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -140,3 +140,4 @@ fi
 log "✅ ${APP_NAME} 部署完成"
 log "   内网: ${HEALTH_URL}"
 log "   对外: http://${SERVER_NAME}${PUBLIC_BASE}"
+log "   注意: ${SERVER_NAME}${PUBLIC_BASE}/ 会 308 到无尾斜杠版本（浏览器自动跟随）"

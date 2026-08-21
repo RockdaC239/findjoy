@@ -23,9 +23,9 @@ ports:
   app: 3001               # 内部端口（next start 只监听 127.0.0.1）
 
 # 对外访问：findfire.club/findjoy（nginx 完整转发前缀，Next.js basePath 处理）
-public_base: /findjoy/
+public_base: /findjoy
 health:
-  url: http://127.0.0.1:3001/findjoy/
+  url: http://127.0.0.1:3001/findjoy
   retries: 30
 
 nginx:
