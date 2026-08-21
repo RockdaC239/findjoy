@@ -1,8 +1,8 @@
 # 实施方案（implementation-plan.md）
 
 ## 目标
-将 app/showcase 从单页海报改造为 9 页全幅沉浸式幻灯片（方向 B）：
-8 页叙事 + 1 页结尾（现有海报页原样保留为结尾页）。仅手动翻页（用户已确认）。
+将 app/showcase 从单页海报改造为 11 页全幅沉浸式幻灯片（方向 B）：
+10 页叙事（用户原文逐字照搬、每段一页）+ 1 页结尾（现有海报页原样保留为结尾页）。仅手动翻页（用户已确认）。
 
 ## 文件变更
 1. **public/deck/**（新增）— 复制 8 张主选配图（deck-01-idea.jpg … deck-08-heart.jpg，来自 references/images/，均为 Wikimedia Commons 自由许可图片）。
@@ -15,18 +15,20 @@
 3. **app/showcase/page.tsx**（改）— 保留服务端组件以导出 metadata，改为渲染 <ShowcaseDeck/>；文案数据移到 Deck 内（叙事 8 页 + 结尾页）。
 4. **app/showcase/showcase.module.css**（改）— 新增 deck 样式（slide、bg、veil、content、hud、progress、responsive），保留/复用结尾页现有样式；删除不再需要的整页滚动布局样式。
 
-## 文案拆页（8+1）
+## 文案拆页（10+1，用户原文逐字不改）
 | # | 标题 | 配图 |
 |---|------|------|
-| 01 | 突然我就有了一个 idea | deck-01-idea.jpg |
+| 01 | 突然我就有了一个idea……（原文整段） | deck-01-idea.jpg |
 | 02 | 它和市面上绝大多数的人生模拟器不一样 | deck-02-thickness.jpg |
 | 03 | 核心，是一次又一次的决策 | deck-03-decisions.jpg |
-| 04 | 实时推演，下一个节点 | deck-04-nodes.jpg |
-| 05 | 每一个决策，都通向不同的人生方向 | deck-05-directions.jpg |
-| 06 | 所有选择，都没有对错 | deck-06-path.jpg |
-| 07 | 那，幸福是什么呢？ | deck-07-happiness.jpg |
-| 08 | 答案，在每个用户心里 | deck-08-heart.jpg |
-| 09 | 人生没有答案，只有选择（现有海报 + 二维码） | — |
+| 04 | 根据用户的过往经历，以及当下所做的决定，来实时推演下一个节点发生的事。 | deck-04-nodes.jpg |
+| 05 | 从而推动用户再次做出决策。 | deck-05-loop.jpg |
+| 06 | 每一个决策都会把用户推向不同的人生方向……做平衡、做抉择。 | deck-05-directions.jpg |
+| 07 | 所有选择都没有对错……找到幸福。 | deck-06-path.jpg |
+| 08 | 大富大贵不等于幸福……那幸福是什么呢？ | deck-07-happiness.jpg |
+| 09 | 答案在每个体会过多种人生的用户心里…… | deck-08-heart.jpg |
+| 10 | 而这便是findjoy的意义所在。 | deck-10-meaning.jpg |
+| 11 | 人生没有答案，只有选择（现有海报 + 二维码） | — |
 
 ## 响应式策略
 - 大屏（≥1440）：clamp 放大字号，16:9 优先。

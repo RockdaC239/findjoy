@@ -18,4 +18,6 @@
 | deck-08-heart.jpg | [Visitor walking silhouette sunset ruby beach coast scenic c bubar march 04-2015 (17370026042).jpg](https://commons.wikimedia.org/wiki/File:Visitor_walking_silhouette_sunset_ruby_beach_coast_scenic_c_bubar_march_04-2015_(17370026042).jpg) | 美国土地管理局（Public domain） | Public domain |
 | deck-08-heart-alt.jpg | [Three silhouettes visitors sunset rialto beach d archuleta 2015 (22736285177).jpg](https://commons.wikimedia.org/wiki/File:Three_silhouettes_visitors_sunset_rialto_beach_d_archuleta_2015_(22736285177).jpg) | 美国土地管理局（Public domain） | Public domain |
 
+| deck-05-loop.jpg | [City Hall, London, Spiral Staircase - 1.jpg](https://commons.wikimedia.org/wiki/File:City_Hall,_London,_Spiral_Staircase_-_1.jpg) | 见文件页 | CC BY-SA 4.0 |
+| deck-10-meaning.jpg | [Golden Morning (255626291).jpeg](https://commons.wikimedia.org/wiki/File:Golden_Morning_(255626291).jpeg) | 见文件页 | CC0 |
 > 实施阶段：`-alt` 为备选图，最终每页只保留 1 张主图。图片将复制到 `public/deck/` 本地目录，不采用热链。

@@ -61,33 +61,28 @@
   padding: clamp(30px, 5vh, 64px) clamp(40px, 7vw, 130px);
   box-sizing: border-box;
 }
-.deckTitle {
+.deckNo {
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--orange);
+  margin-bottom: 26px;
+}
+.deckText {
   margin: 0;
+  max-width: 56ch;
   color: var(--paper);
   font-family: "DM Serif Display", Georgia, serif;
   font-weight: 400;
-  font-size: clamp(40px, 5.2vw, 96px);
-  line-height: 1.06;
-  letter-spacing: -0.01em;
+  line-height: 1.42;
+  letter-spacing: -0.005em;
   text-shadow: 0 2px 30px rgba(0, 0, 0, 0.35);
 }
-.rule {
-  width: 64px;
-  height: 2px;
-  background: var(--orange);
-  margin: 30px 0;
-}
-.deckBody {
-  margin: 0;
-  max-width: 52ch;
-  color: rgba(248, 248, 246, 0.82);
-  font-size: clamp(15px, 1.25vw, 19px);
-  line-height: 1.85;
-}
-.deckBody b {
-  color: #fff;
-  font-weight: 600;
-}
+/* 按段落长度分级字号（短句大、长段小，保证一屏放下且不破版） */
+.t1 { font-size: clamp(40px, 5.4vw, 96px); }
+.t2 { font-size: clamp(34px, 4.2vw, 78px); }
+.t3 { font-size: clamp(29px, 3.5vw, 62px); }
+.t4 { font-size: clamp(25px, 3vw, 52px); }
 .eyebrow {
   margin: 0 0 26px;
   font-size: 11px;
@@ -384,9 +379,10 @@
   .qrCard {
     width: min(100%, 460px);
   }
-  .deckTitle {
-    font-size: clamp(36px, 5vw, 72px);
-  }
+  .t1 { font-size: clamp(34px, 4.8vw, 80px); }
+  .t2 { font-size: clamp(30px, 3.8vw, 64px); }
+  .t3 { font-size: clamp(25px, 3.1vw, 52px); }
+  .t4 { font-size: clamp(22px, 2.6vw, 44px); }
 }
 
 @media (max-height: 820px) {
@@ -412,12 +408,6 @@
   }
   .content {
     padding: 24px clamp(40px, 7vw, 130px);
-  }
-  .deckTitle {
-    font-size: clamp(34px, 4.6vw, 72px);
-  }
-  .rule {
-    margin: 20px 0;
   }
 }
 
@@ -508,13 +498,13 @@
     padding: 22px 22px 90px;
     justify-content: center;
   }
-  .deckTitle {
-    font-size: clamp(28px, 8.5vw, 40px);
+  .deckNo {
+    margin-bottom: 18px;
   }
-  .deckBody {
-    font-size: 15px;
-    line-height: 1.8;
-  }
+  .t1 { font-size: clamp(26px, 8.4vw, 40px); }
+  .t2 { font-size: clamp(24px, 7.2vw, 34px); }
+  .t3 { font-size: clamp(21px, 6vw, 29px); }
+  .t4 { font-size: clamp(19px, 5.2vw, 25px); }
   .hud {
     padding: 12px 20px 16px;
     gap: 12px;

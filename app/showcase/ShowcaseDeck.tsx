@@ -1,108 +1,68 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { ShowcaseLogo } from "./ShowcaseLogo";
 import styles from "./showcase.module.css";
 
+// 10 段叙事文案：来自产品团队提供的「findjoy 由来」讲述，逐字照搬、每段一页。
+// 结尾页（第 11 页）保留原展示海报：人生没有答案，只有选择 + 二维码。
 type NarrativeSlide = {
   no: string;
-  eyebrow: string;
-  title: string;
-  body: ReactNode;
+  text: string;
   img: string;
 };
 
-// 8 页叙事内容，来自产品团队提供的「findjoy 由来」讲述，逐页拆解。
-// 结尾页（第 9 页）保留原展示海报：人生没有答案，只有选择 + 二维码。
 const narrativeSlides: NarrativeSlide[] = [
   {
     no: "01",
-    eyebrow: "IDEAS",
-    title: "突然我就有了一个 idea",
-    body: (
-      <>
-        我要做一款人生模拟器，可以玩各种各样的人生，在体验的过程里，找到自己真正向往的生活。
-        于是便有了这款 demo——<b>findjoy，觅乐</b>。
-      </>
-    ),
+    text: "突然我就有了一个idea，我要做一款人生模拟器，可以玩各种各样的人生，在体验的过程里，找到自己真正向往的生活。于是便有了这款demo，findjoy，觅乐。",
     img: "deck-01-idea.jpg",
   },
   {
     no: "02",
-    eyebrow: "DIFFERENT",
-    title: "它和市面上绝大多数的人生模拟器不一样",
-    body: (
-      <>
-        没有目标、没有数值、没有评判。因为我认为，这些东西无法描述<b>生命的厚度</b>。
-      </>
-    ),
+    text: "它和市面上绝大多数的人生模拟器不一样，它没有目标、没有数值、没有评判，因为我认为这些东西无法描述生命的厚度。",
     img: "deck-02-thickness.jpg",
   },
   {
     no: "03",
-    eyebrow: "CORE",
-    title: "核心，是一次又一次的决策",
-    body: (
-      <>
-        这款产品的核心就是一次又一次的决策，<b>整个人生故事线由 AI 驱动</b>。
-      </>
-    ),
+    text: "这款产品的核心就是一次又一次的决策，整个人生故事线由ai驱动。",
     img: "deck-03-decisions.jpg",
   },
   {
     no: "04",
-    eyebrow: "REALTIME",
-    title: "实时推演，下一个节点",
-    body: (
-      <>
-        根据用户的过往经历，以及当下所做的决定，<b>实时推演下一个节点发生的事</b>，
-        从而推动用户再次做出决策。
-      </>
-    ),
+    text: "根据用户的过往经历，以及当下所做的决定，来实时推演下一个节点发生的事。",
     img: "deck-04-nodes.jpg",
   },
   {
     no: "05",
-    eyebrow: "DIRECTIONS",
-    title: "每一个决策，都通向不同的人生方向",
-    body: (
-      <>
-        爱情、事业、亲情、友情——用户要在它们之间<b>做平衡，做抉择</b>。
-      </>
-    ),
-    img: "deck-05-directions.jpg",
+    text: "从而推动用户再次做出决策。",
+    img: "deck-05-loop.jpg",
   },
   {
     no: "06",
-    eyebrow: "NO JUDGEMENT",
-    title: "所有选择，都没有对错",
-    body: (
-      <>
-        也没有所谓的成功。只想帮助用户在走过多种人生后，<b>找到自己想过的生活，找到幸福</b>。
-      </>
-    ),
-    img: "deck-06-path.jpg",
+    text: "每一个决策都会把用户推向不同的人生方向，用户要在爱情、事业、亲情、友情之间做平衡、做抉择。",
+    img: "deck-05-directions.jpg",
   },
   {
     no: "07",
-    eyebrow: "HAPPINESS",
-    title: "那，幸福是什么呢？",
-    body: <>大富大贵不等于幸福，躺平不等于幸福，功成名就也不等于幸福。</>,
-    img: "deck-07-happiness.jpg",
+    text: "所有选择都没有对错，也没有所谓的成功，只想帮助用户在走过多种人生后，找到自己想过的生活，找到幸福。",
+    img: "deck-06-path.jpg",
   },
   {
     no: "08",
-    eyebrow: "MEANING",
-    title: "答案，在每个用户心里",
-    body: (
-      <>
-        每个体会过多种人生的用户，都有自己的定义。
-        而这，便是<b>findjoy 的意义所在</b>。
-      </>
-    ),
+    text: "大富大贵不等于幸福、躺平不等于幸福、功成名就也不等于幸福，那幸福是什么呢？",
+    img: "deck-07-happiness.jpg",
+  },
+  {
+    no: "09",
+    text: "答案在每个体会过多种人生的用户心里，且每个人的定义都不同。",
     img: "deck-08-heart.jpg",
+  },
+  {
+    no: "10",
+    text: "而这便是findjoy的意义所在。",
+    img: "deck-10-meaning.jpg",
   },
 ];
 
@@ -113,6 +73,14 @@ const pillars = [
 ] as const;
 
 const ASSET_PREFIX = "/findjoy"; // 与 next.config basePath 一致
+
+// 按段落长度分级字号：短句用超大衬线，长段降级保证一屏放得下
+function textSizeClass(len: number): string {
+  if (len <= 24) return styles.t1;
+  if (len <= 40) return styles.t2;
+  if (len <= 70) return styles.t3;
+  return styles.t4;
+}
 
 export default function ShowcaseDeck() {
   const total = narrativeSlides.length + 1;
@@ -224,7 +192,7 @@ export default function ShowcaseDeck() {
             .filter(Boolean)
             .join(" ")}
           role="region"
-          aria-label={s.title}
+          aria-label={s.text.slice(0, 24)}
           aria-hidden={i !== index}
         >
           <div className={styles.bg}>
@@ -239,12 +207,8 @@ export default function ShowcaseDeck() {
             <div className={styles.veil} />
           </div>
           <div className={styles.content}>
-            <p className={styles.eyebrow}>
-              {s.eyebrow} — {s.no}
-            </p>
-            <h1 className={styles.deckTitle}>{s.title}</h1>
-            <div className={styles.rule} aria-hidden="true" />
-            <p className={styles.deckBody}>{s.body}</p>
+            <span className={styles.deckNo}>{s.no}</span>
+            <p className={[styles.deckText, textSizeClass(s.text.length)].join(" ")}>{s.text}</p>
           </div>
         </section>
       ))}

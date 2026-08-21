@@ -11,12 +11,16 @@
 | 02 thickness | 年轮/树木截面（生命的厚度） | deck-02-thickness.jpg（松树截面, CC BY-SA 4.0） | — |
 | 03 decisions | 黑白国际象棋兵 | deck-03-decisions.jpg（Dietmar Rabich 黑白棋子, CC BY-SA 4.0） | — |
 | 04 nodes | 星轨（实时推演节点） | deck-04-nodes.jpg（ESO 阿塔卡马星轨, CC BY 4.0） | deck-04-nodes-alt.jpg（ISS 气辉星轨, CC BY 4.0） |
-| 05 directions | 铁轨岔道 / 路牌（人生方向） | deck-05-directions.jpg（墨尔本铁路岔道, CC BY-SA 4.0） | deck-05-directions-alt.jpg（Dingle 路牌, CC0） |
+| 05 loop | 旋转楼梯（推动再次决策） | deck-05-loop.jpg（伦敦市政厅旋转楼梯, CC BY-SA 4.0） | — |
+| 06 directions | 铁轨岔道 / 路牌（人生方向） | deck-05-directions.jpg（墨尔本铁路岔道, CC BY-SA 4.0） | deck-05-directions-alt.jpg（Dingle 路牌, CC0） |
 | 06 path | 晨雾林间小径（没有对错） | deck-06-path.jpg（Dülmen 黑白晨雾, CC BY-SA 4.0） | — |
 | 07 happiness | 日出/海岸（幸福是什么） | deck-07-happiness.jpg（Dingle 冬日黎明, CC BY-SA 4.0） | deck-07-happiness-alt.jpg（Sète 日落, CC BY 4.0） |
-| 08 heart | 人形剪影（答案在心里） | deck-08-heart.jpg（海边行走剪影, Public domain） | deck-08-heart-alt.jpg（海边三人剪影, Public domain） |
+| 09 heart | 人形剪影（答案在心里） | deck-08-heart.jpg（海边行走剪影, Public domain） | deck-08-heart-alt.jpg（海边三人剪影, Public domain） |
+| 10 meaning | 金色海面日出（意义所在） | deck-10-meaning.jpg（Golden Morning, CC0） | deck-07-happiness-alt.jpg（Sète 日落, CC BY 4.0） |
 
 统一处理：CSS 暖调黑白（grayscale + 轻微 sepia + 微饱和），与大屏投影的安静克制气质一致。
+
+> 注：叙事文案为用户原文，逐字照搬，每段一页（10 页叙事 + 1 页结尾）。
 
 ## 候选方向（previews/）
 1. **preview-1.html · 左右分栏**：左文右图，延续现有海报的构图语言，图片带细线外框。
