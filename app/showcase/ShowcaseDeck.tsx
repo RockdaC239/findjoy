@@ -1,27 +1,43 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ShowcaseLogo } from "./ShowcaseLogo";
 import styles from "./showcase.module.css";
 
-// 10 段叙事文案：来自产品团队提供的「findjoy 由来」讲述，逐字照搬、每段一页。
-// 结尾页（第 11 页）保留原展示海报：人生没有答案，只有选择 + 二维码。
+// PPT 只做「提取重点 + 提词」，细节由演讲人口述：
+// - 第 1 页为浓缩要点页（不含原文，去掉第一人称）
+// - 其余叙事页保留原文逐字，或按用户要求精简/合并/删除
+// - 结尾页（第 9 页）保留原展示海报：人生没有答案，只有选择 + 二维码
 type NarrativeSlide = {
   no: string;
-  text: string;
   img: string;
+  /** 单段原文（逐字） */
+  text?: string;
+  /** 多行原文（逐字，同一页，如原 4、5 段合并） */
+  lines?: string[];
+  /** 浓缩页：主句 */
+  title?: string;
+  /** 浓缩页：要点列表（提词用） */
+  points?: string[];
 };
 
 const narrativeSlides: NarrativeSlide[] = [
   {
     no: "01",
-    text: "突然我就有了一个idea，我要做一款人生模拟器，可以玩各种各样的人生，在体验的过程里，找到自己真正向往的生活。于是便有了这款demo，findjoy，觅乐。",
+    title: "一个 idea",
+    points: [
+      "一款人生模拟器",
+      "玩遍各种各样的人生",
+      "在体验里，找到自己真正向往的生活",
+      "于是有了 demo：findjoy · 觅乐",
+    ],
     img: "deck-01-idea.jpg",
   },
   {
     no: "02",
-    text: "它和市面上绝大多数的人生模拟器不一样，它没有目标、没有数值、没有评判，因为我认为这些东西无法描述生命的厚度。",
+    text: "没有目标，没有数值，没有评判",
     img: "deck-02-thickness.jpg",
   },
   {
@@ -31,37 +47,30 @@ const narrativeSlides: NarrativeSlide[] = [
   },
   {
     no: "04",
-    text: "根据用户的过往经历，以及当下所做的决定，来实时推演下一个节点发生的事。",
+    lines: [
+      "根据用户的过往经历，以及当下所做的决定，来实时推演下一个节点发生的事。",
+      "从而推动用户再次做出决策。",
+    ],
     img: "deck-04-nodes.jpg",
   },
   {
     no: "05",
-    text: "从而推动用户再次做出决策。",
-    img: "deck-05-loop.jpg",
-  },
-  {
-    no: "06",
     text: "每一个决策都会把用户推向不同的人生方向，用户要在爱情、事业、亲情、友情之间做平衡、做抉择。",
     img: "deck-05-directions.jpg",
   },
   {
-    no: "07",
+    no: "06",
     text: "所有选择都没有对错，也没有所谓的成功，只想帮助用户在走过多种人生后，找到自己想过的生活，找到幸福。",
     img: "deck-06-path.jpg",
   },
   {
-    no: "08",
-    text: "大富大贵不等于幸福、躺平不等于幸福、功成名就也不等于幸福，那幸福是什么呢？",
+    no: "07",
+    text: "幸福是什么？",
     img: "deck-07-happiness.jpg",
   },
   {
-    no: "09",
-    text: "答案在每个体会过多种人生的用户心里，且每个人的定义都不同。",
-    img: "deck-08-heart.jpg",
-  },
-  {
-    no: "10",
-    text: "而这便是findjoy的意义所在。",
+    no: "08",
+    text: "这便是findjoy的意义所在。",
     img: "deck-10-meaning.jpg",
   },
 ];
@@ -183,6 +192,37 @@ export default function ShowcaseDeck() {
     .filter(Boolean)
     .join(" ");
 
+  const slideBody = (s: NarrativeSlide): ReactNode => {
+    if (s.title) {
+      return (
+        <>
+          <p data-deck-title className={[styles.deckText, styles.t1].join(" ")}>{s.title}</p>
+          <div className={styles.deckPoints}>
+            {(s.points ?? []).map((pt, j) => (
+              <p key={j} data-deck-point className={styles.deckPoint}>
+                <span className={styles.deckPointMark} aria-hidden="true">·</span>
+                {pt}
+              </p>
+            ))}
+          </div>
+        </>
+      );
+    }
+    if (s.lines) {
+      const size = textSizeClass(s.lines.join("").length);
+      return (
+        <div className={styles.deckLines}>
+          {s.lines.map((ln, j) => (
+            <p key={j} data-deck-line className={[styles.deckText, size].join(" ")}>
+              {ln}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return <p className={[styles.deckText, textSizeClass((s.text ?? "").length)].join(" ")}>{s.text}</p>;
+  };
+
   return (
     <div className={deckClass}>
       {narrativeSlides.map((s, i) => (
@@ -192,7 +232,7 @@ export default function ShowcaseDeck() {
             .filter(Boolean)
             .join(" ")}
           role="region"
-          aria-label={s.text.slice(0, 24)}
+          aria-label={s.title ?? s.text ?? (s.lines ?? []).join("")}
           aria-hidden={i !== index}
         >
           <div className={styles.bg}>
@@ -206,10 +246,7 @@ export default function ShowcaseDeck() {
             />
             <div className={styles.veil} />
           </div>
-          <div className={styles.content}>
-            <span className={styles.deckNo}>{s.no}</span>
-            <p className={[styles.deckText, textSizeClass(s.text.length)].join(" ")}>{s.text}</p>
-          </div>
+          <div className={styles.content}>{slideBody(s)}</div>
         </section>
       ))}
 

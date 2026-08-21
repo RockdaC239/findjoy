@@ -1,8 +1,8 @@
 # 实施方案（implementation-plan.md）
 
 ## 目标
-将 app/showcase 从单页海报改造为 11 页全幅沉浸式幻灯片（方向 B）：
-10 页叙事（用户原文逐字照搬、每段一页）+ 1 页结尾（现有海报页原样保留为结尾页）。仅手动翻页（用户已确认）。
+将 app/showcase 从单页海报改造为 9 页全幅沉浸式幻灯片（方向 B）：
+8 页叙事（第 1 页浓缩要点，其余按用户要求精简/合并/删除，保留原文逐字）+ 1 页结尾（现有海报页原样保留为结尾页）。仅手动翻页（用户已确认）。
 
 ## 文件变更
 1. **public/deck/**（新增）— 复制 8 张主选配图（deck-01-idea.jpg … deck-08-heart.jpg，来自 references/images/，均为 Wikimedia Commons 自由许可图片）。
@@ -15,7 +15,7 @@
 3. **app/showcase/page.tsx**（改）— 保留服务端组件以导出 metadata，改为渲染 <ShowcaseDeck/>；文案数据移到 Deck 内（叙事 8 页 + 结尾页）。
 4. **app/showcase/showcase.module.css**（改）— 新增 deck 样式（slide、bg、veil、content、hud、progress、responsive），保留/复用结尾页现有样式；删除不再需要的整页滚动布局样式。
 
-## 文案拆页（10+1，用户原文逐字不改）
+## 文案拆页（8+1）
 | # | 标题 | 配图 |
 |---|------|------|
 | 01 | 突然我就有了一个idea……（原文整段） | deck-01-idea.jpg |

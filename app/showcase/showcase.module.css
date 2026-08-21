@@ -83,6 +83,36 @@
 .t2 { font-size: clamp(34px, 4.2vw, 78px); }
 .t3 { font-size: clamp(29px, 3.5vw, 62px); }
 .t4 { font-size: clamp(25px, 3vw, 52px); }
+/* 浓缩页：主句 + 要点列表（提词用） */
+.deckPoints {
+  margin-top: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.deckPoint {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  color: rgba(248, 248, 246, 0.92);
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: clamp(22px, 2.3vw, 38px);
+  line-height: 1.4;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+.deckPointMark {
+  flex: none;
+  color: var(--orange);
+  font-size: 1.15em;
+  line-height: 1;
+}
+/* 多行原文（同一页多段） */
+.deckLines {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 .eyebrow {
   margin: 0 0 26px;
   font-size: 11px;
@@ -500,6 +530,17 @@
   }
   .deckNo {
     margin-bottom: 18px;
+  }
+  .deckPoints {
+    margin-top: 24px;
+    gap: 12px;
+  }
+  .deckPoint {
+    gap: 10px;
+    font-size: clamp(18px, 5.6vw, 26px);
+  }
+  .deckLines {
+    gap: 14px;
   }
   .t1 { font-size: clamp(26px, 8.4vw, 40px); }
   .t2 { font-size: clamp(24px, 7.2vw, 34px); }
