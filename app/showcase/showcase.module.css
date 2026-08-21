@@ -83,6 +83,11 @@
 .t2 { font-size: clamp(34px, 4.2vw, 78px); }
 .t3 { font-size: clamp(29px, 3.5vw, 62px); }
 .t4 { font-size: clamp(25px, 3vw, 52px); }
+/* 单行短句：字号按容器宽度适配，保证一行放下（如「幸福是什么？」） */
+.q {
+  font-size: clamp(34px, 5.6vw, 72px);
+  white-space: nowrap;
+}
 /* 浓缩页：主句 + 要点列表（提词用） */
 .deckPoints {
   margin-top: 36px;
@@ -546,6 +551,7 @@
   .t2 { font-size: clamp(24px, 7.2vw, 34px); }
   .t3 { font-size: clamp(21px, 6vw, 29px); }
   .t4 { font-size: clamp(19px, 5.2vw, 25px); }
+  .q { font-size: clamp(24px, 8vw, 36px); }
   .hud {
     padding: 12px 20px 16px;
     gap: 12px;

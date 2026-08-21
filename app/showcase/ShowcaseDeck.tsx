@@ -21,6 +21,8 @@ type NarrativeSlide = {
   title?: string;
   /** 浓缩页：要点列表（提词用） */
   points?: string[];
+  /** 强制单行展示（短句专用，字号按单行适配） */
+  oneLine?: boolean;
 };
 
 const narrativeSlides: NarrativeSlide[] = [
@@ -67,6 +69,7 @@ const narrativeSlides: NarrativeSlide[] = [
     no: "07",
     text: "幸福是什么？",
     img: "deck-07-happiness.jpg",
+    oneLine: true,
   },
   {
     no: "08",
@@ -220,7 +223,8 @@ export default function ShowcaseDeck() {
         </div>
       );
     }
-    return <p className={[styles.deckText, textSizeClass((s.text ?? "").length)].join(" ")}>{s.text}</p>;
+    const sizeClass = s.oneLine ? styles.q : textSizeClass((s.text ?? "").length);
+    return <p className={[styles.deckText, sizeClass].join(" ")}>{s.text}</p>;
   };
 
   return (
