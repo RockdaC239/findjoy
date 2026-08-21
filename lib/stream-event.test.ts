@@ -23,4 +23,24 @@ describe("readStreamedEvent", () => {
       ],
     });
   });
+
+  it("reveals the landing age as soon as timePassed streams (it is the first JSON field)", () => {
+    // timePassed 数字可能还在传输中（后面紧跟逗号/换行），只取已完整到达的整数部分
+    expect(readStreamedEvent('{"timePassed":3,"story":"你三十五岁，')).toEqual({
+      story: "你三十五岁，",
+      title: "",
+      choices: [],
+      timePassed: 3,
+    });
+    expect(readStreamedEvent('{"timePassed" : 5 }').timePassed).toBe(5);
+    expect(readStreamedEvent('{"timePassed": 3.0,"story":"x"}').timePassed).toBe(3);
+  });
+
+  it("keeps timePassed undefined until the field arrives", () => {
+    expect(readStreamedEvent('{"story":"你看见午后的光。').timePassed).toBeUndefined();
+  });
+
+  it("accepts the time_passed snake_case fallback", () => {
+    expect(readStreamedEvent('{"time_passed":7}').timePassed).toBe(7);
+  });
 });

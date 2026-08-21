@@ -4,7 +4,7 @@ import { useState } from "react";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
 import { parseSseMessages } from "../lib/sse";
-import { readStreamedEvent, type StreamedChoice } from "../lib/stream-event";
+import { readStreamedEvent, type StreamedEvent } from "../lib/stream-event";
 import type { Gender } from "../lib/life";
 
 type Phase = "start" | "birth" | "event" | "review";
@@ -162,7 +162,6 @@ export default function Home() {
   const [life, setLife] = useState<LifeData>(demoLife);
   const [review, setReview] = useState<Review>(demoReview);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
   // 生产固定配置：始终使用默认的 DeepSeek deepseek-v4-flash（Key 由服务端环境变量提供）
   const [modelConfig] = useState<ModelConfig>(() => {
     if (typeof window === "undefined") return defaultModelConfig;
@@ -174,7 +173,13 @@ export default function Home() {
   const [historyLives, setHistoryLives] = useState<LifeSummary[] | null>(null);
   const [historyDetail, setHistoryDetail] = useState<import("../lib/life").LifeState | null>(null);
   const [requestError, setRequestError] = useState("");
-  const [streamingEvent, setStreamingEvent] = useState({ story: "", title: "", choices: [] as StreamedChoice[] });
+  const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
+
+  // timePassed 是流式 JSON 的第一个字段：一旦到达，顶栏年龄立即显示落地年龄（旧年龄 + timePassed），
+  // 不必等整段 story/choices 流完；落地年龄与 life.ts 的 applyNextEvent 保持一致（上限 110 岁）。
+  const displayAge = isLoading && typeof streamingEvent.timePassed === "number"
+    ? Math.min(110, life.age + streamingEvent.timePassed)
+    : life.age;
 
   async function requestLife(url: string, body?: Record<string, unknown>) {
     setIsLoading(true);
@@ -236,10 +241,8 @@ export default function Home() {
 
   async function startLife(gender: Gender) {
     setShowGenderDialog(false);
-    setSelectedChoice("starting");
     setPhase("event");
     const payload = await requestLife(`${API_BASE}/api/life/start`, { gender });
-    setSelectedChoice(null);
     if (!payload) {
       setPhase("start");
       return;
@@ -248,7 +251,6 @@ export default function Home() {
   }
 
   async function choose(choiceId: string) {
-    setSelectedChoice(choiceId);
     const choice = life.choices.find((item) => item.id === choiceId);
     const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { choice });
     if (isRecord(payload) && payload.ended === true) {
@@ -258,11 +260,9 @@ export default function Home() {
     } else if (payload) {
       setLife(parseLife(payload));
     }
-    setSelectedChoice(null);
   }
 
   async function continueLife() {
-    setSelectedChoice("continuing");
     const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`);
     if (isRecord(payload) && payload.ended === true) {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
@@ -271,7 +271,6 @@ export default function Home() {
     } else if (payload) {
       setLife(parseLife(payload));
     }
-    setSelectedChoice(null);
   }
 
   function restart() {
@@ -304,7 +303,7 @@ export default function Home() {
   return (
     <main className={`page page--${phase}`}>
       <header className="topbar" aria-label="Primary navigation">
-        {phase === "event" ? <p className="current-age">{life.age} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><div className="topbar-actions"><button className="settings-button" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></div></>}
+        {phase === "event" ? <p className="current-age">{displayAge} 岁</p> : <><BrandLogo className="wordmark" onClick={restart} /><div className="topbar-actions"><button className="settings-button" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></div></>}
       </header>
 
       {showSettings && (
@@ -456,7 +455,7 @@ export default function Home() {
                     return (
                       <button className={`choice-card ${choice ? "choice-card--revealed" : ""}`} key={id} disabled={!choice || isLoading} onClick={() => choice && choose(choice.id)}>
                         <span className="choice-card-back" aria-hidden="true">?</span>
-                        <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{selectedChoice === choice?.id ? "人生正在继续" : `“${choice?.text ?? ""}”`}</strong><b aria-hidden="true">↗</b></span>
+                        <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{`“${choice?.text ?? ""}”`}</strong><b aria-hidden="true">↗</b></span>
                       </button>
                     );
                   })}
