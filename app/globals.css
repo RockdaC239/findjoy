@@ -15,7 +15,7 @@ button { color:inherit; font:inherit; cursor:pointer; }
 .chapter { color:var(--muted); }
 .current-age { margin:0 auto; color:var(--ink); font-family:'DM Serif Display', Georgia, serif; font-size:clamp(24px, 3vw, 36px); line-height:1; }
 .topbar-actions { margin-left:auto; display:flex; align-items:center; gap:14px; }
-.settings-button { border:0; border-bottom:1px solid var(--line); background:transparent; padding:3px 0; color:var(--muted); font-size:11px; text-decoration:none; }
+.settings-button { border:0; border-bottom:1px solid var(--line); background:transparent; padding:3px 0; color:var(--muted); font-size:11px; }
 .settings-button:hover,.settings-close:hover { color:var(--orange); }
 .modal-scrim { position:fixed; inset:0; z-index:1; background:transparent; }
 .settings-panel { position:absolute; z-index:2; top:76px; right:clamp(24px, 5vw, 80px); width:min(360px, calc(100vw - 44px)); border:1px solid var(--ink); background:var(--paper); padding:20px; border-radius:12px; box-shadow:0 8px 30px rgba(17,17,15,.12); }
