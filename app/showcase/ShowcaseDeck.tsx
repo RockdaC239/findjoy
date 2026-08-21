@@ -33,7 +33,7 @@ const narrativeSlides: NarrativeSlide[] = [
       "一款人生模拟器",
       "玩遍各种各样的人生",
       "在体验里，找到自己真正向往的生活",
-      "于是有了 demo：findjoy · 觅乐",
+      "findjoy · 觅乐",
     ],
     img: "deck-01-idea.jpg",
   },
