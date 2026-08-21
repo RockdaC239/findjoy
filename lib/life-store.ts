@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
+import { flagsToBackground, type BackgroundAvoid } from "./background";
 
 const DEFAULT_DB_FILE = path.join(process.cwd(), ".data", "life.db");
 
@@ -101,6 +102,32 @@ export const lifeStore = {
         updatedAt: row.updated_at,
       };
     });
+  },
+
+  // 收集最近几局人生用过的出身维度取值，供新一局开局避开，避免连续人生反复落到
+  // 同一条线上（例如反复“艺术天赋 + 再婚家庭 → 画画/艺考/继父”）。只统计有完整出身档案的存档。
+  recentBackgroundAvoid(limit = 5): BackgroundAvoid {
+    const rows = getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<{ state: string }>;
+    const economy: string[] = [];
+    const structure: string[] = [];
+    const event: string[] = [];
+    const talent: string[] = [];
+    for (const row of rows) {
+      let state: LifeState;
+      try { state = JSON.parse(row.state) as LifeState; } catch { continue; }
+      const bg = flagsToBackground(state.flags);
+      if (!bg) continue;
+      if (!economy.includes(bg.economy)) economy.push(bg.economy);
+      if (!structure.includes(bg.structure)) structure.push(bg.structure);
+      if (!event.includes(bg.event)) event.push(bg.event);
+      if (!talent.includes(bg.talent)) talent.push(bg.talent);
+    }
+    return {
+      economy: economy as BackgroundAvoid["economy"],
+      structure: structure as BackgroundAvoid["structure"],
+      event: event as BackgroundAvoid["event"],
+      talent: talent as BackgroundAvoid["talent"],
+    };
   },
 
   delete(id: string): void {

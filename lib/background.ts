@@ -25,22 +25,37 @@ export interface LifeBackground {
 
 // 概率权重：经济/结构参考现实分布（普通与小康为主，大富稀有；双亲完整为主，单亲/留守/隔代/收养为少数）；
 // 事件基调四等分偏置一点（安稳与机会略高于变故），天赋半数无、其余均摊。
-function pickWeighted<T>(random: () => number, entries: Array<[T, number]>): T {
-  const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
+function pickWeighted<T>(random: () => number, entries: Array<[T, number]>, avoid: ReadonlyArray<T> = []): T {
+  let pool = entries;
+  if (avoid.length > 0) {
+    const filtered = entries.filter(([value]) => !avoid.includes(value));
+    if (filtered.length > 0) pool = filtered;
+  }
+  const total = pool.reduce((sum, [, weight]) => sum + weight, 0);
   let roll = random() * total;
-  for (const [value, weight] of entries) {
+  for (const [value, weight] of pool) {
     roll -= weight;
     if (roll < 0) return value;
   }
-  return entries[entries.length - 1][0];
+  return pool[pool.length - 1][0];
 }
 
-export function rollBackground(random: () => number = Math.random): LifeBackground {
+// 新一局开局出身滚动。avoid 传入最近几局已用过的维度取值，
+// 让连续的人生不要总落在同一条线上（例如反复"艺术天赋 + 再婚家庭 → 画画/艺考/继父"），
+// 从而给玩家换一种人生的新鲜感。某维度全部被避开时回落到完整池。
+export interface BackgroundAvoid {
+  economy?: ReadonlyArray<FamilyEconomy>;
+  structure?: ReadonlyArray<FamilyStructure>;
+  event?: ReadonlyArray<OpeningEventGenre>;
+  talent?: ReadonlyArray<Talent>;
+}
+
+export function rollBackground(random: () => number = Math.random, avoid: BackgroundAvoid = {}): LifeBackground {
   return {
-    economy: pickWeighted(random, [["拮据", 12], ["普通", 38], ["小康", 32], ["富裕", 14], ["大富", 4]]),
-    structure: pickWeighted(random, [["双亲完整", 68], ["单亲", 12], ["再婚家庭", 7], ["留守隔代", 8], ["收养", 5]]),
-    event: pickWeighted(random, [["安稳温暖", 30], ["机会降临", 25], ["家庭变故", 25], ["平凡开端", 20]]),
-    talent: pickWeighted(random, [["无", 50], ["艺术", 10], ["运动", 10], ["学业", 12], ["社交", 10], ["动手", 8]]),
+    economy: pickWeighted(random, [["拮据", 12], ["普通", 38], ["小康", 32], ["富裕", 14], ["大富", 4]], avoid.economy),
+    structure: pickWeighted(random, [["双亲完整", 68], ["单亲", 12], ["再婚家庭", 7], ["留守隔代", 8], ["收养", 5]], avoid.structure),
+    event: pickWeighted(random, [["安稳温暖", 30], ["机会降临", 25], ["家庭变故", 25], ["平凡开端", 20]], avoid.event),
+    talent: pickWeighted(random, [["无", 50], ["艺术", 10], ["运动", 10], ["学业", 12], ["社交", 10], ["动手", 8]], avoid.talent),
   };
 }
 

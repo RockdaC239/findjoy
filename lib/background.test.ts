@@ -65,6 +65,28 @@ describe("life background", () => {
     expect(flagsToBackground({ bgEconomy: "暴富", bgStructure: "双亲完整", bgEvent: "安稳温暖", bgTalent: "无" })).toBeUndefined();
   });
 
+  it("avoids recently-used values so consecutive lives differ", () => {
+    // 连续多局都用了 艺术天赋 + 再婚家庭，新一局应尽量避开，给玩家换一种人生。
+    let sawOtherTalent = false;
+    let sawOtherStructure = false;
+    for (let i = 0; i < 500; i++) {
+      const bg = rollBackground(seededRandom(i), { talent: ["艺术"], structure: ["再婚家庭"] });
+      if (bg.talent !== "艺术") sawOtherTalent = true;
+      if (bg.structure !== "再婚家庭") sawOtherStructure = true;
+    }
+    expect(sawOtherTalent).toBe(true);
+    expect(sawOtherStructure).toBe(true);
+  });
+
+  it("rolls a valid fallback when every value of a dimension is avoided", () => {
+    // 某维度全部被避开时回落到完整池，仍返回合法取值。
+    for (let i = 0; i < 50; i++) {
+      const bg = rollBackground(seededRandom(i), { talent: [...TALENTS], structure: [...FAMILY_STRUCTURE] });
+      expect(TALENTS).toContain(bg.talent);
+      expect(FAMILY_STRUCTURE).toContain(bg.structure);
+    }
+  });
+
   it("builds a directive that covers all four dimensions", () => {
     const directive = buildBackgroundDirective({ economy: "富裕", structure: "再婚家庭", event: "平凡开端", talent: "运动" });
     expect(directive).toContain("【本局出身档案】");

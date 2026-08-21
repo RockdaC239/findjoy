@@ -61,6 +61,19 @@ describe("life store", () => {
     expect(lifeStore.getTranscript(life.lifeId)).toBeNull();
   });
 
+  it("collects recently-used background dimensions for the next life to avoid", () => {
+    const artRemarried = createStarterLife();
+    artRemarried.flags = { bgEconomy: "小康", bgStructure: "再婚家庭", bgEvent: "机会降临", bgTalent: "艺术" };
+    const artRemarried2 = createStarterLife();
+    artRemarried2.flags = { bgEconomy: "普通", bgStructure: "再婚家庭", bgEvent: "家庭变故", bgTalent: "艺术" };
+    lifeStore.set(artRemarried2);
+    lifeStore.set(artRemarried);
+
+    const avoid = lifeStore.recentBackgroundAvoid(5);
+    expect(avoid.talent).toContain("艺术");
+    expect(avoid.structure).toContain("再婚家庭");
+  });
+
   it("lists life summaries with correct fields", () => {
     const first = createStarterLife();
     const second = createStarterLife();
