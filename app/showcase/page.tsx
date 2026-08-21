@@ -17,7 +17,6 @@ const pillars = [
 export default function ShowcasePage() {
   return (
     <main className={styles.page}>
-      <div className={styles.frame} aria-hidden="true" />
       <div className={styles.inner}>
         <header className={styles.topbar}>
           <ShowcaseLogo />
@@ -54,7 +53,6 @@ export default function ShowcasePage() {
             <div className={styles.qrCard}>
               <p className={styles.qrLabel}>扫码 · 开始你的一生</p>
               <div className={styles.qrWrap}>
-                <span className={styles.pulse} aria-hidden="true" />
                 {/* eslint-disable-next-line @next/next/no-img-element -- 二维码必须原图直出，避免任何图片优化/重编码影响扫码精度 */}
                 <img
                   className={styles.qrImg}
