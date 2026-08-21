@@ -2,7 +2,8 @@
 # ============================================================
 # 执行层：findjoy 生产环境部署脚本（幂等）
 # 由 GitHub Actions 同步代码后在服务器上调用。
-# 重复部署会复用已有端口 / systemd 单元 / nginx 配置。
+# 重复部署会复用已有 systemd 单元 / nginx 配置。
+# 对外访问：findfire.club/findjoy（Next.js basePath 处理前缀）
 # ============================================================
 set -euo pipefail
 
@@ -10,9 +11,11 @@ APP_NAME="${APP_NAME:-findjoy}"
 DEPLOY_USER="${DEPLOY_USER:-rocc}"
 SERVER_PATH="${SERVER_PATH:-/home/${DEPLOY_USER}/apps/${APP_NAME}}"
 SRC_DIR="${SRC_DIR:-${SERVER_PATH}/src}"
-APP_PORT="${APP_PORT:-3030}"
-PUBLIC_PORT="${PUBLIC_PORT:-3939}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}/}"
+APP_PORT="${APP_PORT:-3001}"
+PUBLIC_BASE="${PUBLIC_BASE:-/findjoy/}"
+SERVER_NAME="${SERVER_NAME:-findfire.club}"
+LISTEN_PORT="${LISTEN_PORT:-80}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}${PUBLIC_BASE}}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
 
 log() { echo "==> $*"; }
@@ -78,17 +81,17 @@ else
   log "systemd 单元无变化，跳过"
 fi
 
-log "4/5 创建/更新 nginx 反向代理（幂等）"
+log "4/5 创建/更新 nginx 反向代理（幂等，内容变化才更新）"
 NGINX_CONF="/etc/nginx/conf.d/${APP_NAME}.conf"
-if [ ! -f "$NGINX_CONF" ]; then
-  NGINX_BODY=$(cat <<'NGEOF'
+# 注意：PUBLIC_BASE 以 / 结尾（如 /findjoy/），location 匹配 ${PUBLIC_BASE} 前缀并完整转发
+NGINX_BODY=$(cat <<'NGEOF'
 server {
-    listen 3030_placeholder;
-    server_name _;
+    listen 80_PLACEHOLDER;
+    server_name SERVER_NAME_PLACEHOLDER;
 
     client_max_body_size 10m;
 
-    location / {
+    location /findjoy/ {
         proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -102,18 +105,24 @@ server {
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
     }
+
+    # 根路径：findfire 主产品暂未部署，先给占位响应
+    location / {
+        return 200 'findfire.club - 主产品部署中';
+        add_header Content-Type text/plain;
+    }
 }
 NGEOF
 )
-  # 用 sed 注入实际端口（保留 nginx 变量原样）
-  NGINX_BODY=$(printf '%s' "$NGINX_BODY" | sed -e "s/3030_placeholder/${PUBLIC_PORT}/" -e "s/APP_PORT_PLACEHOLDER/${APP_PORT}/")
-  echo "$NGINX_BODY" | sudo tee "$NGINX_CONF" >/dev/null
-  sudo nginx -t || die "nginx 配置校验失败"
-  sudo systemctl reload nginx
-  log "nginx 反向代理已创建（:${PUBLIC_PORT} -> 127.0.0.1:${APP_PORT}）"
-else
-  log "nginx 配置已存在，跳过"
-fi
+  NGINX_BODY=$(printf '%s' "$NGINX_BODY" | sed -e "s/80_PLACEHOLDER/${LISTEN_PORT}/" -e "s/SERVER_NAME_PLACEHOLDER/${SERVER_NAME}/" -e "s/APP_PORT_PLACEHOLDER/${APP_PORT}/")
+  if ! diff -q <(echo "$NGINX_BODY") <(sudo cat "$NGINX_CONF" 2>/dev/null) >/dev/null 2>&1; then
+    echo "$NGINX_BODY" | sudo tee "$NGINX_CONF" >/dev/null
+    sudo nginx -t || die "nginx 配置校验失败"
+    sudo systemctl reload nginx
+    log "nginx 配置已更新（${SERVER_NAME}${PUBLIC_BASE} -> 127.0.0.1:${APP_PORT}）"
+  else
+    log "nginx 配置无变化，跳过"
+  fi
 
 log "5/5 重启服务并健康检查"
 sudo systemctl restart "${APP_NAME}"
@@ -128,7 +137,6 @@ if [ "$healthy" != 1 ]; then
   die "健康检查失败：$HEALTH_URL"
 fi
 
-PUBLIC_IP=$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo "<服务器公网IP>")
 log "✅ ${APP_NAME} 部署完成"
 log "   内网: ${HEALTH_URL}"
-log "   对外: http://${PUBLIC_IP}:${PUBLIC_PORT}"
+log "   对外: http://${SERVER_NAME}${PUBLIC_BASE}"

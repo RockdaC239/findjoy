@@ -45,6 +45,9 @@ const REMOTE_MODELS_STORAGE_KEY = "findjoy:remote-models";
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
 const CHILDHOOD_BOUNDARY = 15;
 
+// 部署在 findfire.club/findjoy 子路径下；客户端 fetch 不会自动带 basePath，需手动加前缀
+const API_BASE = "/findjoy";
+
 type LifeSummary = {
   lifeId: string;
   age: number;
@@ -111,12 +114,13 @@ function getString(value: unknown, fallback: string): string {
 }
 
 function getChoices(value: unknown): Choice[] {
-  if (!Array.isArray(value)) return demoLife.choices;
-  const choices = value.flatMap((item, index) => {
+  // 真实事件里拿到多少选项就展示多少，绝不用 demo 文案顶替——
+  // 否则会出现“本该是模型给的选项，却突然变成演示选项”的卡片跳变。
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index) => {
     if (!isRecord(item) || typeof item.text !== "string") return [];
     return [{ id: getString(item.id, String.fromCharCode(65 + index)), text: item.text }];
   });
-  return choices.length >= 2 ? choices : demoLife.choices;
 }
 
 function parseLife(payload: unknown): LifeData {
@@ -216,7 +220,7 @@ export default function Home() {
     setIsRefreshingModels(true);
     setModelRefreshMessage("");
     try {
-      const response = await fetch("/api/models", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerId: modelConfig.providerId, apiKey: modelConfig.apiKey }) });
+      const response = await fetch(`${API_BASE}/api/models`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerId: modelConfig.providerId, apiKey: modelConfig.apiKey }) });
       const payload = (await response.json()) as { models?: ModelOption[]; error?: string };
       if (!response.ok || !payload.models?.length) throw new Error(payload.error ?? "未读取到模型");
       setRemoteModels((current) => {
@@ -294,7 +298,7 @@ export default function Home() {
     setShowGenderDialog(false);
     setSelectedChoice("starting");
     setPhase("event");
-    const payload = await requestLife("/api/life/start", { gender });
+    const payload = await requestLife(`${API_BASE}/api/life/start`, { gender });
     setSelectedChoice(null);
     if (!payload) {
       setPhase("start");
@@ -306,9 +310,9 @@ export default function Home() {
   async function choose(choiceId: string) {
     setSelectedChoice(choiceId);
     const choice = life.choices.find((item) => item.id === choiceId);
-    const payload = await requestLife(`/api/life/${life.lifeId}/next`, { choice });
+    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { choice });
     if (isRecord(payload) && payload.ended === true) {
-      const ending = await requestLife(`/api/life/${life.lifeId}/ending`);
+      const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
       setReview(parseReview(ending, life));
       setPhase("review");
     } else if (payload) {
@@ -319,9 +323,9 @@ export default function Home() {
 
   async function continueLife() {
     setSelectedChoice("continuing");
-    const payload = await requestLife(`/api/life/${life.lifeId}/next`);
+    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`);
     if (isRecord(payload) && payload.ended === true) {
-      const ending = await requestLife(`/api/life/${life.lifeId}/ending`);
+      const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
       setReview(parseReview(ending, life));
       setPhase("review");
     } else if (payload) {
@@ -341,7 +345,7 @@ export default function Home() {
     setShowHistory(true);
     if (historyLives !== null) return;
     try {
-      const response = await fetch("/api/lives");
+      const response = await fetch(`${API_BASE}/api/lives`);
       const payload = (await response.json()) as { lives?: LifeSummary[] };
       setHistoryLives(Array.isArray(payload.lives) ? payload.lives : []);
     } catch {
@@ -351,7 +355,7 @@ export default function Home() {
 
   async function loadLifeDetail(lifeId: string) {
     try {
-      const response = await fetch(`/api/life/${lifeId}`);
+      const response = await fetch(`${API_BASE}/api/life/${lifeId}`);
       const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
       if (payload.state) setHistoryDetail(payload.state);
     } catch { /* keep list visible */ }
