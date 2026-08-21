@@ -4,6 +4,8 @@ import { buildBackgroundDirective, flagsToBackground, type LifeBackground } from
 
 const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实、复杂、不确定的人生，不定义幸福。全程只用第二人称“你”称呼玩家。禁止出现任何人物姓名、昵称、英文名、姓名占位符；其他人物只能使用关系或角色称谓，例如父亲、母亲、同学、伴侣、老师、邻居。
 
+玩家性别以每轮状态里的 gender 字段为准（female=女性，male=男性），必须在整局人生中保持不变：叙述里“你”相关的称谓与视角要一直符合该性别，例如玩家为女性时，孩子应叫你“妈妈”、孙辈叫你“外婆/奶奶”，不能被写成“爸爸/爷爷”；不要中途改变性别或让亲属称谓与性别矛盾。
+
 人生推演节奏：这不是娓娓道来的小说，而是一次浓缩的人生。时间可以大幅跳跃（每次 1~8 年，童年也可以一次跳过数年）。每一个事件都必须是人生节点级别的重要事件——转折、变故、机会、失去、关系变化、关键决定；不要写日常琐事或流水账。每一段现状都要说得准、说得透。
 
 开局第一个事件更要重要：必须从至少 4 岁写起（timePassed 硬约束 4~7，绝对不要在 0/1/2/3 岁写开局），直接反映那个年龄阶段最重要的节点，让玩家一开局就面临第一个有分量的抉择。重要不等于惨：一个安稳家庭里孩子第一次为自己争取什么、一次天赋被发现，同样有分量。本局固定的"出身档案"指令（家庭经济/家庭结构/开局事件基调/天赋）会随本提示词给出，照指令写开局即可；不要默认写家庭变故或亲人患病。
@@ -11,10 +13,10 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
 只返回一个 JSON 对象，不要 Markdown 代码块，不要任何额外文字或解释。必须严格使用下面的 camelCase 字段，并按此顺序输出（story 在前、event 在后）：
 {"timePassed":3,"story":"...","event":{"type":"family","title":"...","importance":0.8},"choices":[{"id":"A","text":"..."},{"id":"B","text":"..."},{"id":"C","text":"..."}],"objectiveChanges":{},"memory":"..."}
 示例（只演示格式与语气，不要照抄内容）：
-{"timePassed":3,"story":"大学室友都在互相抄作业、刷绩点，只有你想把这门课真正学懂；老师私下说你有点天赋，劝你考虑往这个方向走。","event":{"type":"career","title":"合群还是认真","importance":0.8},"choices":[{"id":"A","text":"跟大家一样，先保住绩点和关系"},{"id":"B","text":"认真学下去，哪怕被说成不合群"},{"id":"C","text":"表面合群，私下自己认真学"}],"objectiveChanges":{},"memory":"你在图书馆坐到闭馆，出来时月亮已经升得很高了。"}
+{"timePassed":3,"story":"你二十岁，和两个朋友合伙开了一间小设计工作室。半年过去，朋友想接来钱快的商业单，你想做能拿奖的原创作品。会议室里，三个人第一次吵红了脸。","event":{"type":"career","title":"商业单还是原创","importance":0.8},"choices":[{"id":"A","text":"按数据说话，先接商业单养活工作室"},{"id":"B","text":"坚持做原创，哪怕前两年不赚钱"},{"id":"C","text":"一半一半：商业单养家，原创养梦"}],"objectiveChanges":{},"memory":"那晚散会后，你在工作室画了一夜草图。"}
 字段含义：
-- story：上一次选择之后，人生现状的精准速写（60 至 150 字）。只说明“现在变成了什么样”，不叙述过程、不做铺垫。展示顺序在最前。
-- event：在当前现状下发生的一件事，必须是重要的人生节点；title 用一句话点题，展示在 story 之后。
+- story：此刻正在发生的一幕真实人生（80 至 180 字）。**story 的时间必须落在本节点年龄（timePassed 推进之后），第一句以"你Y岁"开头，Y 必须等于当前年龄 + timePassed**：例如当前 30 岁、timePassed 5，就写"你三十五岁……"，绝对不要写三十岁或更早的年龄。要写一个具体的场景：谁在你面前、说了什么话、房间里有什么声音、你手上正拿着什么——让玩家像亲眼看到一样，感受到这个决定正压在自己身上。不要写成简历式总结或新闻标题，不要只报状态（"你事业稳定、家庭和睦"），要落到正在发生的事和即将做出的选择上。展示顺序在最前。
+- event：把 story 里正在发生的这件事凝成一句话标题；title 必须是事件本身（如"父亲把诊断书放在桌上"），而不是抽象的概括词（如"家庭危机""人生转折"），展示在 story 之后。
 - event.type 只能是英文枚举值之一：career、relationship、health、finance、random、family（不要使用中文或其它单词）。
 - choices：这个事件带来的 2 至 3 个真正不同且合理的关键抉择，每项必须包含 id 和 text。
   **硬约束：三个选项之间必须有清晰的价值张力，每个选项必须代表一种不同的人生价值或方向**（例如放弃/坚持、个人/家庭、安稳/冒险、服从/反叛、理性/感性、短利/长利、逃避/面对、向内/向外等），不能是同一种态度的不同措辞（例如不能三个都是"接受/适应/顺其自然"）。选 A、选 B、选 C，必须让你的人生走向不同分支；如果三个选项读起来意思接近，说明你写错了。
@@ -22,6 +24,7 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
   **张力轴轮换硬约束：本次事件的张力轴必须与上一个事件的张力轴不同。** 上一条事件的选项用的是什么价值轴，这一条就换一条别的轴。例如上一条是"追梦/顾家、闯荡/安稳"，这一条就改写成"理性/感性"（如：按数据和利弊判断 vs 凭直觉和热爱 vs 先不表态再想想）、"名声/自由"（如：要名气和认可 vs 要自在随心 vs 两者都想要一点）、"守成/创新"（如：维持现状 vs 大胆变革 vs 小步试水）、"独行/合作"、"服从/反叛"、"短利/长利"、"逃避/面对"等。同一局内相邻两个节点绝不能用同一条价值轴；连续两三个节点都出现"闯出去/留守/折中"这类三件套，说明你没有换轴。
   写法建议：选项文本里直接点出你要表达的价值立场（如"为了撑住这个家，..."、"我不想被这件事拖住，..."、"找专业的人来帮忙，比我自己扛更靠谱..."），让玩家一眼看出区别。
   **连续性硬约束**：事件必须随时间和玩家的选择推进。严禁原样或近乎原样地复述上一条事件的故事、标题或选项——即使玩家选择了"维持现状、顺其自然"，也要写出新的处境、新的变化和新的选项；连续两个节点绝不能是同一个事件。
+  人生阶段要均衡：工作、家庭、健康、关系、情感都要有机会出现，不要从头到尾只写事业打拼。尤其是感情线：恋爱、婚姻、伴侣、亲密关系是人生的重要部分，应当自然而然地出现并发展——可以是学生时代的初恋、青年时的相遇、中年时的陪伴或晚年的相守。不要总是让玩家一直单身、迟迟不婚或永远只谈事业；也不必强行圆满，一段真实的感情可以有遗憾，但要有发生、有推进、有温度。婚姻的时点可以多样（有人早婚、有人晚婚、有人不婚），关键是有真实的关系与情感线索贯穿人生，而不是全程回避。
 - objectiveChanges：本次事件造成的客观变化，可为空对象。
 - memory：一句话浓缩这次事件。`;
 
@@ -32,9 +35,9 @@ export const CHILDHOOD_SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系�
 只返回一个 JSON 对象，不要 Markdown 代码块，不要任何额外文字或解释。必须严格使用下面的 camelCase 字段（注意：没有 choices 字段），并按此顺序输出（story 在前、event 在后）：
 {"timePassed":5,"story":"...","event":{"type":"family","title":"...","importance":0.8},"objectiveChanges":{},"memory":"..."}
 示例（只演示格式与语气，不要照抄内容）：
-{"timePassed":6,"story":"小学三年级那年，你在美术课上第一次画出像样的画，被老师贴在教室后墙。从那以后，你开始喜欢放学后留下来画画。","event":{"type":"random","title":"天赋被发现","importance":0.75},"objectiveChanges":{},"memory":"三年级那幅画，是你第一次被别人认真看见。"}
+{"timePassed":5,"story":"你九岁，升入三年级。搬家后你转学到了城东，班里一个扎马尾的女孩在课间递给你半块橡皮，你们成了同桌。","event":{"type":"random","title":"半块橡皮","importance":0.7},"objectiveChanges":{},"memory":"九岁那年，你第一次有了可以一起放学回家的朋友。"}
 字段含义：
-- story：这段童年里，你的人生现状精准速写（60 至 150 字）。只描述“命运把你带到了哪里、你长成了什么样”，不写任何选择。
+- story：这段童年里，你的人生现状精准速写（60 至 150 字）。**story 的时间落在这一跳结束后的年龄，第一句以"你Y岁"开头，Y = 当前年龄 + timePassed**：例如当前 10 岁、timePassed 4，就写"你十四岁……"，绝对不要写十岁或更早的年龄。只描述“命运把你带到了哪里、你长成了什么样”，不写任何选择。
 - event：这段童年里发生的最重要的一件事（家庭变故、迁徙、入学、亲人生病、交到朋友、学会一件本领等），必须是重要节点；title 用一句话点题，展示在 story 之后。story 里必须写到"发生了什么事"（一次驻足、一次搬家、一场比赛、一句夸奖、一次离别……），不能只是氛围、心情或物件的描写（例如"门后那幅全家福"这种画面不是事件）；**连续性硬约束：严禁原样或近乎原样地复述上一条事件的故事、标题或内容——即使这段时间没有大事，也要写出新的细节、新的处境**；童年同样遵循本局"出身档案"：不是每一局的童年都要写变故或苦难，普通温暖的成长也有分量。
 - event.type 只能是英文枚举值之一：career、relationship、health、finance、random、family（不要使用中文或其它单词）。
 - timePassed：时间跳跃（建议 4~7 年，童年可以大幅跳跃），**落地年龄（当前年龄 + timePassed）必须小于 15 岁**，不要跳到 15 岁及以后；从 15 岁起进入成年决策阶段，届时会切换到另一套指令。
@@ -54,10 +57,13 @@ export function crossesAdulthoodBoundary(stateAge: number, timePassed: number): 
 // 出身档案：见 lib/background.ts。每局开局由 start 路由掷出四维出身并写入 flags，
 // 这里把本局出身档案作为系统提示词的固定后缀；同一局内前缀字节稳定，不破坏 DeepSeek 上下文缓存。
 // 旧存档（无出身档案）返回基础提示词。
-export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackground): string {
+// transitioning=true 表示"成年后的第一个决策节点"（14 岁迈入 15+），追加专属指令：
+// 时间已过去、写落地年龄的你、严禁复述上一条童年事件——修"14 岁节点内容在 18 岁重生成"。
+export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackground, transitioning = false): string {
   const base = expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
-  if (!background) return base;
-  return `${base}\n\n${buildBackgroundDirective(background)}`;
+  const profile = background ? `\n\n${buildBackgroundDirective(background)}` : "";
+  if (!transitioning) return `${base}${profile}`;
+  return `${base}${profile}\n\n【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。`;
 }
 
 export class ModelError extends Error {
@@ -102,11 +108,14 @@ function finiteOrZero(value: unknown) {
 export function resolveModelConfig(config?: Partial<ModelConfig>, env: EnvConfig = process.env): ResolvedModelConfig {
   const providerModel = config?.providerId ? resolveProviderModel(config.providerId, config.model) : undefined;
   const requestedModel = typeof config?.model === "string" && config.model.trim() ? config.model.trim() : undefined;
+  // 生产固定模型与 Key：优先环境变量（LLM_MODEL=deepseek-v4-flash / LLM_API_KEY），
+  // 忽略前端传入的 apiKey 与 model，避免用户绕过固定配置。
+  const fixedModel = (env.LLM_MODEL || env.OPENAI_MODEL || "").trim();
   return {
-    apiKey: (config?.apiKey || env.LLM_API_KEY || env.OPENAI_API_KEY || "").trim(),
-    providerId: providerModel?.providerId ?? "environment",
-    baseUrl: providerModel?.baseUrl ?? (env.LLM_BASE_URL || env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, ""),
-    model: requestedModel ?? providerModel?.model ?? (env.LLM_MODEL || env.OPENAI_MODEL || "gpt-4o-mini").trim(),
+    apiKey: (env.LLM_API_KEY || env.OPENAI_API_KEY || "").trim(),
+    providerId: "environment",
+    baseUrl: (env.LLM_BASE_URL || env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, ""),
+    model: fixedModel || requestedModel || providerModel?.model || "gpt-4o-mini",
     inputCostPerMillion: providerModel && requestedModel === providerModel.model ? providerModel.inputCostPerMillion : (providerModel ? 0 : finiteOrZero(env.LLM_INPUT_COST_PER_MILLION)),
     outputCostPerMillion: providerModel && requestedModel === providerModel.model ? providerModel.outputCostPerMillion : (providerModel ? 0 : finiteOrZero(env.LLM_OUTPUT_COST_PER_MILLION)),
   };
@@ -395,6 +404,7 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
     history: state.history,
     current_state: {
       age: state.basic.age,
+      gender: state.basic.gender,
       career: state.career,
       finance: state.finance,
       health: state.health,
@@ -427,6 +437,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
   }
   payload.current_state = {
     age: state.basic.age,
+    gender: state.basic.gender,
     career: state.career,
     finance: state.finance,
     health: state.health,
@@ -485,7 +496,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
     try {
-      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags));
+      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags), expectChoices && state.basic.age < CHILDHOOD_BOUNDARY);
       const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
       const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS), body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages: withRetryCorrection(attempt, messages, lastFailureReason, "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。") }) });
       if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
@@ -546,7 +557,11 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
     }
     if (attempt < MAX_MODEL_ATTEMPTS) yield { retry: true, reason: lastFailureReason };
   }
-  throw lastError;
+  // 兜底：模型连续失败也不让一局人生永远卡在同一个决策节点上。
+  // 用确定性回退事件推进，保证玩家始终能继续；转录同样记录这份回退事件。
+  logModelDiagnostic("event-fallback", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", reason: lastFailureReason || lastError.message });
+  const fallback = buildFallbackEvent(state, choice);
+  return { ...fallback, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedCostUsd: 0, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
 }
 
 export async function generateNextEvent(state: LifeState, choice?: LifeChoice, requestConfig?: Partial<ModelConfig>): Promise<NextEvent> {

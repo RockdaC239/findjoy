@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getProvider, MODEL_PROVIDERS } from "../lib/provider-catalog";
+import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
 import { parseSseMessages } from "../lib/sse";
 import { readStreamedEvent, type StreamedChoice } from "../lib/stream-event";
@@ -38,10 +38,6 @@ type ModelConfig = {
   model: string;
 };
 
-type ModelOption = { id: string; label: string };
-
-const MODEL_CONFIG_STORAGE_KEY = "findjoy:model-config";
-const REMOTE_MODELS_STORAGE_KEY = "findjoy:remote-models";
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
 const CHILDHOOD_BOUNDARY = 15;
 
@@ -57,22 +53,12 @@ type LifeSummary = {
   updatedAt: string;
 };
 
+// 生产固定配置：DeepSeek deepseek-v4-flash，Key 由服务端环境变量提供（前端不收集）
 const defaultModelConfig: ModelConfig = {
-  providerId: "openai",
+  providerId: "deepseek",
   apiKey: "",
-  model: "gpt-4o-mini",
+  model: "deepseek-v4-flash",
 };
-
-function loadRemoteModels(): Record<string, ModelOption[]> {
-  if (typeof window === "undefined") return {};
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(REMOTE_MODELS_STORAGE_KEY) ?? "{}");
-    if (!saved || typeof saved !== "object") return {};
-    return Object.fromEntries(Object.entries(saved).map(([providerId, models]) => [providerId, Array.isArray(models) ? models.filter((model): model is ModelOption => Boolean(model) && typeof model === "object" && typeof (model as ModelOption).id === "string" && typeof (model as ModelOption).label === "string") : []]));
-  } catch {
-    return {};
-  }
-}
 
 const demoLife: LifeData = {
   lifeId: "demo-life",
@@ -177,64 +163,18 @@ export default function Home() {
   const [review, setReview] = useState<Review>(demoReview);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
-  const [modelConfig, setModelConfig] = useState<ModelConfig>(() => {
+  // 生产固定配置：始终使用默认的 DeepSeek deepseek-v4-flash（Key 由服务端环境变量提供）
+  const [modelConfig] = useState<ModelConfig>(() => {
     if (typeof window === "undefined") return defaultModelConfig;
-    try {
-      const saved = window.localStorage.getItem(MODEL_CONFIG_STORAGE_KEY);
-      return saved ? { ...defaultModelConfig, ...JSON.parse(saved) } : defaultModelConfig;
-    } catch { return defaultModelConfig; }
+    return defaultModelConfig;
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showGenderDialog, setShowGenderDialog] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLives, setHistoryLives] = useState<LifeSummary[] | null>(null);
   const [historyDetail, setHistoryDetail] = useState<import("../lib/life").LifeState | null>(null);
-  const [remoteModels, setRemoteModels] = useState<Record<string, ModelOption[]>>(loadRemoteModels);
-  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
-  const [modelRefreshMessage, setModelRefreshMessage] = useState("");
   const [requestError, setRequestError] = useState("");
   const [streamingEvent, setStreamingEvent] = useState({ story: "", title: "", choices: [] as StreamedChoice[] });
-  const selectedProvider = getProvider(modelConfig.providerId) ?? MODEL_PROVIDERS[0];
-  const listedModels = remoteModels[selectedProvider.id] ?? selectedProvider.models;
-  const availableModels = listedModels.some((model) => model.id === modelConfig.model) ? listedModels : [{ id: modelConfig.model, label: `${modelConfig.model}（当前选择）` }, ...listedModels];
-
-  function updateModelConfig<K extends keyof ModelConfig>(key: K, value: ModelConfig[K]) {
-    const next = { ...modelConfig, [key]: value };
-    setModelConfig(next);
-    try { window.localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(next)); } catch { /* Storage is optional. */ }
-  }
-
-  function selectProvider(providerId: string) {
-    const provider = getProvider(providerId) ?? MODEL_PROVIDERS[0];
-    const models = remoteModels[provider.id] ?? provider.models;
-    const next = { ...modelConfig, providerId: provider.id, model: models[0].id };
-    setModelConfig(next);
-    try { window.localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(next)); } catch { /* Storage is optional. */ }
-  }
-
-  async function refreshModels() {
-    if (!modelConfig.apiKey) {
-      setModelRefreshMessage("请先填写 API Key");
-      return;
-    }
-    setIsRefreshingModels(true);
-    setModelRefreshMessage("");
-    try {
-      const response = await fetch(`${API_BASE}/api/models`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerId: modelConfig.providerId, apiKey: modelConfig.apiKey }) });
-      const payload = (await response.json()) as { models?: ModelOption[]; error?: string };
-      if (!response.ok || !payload.models?.length) throw new Error(payload.error ?? "未读取到模型");
-      setRemoteModels((current) => {
-        const next = { ...current, [modelConfig.providerId]: payload.models ?? [] };
-        window.localStorage.setItem(REMOTE_MODELS_STORAGE_KEY, JSON.stringify(next));
-        return next;
-      });
-      setModelRefreshMessage(`已读取 ${payload.models.length} 个可用模型`);
-    } catch (error) {
-      setModelRefreshMessage(error instanceof Error ? error.message : "读取模型列表失败");
-    } finally {
-      setIsRefreshingModels(false);
-    }
-  }
 
   async function requestLife(url: string, body?: Record<string, unknown>) {
     setIsLoading(true);
@@ -372,12 +312,10 @@ export default function Home() {
         <div className="modal-scrim" onClick={() => setShowSettings(false)} aria-hidden="true" />
         <section className="settings-panel" aria-label="模型设置">
           <div className="settings-head"><p className="eyebrow">MODEL CONNECTION</p><button className="settings-close" onClick={() => setShowSettings(false)} aria-label="关闭模型设置">×</button></div>
-          <p className="settings-note">只需选择供应商、模型并填写 Key。接口地址和计费规则由系统自动配置，设置保存在当前浏览器。</p>
-          <label>供应商<select value={modelConfig.providerId} onChange={(event) => selectProvider(event.target.value)}>{MODEL_PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label>
-          <label>模型<select value={modelConfig.model} onChange={(event) => updateModelConfig("model", event.target.value)}>{availableModels.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label>
-          <label>API Key<input type="password" value={modelConfig.apiKey} onChange={(event) => updateModelConfig("apiKey", event.target.value)} placeholder="粘贴该供应商的 API Key" autoComplete="off" /></label>
-          <button className="refresh-models" type="button" onClick={refreshModels} disabled={isRefreshingModels}>{isRefreshingModels ? "正在读取模型..." : "刷新该供应商的最新模型"}</button>
-          {modelRefreshMessage && <p className="settings-status" role="status">{modelRefreshMessage}</p>}
+          <p className="settings-note">系统固定使用 DeepSeek deepseek-v4-flash 模型，API Key 由服务端统一配置，无需填写。</p>
+          <label>供应商<select value={modelConfig.providerId} disabled>{MODEL_PROVIDERS.filter((provider) => provider.id === "deepseek").map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label>
+          <label>模型<select value="deepseek-v4-flash" disabled><option value="deepseek-v4-flash">DeepSeek V4 Flash（默认）</option></select></label>
+          <label>API Key<input type="password" value="server-managed" placeholder="由服务端统一配置" disabled autoComplete="off" /></label>
         </section>
         </>
       )}

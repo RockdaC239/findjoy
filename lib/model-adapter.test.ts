@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, generateNextEvent, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
 import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
 describe("model configuration", () => {
-  it("uses a supplied provider and model ahead of environment defaults", () => {
+  it("pins the server-side environment model and key ahead of any browser configuration", () => {
     expect(
       resolveModelConfig(
         {
@@ -12,13 +12,13 @@ describe("model configuration", () => {
           apiKey: "user-key",
           model: "deepseek-chat",
         },
-        { LLM_API_KEY: "env-key", LLM_BASE_URL: "https://api.openai.com/v1", LLM_MODEL: "gpt-4o-mini" },
+        { LLM_API_KEY: "env-key", LLM_BASE_URL: "https://api.deepseek.com/v1", LLM_MODEL: "deepseek-v4-flash" },
       ),
     ).toEqual({
-      apiKey: "user-key",
-      providerId: "deepseek",
+      apiKey: "env-key",
+      providerId: "environment",
       baseUrl: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
+      model: "deepseek-v4-flash",
       inputCostPerMillion: 0.28,
       outputCostPerMillion: 0.42,
     });
@@ -255,7 +255,7 @@ describe("model configuration", () => {
     const lean = JSON.parse(buildTranscriptUserContent(state, { id: "A", text: "接受" }, false)) as Record<string, unknown>;
     expect(lean.life).toBeUndefined();
     expect(lean.personality).toBeUndefined();
-    expect(lean.current_state).toMatchObject({ age: 20 });
+    expect(lean.current_state).toMatchObject({ age: 20, gender: state.basic.gender });
     expect(lean.current_choice).toEqual({ id: "A", text: "接受" });
   });
 
@@ -336,6 +336,8 @@ describe("model configuration", () => {
     state.career.occupation = "教师";
 
     await expect(generateEnding(state, { providerId: "deepseek", apiKey: "", model: "deepseek-chat" })).rejects.toThrow(ModelError);
+    // 服务端环境变量提供 key 时不应报错（生产固定配置路径）
+    expect(resolveModelConfig({ providerId: "deepseek", apiKey: "", model: "deepseek-chat" }, { LLM_API_KEY: "env-key", LLM_MODEL: "deepseek-v4-flash" }).apiKey).toBe("env-key");
   });
 
   it("rejects a generated ending that introduces a name (strict contract)", () => {
@@ -348,6 +350,32 @@ describe("model configuration", () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  it("guides relationship and love arcs instead of perpetual singleness", () => {
+    const prompt = buildSystemPrompt(true);
+    expect(prompt).toContain("感情线");
+    expect(prompt).toContain("恋爱、婚姻、伴侣");
+    expect(prompt).toContain("不要总是让玩家一直单身、迟迟不婚");
+  });
+
+  it("falls back to a deterministic event instead of leaving a life stuck when the model keeps failing", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalEnv = { ...process.env };
+    // 模拟模型服务持续失败（每次 HTTP 非 2xx），streamNextEvent 应在重试耗尽后回退到 buildFallbackEvent。
+    globalThis.fetch = (async () => new Response("service unavailable", { status: 503 })) as typeof fetch;
+    process.env.LLM_API_KEY = "env-key";
+    process.env.LLM_MODEL = "deepseek-v4-flash";
+    try {
+      const state = createStarterLife({ age: 30 });
+      const event = await generateNextEvent(state, undefined, { providerId: "deepseek", apiKey: "key", model: "deepseek-chat" });
+      expect(event).not.toBeNull();
+      expect(event.choices.length).toBeGreaterThanOrEqual(2);
+      expect((event.usage as { fallbackReason?: string } | undefined)?.fallbackReason).toBeTruthy();
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env = originalEnv;
+    }
   });
 
   it("accepts a well-formed generated ending", () => {
@@ -369,6 +397,12 @@ describe("life background system prompt", () => {
   it("returns the base prompt without a background profile", () => {
     expect(buildSystemPrompt(true)).toBe(buildSystemPrompt(true, undefined));
     expect(buildSystemPrompt(true)).toContain("开局第一个事件更要重要");
+  });
+
+  it("requires the player gender to stay fixed across the whole life", () => {
+    const prompt = buildSystemPrompt(true);
+    expect(prompt).toContain("玩家性别以每轮状态里的 gender 字段为准");
+    expect(prompt).toContain("不要中途改变性别");
   });
 
   it("appends the fixed per-game background profile to the system prompt", () => {
@@ -397,5 +431,14 @@ describe("adulthood boundary", () => {
     // 已在成年阶段或开局（0~4 岁）不属于跨界
     expect(crossesAdulthoodBoundary(15, 1)).toBe(false);
     expect(crossesAdulthoodBoundary(0, 6)).toBe(false);
+  });
+});
+
+describe("adulthood transition prompt", () => {
+  it("appends the first-decision directive only when transitioning into adulthood", () => {
+    const transitioning = buildSystemPrompt(true, undefined, true);
+    expect(transitioning).toContain("【成年后的第一个决策节点】");
+    expect(transitioning).toContain("严禁复述上一条童年事件");
+    expect(buildSystemPrompt(true, undefined, false)).not.toContain("【成年后的第一个决策节点】");
   });
 });
