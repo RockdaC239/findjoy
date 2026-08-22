@@ -1,5 +1,9 @@
 # FindJoy · 觅乐
 
+<p align="center">
+  <img src="./public/findjoy-logo.svg" alt="findjoy. 主标志" width="260" />
+</p>
+
 FindJoy 是一款由 AI 驱动的人生模拟游戏。你从人生的某个起点开始，在关系、工作、家庭、健康、金钱和自我实现之间不断做出选择，直到回望这一生。
 
 它不提供“人生成功分数”，也不替你判断什么样的人生才是正确答案。
