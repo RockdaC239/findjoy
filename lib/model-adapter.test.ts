@@ -35,6 +35,15 @@ describe("model configuration", () => {
     });
   });
 
+  it("ignores browser configuration in environment mode", () => {
+    expect(resolveModelConfig({ providerId: "deepseek", apiKey: "browser-key", model: "deepseek-chat" }, {
+      NODE_ENV: "production",
+      LLM_API_KEY: "server-key",
+      LLM_BASE_URL: "https://api.deepseek.com/v1",
+      LLM_MODEL: "deepseek-v4-flash",
+    })).toMatchObject({ providerId: "environment", apiKey: "server-key", model: "deepseek-v4-flash" });
+  });
+
   it("accepts only a catalog provider while allowing its live model IDs", () => {
     expect(sanitizeModelConfig({ providerId: "alibaba-bailian", model: "not-a-model", apiKey: "key" })).toEqual({
       providerId: "alibaba-bailian",
@@ -552,4 +561,3 @@ describe("storyline guards (题材域层防重)", () => {
     expect(prompt).toContain("艺术创作");
   });
 });
-

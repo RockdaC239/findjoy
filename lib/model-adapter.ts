@@ -1,5 +1,6 @@
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, ModelUsage, LifeEnding } from "./life";
 import { getProvider, resolveProviderModel } from "./provider-catalog";
+import { getModelConfigMode, resolveStoredModelConfig } from "./model-config";
 import { buildBackgroundDirective, flagsToBackground, type LifeBackground } from "./background";
 import { buildStorylinePromptHint, detectStorylineDomains, leftStorylines, parseAvoidStorylines, storylineLabel, type StorylineGuards } from "./storyline";
 import { DEATH_CAUSE_LABEL } from "./life";
@@ -119,18 +120,23 @@ function finiteOrZero(value: unknown) {
 }
 
 export function resolveModelConfig(config?: Partial<ModelConfig>, env: EnvConfig = process.env): ResolvedModelConfig {
-  const providerModel = config?.providerId ? resolveProviderModel(config.providerId, config.model) : undefined;
-  const requestedModel = typeof config?.model === "string" && config.model.trim() ? config.model.trim() : undefined;
-  // 生产固定模型与 Key：优先环境变量（LLM_MODEL=deepseek-v4-flash / LLM_API_KEY），
-  // 忽略前端传入的 apiKey 与 model，避免用户绕过固定配置。
+  const configuredMode = getModelConfigMode(env);
+  const storedConfig = configuredMode === "local" ? resolveStoredModelConfig(env) : undefined;
+  const hasEnvironmentConfig = Boolean((env.LLM_API_KEY || env.OPENAI_API_KEY || env.LLM_MODEL || env.OPENAI_MODEL)?.trim());
+  const mode = configuredMode === "local" && !storedConfig && hasEnvironmentConfig && !env.FINDJOY_MODEL_CONFIG_MODE ? "environment" : configuredMode;
+  const activeConfig = storedConfig ?? (mode === "local" && !hasEnvironmentConfig ? config : undefined);
+  const providerModel = activeConfig?.providerId ? resolveProviderModel(activeConfig.providerId, activeConfig.model) : undefined;
+  const requestedModel = typeof activeConfig?.model === "string" && activeConfig.model.trim() ? activeConfig.model.trim() : undefined;
+  const pricingModel = mode === "local" ? providerModel : (config?.providerId ? resolveProviderModel(config.providerId, config.model) : undefined);
+  const pricingRequestedModel = mode === "local" ? requestedModel : (typeof config?.model === "string" && config.model.trim() ? config.model.trim() : undefined);
   const fixedModel = (env.LLM_MODEL || env.OPENAI_MODEL || "").trim();
   return {
-    apiKey: (env.LLM_API_KEY || env.OPENAI_API_KEY || "").trim(),
-    providerId: "environment",
-    baseUrl: (env.LLM_BASE_URL || env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, ""),
-    model: fixedModel || requestedModel || providerModel?.model || "gpt-4o-mini",
-    inputCostPerMillion: providerModel && requestedModel === providerModel.model ? providerModel.inputCostPerMillion : (providerModel ? 0 : finiteOrZero(env.LLM_INPUT_COST_PER_MILLION)),
-    outputCostPerMillion: providerModel && requestedModel === providerModel.model ? providerModel.outputCostPerMillion : (providerModel ? 0 : finiteOrZero(env.LLM_OUTPUT_COST_PER_MILLION)),
+    apiKey: mode === "local" ? (activeConfig?.apiKey || env.LLM_API_KEY || env.OPENAI_API_KEY || "").trim() : (env.LLM_API_KEY || env.OPENAI_API_KEY || "").trim(),
+    providerId: mode === "local" && providerModel ? providerModel.providerId : "environment",
+    baseUrl: mode === "local" && providerModel ? providerModel.baseUrl : (env.LLM_BASE_URL || env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, ""),
+    model: mode === "environment" ? fixedModel || "gpt-4o-mini" : requestedModel || providerModel?.model || fixedModel || "gpt-4o-mini",
+    inputCostPerMillion: pricingModel && pricingRequestedModel === pricingModel.model ? pricingModel.inputCostPerMillion : (pricingModel ? 0 : finiteOrZero(env.LLM_INPUT_COST_PER_MILLION)),
+    outputCostPerMillion: pricingModel && pricingRequestedModel === pricingModel.model ? pricingModel.outputCostPerMillion : (pricingModel ? 0 : finiteOrZero(env.LLM_OUTPUT_COST_PER_MILLION)),
   };
 }
 

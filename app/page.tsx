@@ -35,8 +35,12 @@ type Review = {
 
 type ModelConfig = {
   providerId: string;
-  apiKey: string;
   model: string;
+};
+
+type ModelConfigStatus = {
+  mode: "local" | "environment";
+  config: { providerId?: string; model?: string; hasApiKey: boolean; apiKeyHint?: string };
 };
 
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
@@ -56,11 +60,9 @@ type LifeSummary = {
   updatedAt: string;
 };
 
-// 生产固定配置：DeepSeek deepseek-v4-flash，Key 由服务端环境变量提供（前端不收集）
 const defaultModelConfig: ModelConfig = {
   providerId: "deepseek",
-  apiKey: "",
-  model: "deepseek-v4-flash",
+  model: "deepseek-chat",
 };
 
 const demoLife: LifeData = {
@@ -165,11 +167,11 @@ export default function Home() {
   const [life, setLife] = useState<LifeData>(demoLife);
   const [review, setReview] = useState<Review>(demoReview);
   const [isLoading, setIsLoading] = useState(false);
-  // 生产固定配置：始终使用默认的 DeepSeek deepseek-v4-flash（Key 由服务端环境变量提供）
-  const [modelConfig] = useState<ModelConfig>(() => {
-    if (typeof window === "undefined") return defaultModelConfig;
-    return defaultModelConfig;
-  });
+  const [modelConfig, setModelConfig] = useState<ModelConfig>(defaultModelConfig);
+  const [modelConfigMode, setModelConfigMode] = useState<ModelConfigStatus["mode"]>("local");
+  const [settingsApiKey, setSettingsApiKey] = useState("");
+  const [settingsStatus, setSettingsStatus] = useState("");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showGenderDialog, setShowGenderDialog] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -179,6 +181,21 @@ export default function Home() {
   const [resumableLife, setResumableLife] = useState<LifeView | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/model-config`)
+      .then(async (response) => (await response.json()) as ModelConfigStatus)
+      .then((payload) => {
+        if (cancelled) return;
+        setModelConfigMode(payload.mode);
+        if (payload.config.providerId && payload.config.model) {
+          setModelConfig({ providerId: payload.config.providerId, model: payload.config.model });
+        }
+      })
+      .catch(() => { /* use the safe default until the settings API is available */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // timePassed 是流式 JSON 的第一个字段：一旦到达，顶栏年龄立即显示落地年龄（旧年龄 + timePassed），
   // 不必等整段 story/choices 流完；落地年龄与 life.ts 的 applyNextEvent 保持一致（上限 110 岁）。
@@ -366,6 +383,26 @@ export default function Home() {
     } catch { /* keep list visible */ }
   }
 
+  async function saveModelSettings() {
+    setIsSavingSettings(true);
+    setSettingsStatus("");
+    try {
+      const response = await fetch(`${API_BASE}/api/model-config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...modelConfig, apiKey: settingsApiKey }),
+      });
+      const payload = (await response.json()) as { error?: string; config?: ModelConfigStatus["config"] };
+      if (!response.ok) throw new Error(payload.error || "模型配置保存失败");
+      setSettingsApiKey("");
+      setSettingsStatus("已保存到本地配置文件，新的请求会使用该模型。");
+    } catch (error) {
+      setSettingsStatus(error instanceof Error ? error.message : "模型配置保存失败");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }
+
   return (
     <main className={`page page--${phase}`}>
       <header className="topbar" aria-label="Primary navigation">
@@ -377,10 +414,14 @@ export default function Home() {
         <div className="modal-scrim" onClick={() => setShowSettings(false)} aria-hidden="true" />
         <section className="settings-panel" aria-label="模型设置">
           <div className="settings-head"><p className="eyebrow">MODEL CONNECTION</p><button className="settings-close" onClick={() => setShowSettings(false)} aria-label="关闭模型设置">×</button></div>
-          <p className="settings-note">系统固定使用 DeepSeek deepseek-v4-flash 模型，API Key 由服务端统一配置，无需填写。</p>
-          <label>供应商<select value={modelConfig.providerId} disabled>{MODEL_PROVIDERS.filter((provider) => provider.id === "deepseek").map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label>
-          <label>模型<select value="deepseek-v4-flash" disabled><option value="deepseek-v4-flash">DeepSeek V4 Flash（默认）</option></select></label>
-          <label>API Key<input type="password" value="server-managed" placeholder="由服务端统一配置" disabled autoComplete="off" /></label>
+          {modelConfigMode === "environment" ? <p className="settings-note">线上环境由服务端统一配置模型，用户配置不会被使用。</p> : <p className="settings-note">本地配置会保存到项目的 .data/model-config.json，不会提交到 Git。</p>}
+          <label>供应商<select value={modelConfigMode === "environment" ? "environment" : modelConfig.providerId} disabled={modelConfigMode === "environment"} onChange={(event) => { const provider = MODEL_PROVIDERS.find((item) => item.id === event.target.value); if (provider) setModelConfig({ providerId: provider.id, model: provider.models[0].id }); }}>
+            {modelConfigMode === "environment" ? <option value="environment">服务端环境变量</option> : MODEL_PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
+          </select></label>
+          <label>模型{modelConfigMode === "environment" ? <input value={modelConfig.model} disabled /> : <select value={modelConfig.model} onChange={(event) => setModelConfig((current) => ({ ...current, model: event.target.value }))}>{(MODEL_PROVIDERS.find((provider) => provider.id === modelConfig.providerId)?.models ?? []).map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select>}</label>
+          <label>API Key<input type="password" value={modelConfigMode === "environment" ? "server-managed" : settingsApiKey} placeholder={modelConfigMode === "environment" ? "由服务端统一配置" : "输入后保存到本地文件"} disabled={modelConfigMode === "environment"} onChange={(event) => setSettingsApiKey(event.target.value)} autoComplete="off" /></label>
+          {modelConfigMode === "local" && <button className="refresh-models" type="button" onClick={saveModelSettings} disabled={isSavingSettings}>{isSavingSettings ? "保存中…" : "确认并保存"}</button>}
+          {settingsStatus && <p className="settings-status" role="status">{settingsStatus}</p>}
         </section>
         </>
       )}
