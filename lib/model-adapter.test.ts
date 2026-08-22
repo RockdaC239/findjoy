@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEndingHardFacts, buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, generateNextEvent, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { applyEndingHardFacts, buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, generateNextEvent, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, repairGeneratedEvent, repairTruncatedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
 import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
@@ -409,6 +409,46 @@ describe("model configuration", () => {
     expect(fixed.death).toBe("自然离世");
     expect(fixed.facts.occupation).toBe("短跑教练");
     expect(fixed.facts.city).toBe("杭州");
+  });
+
+  it("repairs truncated JSON by closing strings and braces", () => {
+    const repaired = repairTruncatedJson('{"timePassed":3,"story":"你二十岁","event":{"type":"career","title":"新工作"');
+    const parsed = JSON.parse(repaired) as { timePassed: number; story: string };
+    expect(parsed.timePassed).toBe(3);
+    expect(parsed.story).toBe("你二十岁");
+  });
+
+  it("fills missing choices so the player always has options (no retry)", () => {
+    const parsed = repairGeneratedEvent(
+      { timePassed: 3, story: "你站在路口。", event: { type: "career", title: "去留", importance: 0.8 }, choices: [{ id: "A", text: "留下" }] },
+      true
+    );
+    expect(parsed).not.toBeNull();
+    expect(parsed!.choices.length).toBeGreaterThanOrEqual(2);
+    expect(parsed!.choices[0]).toMatchObject({ id: "A", text: "留下" });
+  });
+
+  it("accepts an event whose axis repeats the previous one (no retry on axis repeat)", () => {
+    const parsed = repairGeneratedEvent(
+      { timePassed: 2, story: "你还在原地。", event: { type: "random", title: "犹豫", importance: 0.6 }, choices: [{ id: "A", text: "安稳地留在家乡" }, { id: "B", text: "闯出去看看" }] },
+      true
+    );
+    expect(parsed).not.toBeNull();
+    expect(parsed!.choices).toHaveLength(3);
+  });
+
+  it("still rejects events missing core fields (kept as retry)", () => {
+    expect(repairGeneratedEvent({ event: { type: "career", title: "x" } }, true)).toBeNull();
+    expect(repairGeneratedEvent({ story: "没有事件", event: { type: "career" } }, true)).toBeNull();
+  });
+
+  it("still rejects events containing name instructions (kept as retry)", () => {
+    expect(repairGeneratedEvent({ timePassed: 1, story: "他名叫张伟，是班长。", event: { type: "random", title: "新同学", importance: 0.6 } }, true)).toBeNull();
+  });
+
+  it("appends a preventive axis-rotation hint when avoidAxis is provided", () => {
+    const prompt = buildSystemPrompt(true, undefined, false, "闯荡/留守");
+    expect(prompt).toContain("上一节点的价值张力轴是" + '"' + "闯荡/留守" + '"');
   });
 });
 

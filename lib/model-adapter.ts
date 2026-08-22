@@ -49,6 +49,8 @@ const occupations = ["产品经理", "软件工程师", "教师", "设计师", "
 export const CHILDHOOD_BOUNDARY = 15;
 export const MODEL_REQUEST_TIMEOUT_MS = 60_000;
 export const MAX_MODEL_ATTEMPTS = 3;
+// 首 token 看门狗：超过该时长模型还没开始输出，判定为卡住，快速失败重试（不等满 60 秒）。
+export const FIRST_TOKEN_TIMEOUT_MS = 25_000;
 
 // 童年节点落地后是否跨入成年（≥15 岁）。判定"该不该给选项"必须用落地年龄，
 // 否则会出现"14 岁生成、落到 17 岁却仍是纯叙事节点"的边界错位（17 岁拿不到任何决策）。
@@ -61,11 +63,16 @@ export function crossesAdulthoodBoundary(stateAge: number, timePassed: number): 
 // 旧存档（无出身档案）返回基础提示词。
 // transitioning=true 表示"成年后的第一个决策节点"（14 岁迈入 15+），追加专属指令：
 // 时间已过去、写落地年龄的你、严禁复述上一条童年事件——修"14 岁节点内容在 18 岁重生成"。
-export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackground, transitioning = false): string {
+export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackground, transitioning = false, avoidAxis?: string | null): string {
   const base = expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
   const profile = background ? `\n\n${buildBackgroundDirective(background)}` : "";
-  if (!transitioning) return `${base}${profile}`;
-  return `${base}${profile}\n\n【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。`;
+  // 预防式张力轴轮换：把上一节点的价值张力轴写进提示词，让模型主动避开，
+  // 而不是等它写重复了再重试（消除"张力轴重复"这一类重试）。
+  const axisHint = expectChoices && avoidAxis
+    ? `\n\n【张力轴轮换】上一节点的价值张力轴是"${avoidAxis}"。本轮选项的张力轴必须与它不同（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要重复"${avoidAxis}"这一条。`
+    : "";
+  if (!transitioning) return `${base}${profile}${axisHint}`;
+  return `${base}${profile}${axisHint}\n\n【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。`;
 }
 
 export class ModelError extends Error {
@@ -319,6 +326,43 @@ export function parseGeneratedJson(text: string): unknown {
   throw new ModelError("模型返回内容无法解析为 JSON");
 }
 
+// 截断修复：max_tokens 或供应商截断导致 JSON 未闭合时，补全未闭合字符串与括号后再解析。
+// 消除"输出被截断 → 整轮重试"这一类失败。
+export function repairTruncatedJson(text: string): string {
+  let s = (text ?? "").trim();
+  if (!s) return s;
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const ch of s) {
+    if (inString) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === "\\") { escaped = true; continue; }
+      if (ch === '"') { inString = false; continue; }
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{" || ch === "[") { stack.push(ch); continue; }
+    if (ch === "}" || ch === "]") {
+      const open = stack.pop();
+      if ((ch === "}" && open !== "{") || (ch === "]" && open !== "[")) return text; // 结构已乱，放弃修复
+    }
+  }
+  if (inString) s += '"'; // 补全未闭合字符串
+  s = s.replace(/[,\s]+$/, ""); // 去掉尾部悬空逗号
+  for (let i = stack.length - 1; i >= 0; i--) s += stack[i] === "{" ? "}" : "]"; // 按栈补全闭合
+  return s;
+}
+
+// 解析失败后先尝试截断修复，仍失败才抛错进入重试。
+function parseWithTruncationRepair(text: string): unknown {
+  try {
+    return parseGeneratedJson(text);
+  } catch {
+    return parseGeneratedJson(repairTruncatedJson(text));
+  }
+}
+
 // 重试时给模型带回失败原因，避免"同样的错再犯一遍"（盲重试）。
 // guidance 按场景给出该契约的字段要点。
 function withRetryCorrection(attempt: number, messages: NextEventMessage[], failureReason: string, guidance: string): NextEventMessage[] {
@@ -368,6 +412,52 @@ export function normalizeGeneratedEvent(value: unknown, expectChoices = true, pr
     story,
     event: { type, title, importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
     choices,
+    objectiveChanges: normalizeObjectiveChanges(candidate.objectiveChanges ?? candidate.objective_changes),
+    memory: typeof candidate.memory === "string" && candidate.memory.trim() ? candidate.memory.trim() : undefined,
+  };
+}
+
+// 选项补齐池：模型只给出 1 个或 0 个有效选项时，按事件类型补足 2~3 个，
+// 保证玩家始终有得选，避免为"选项数量不足"反复重试。
+const FILL_CHOICES: Record<string, string[]> = {
+  career: ["接受眼前的这个机会", "再观望一段时间，想清楚再动", "按自己的节奏来，不被推着走"],
+  relationship: ["认真回应这份心意，把话说明白", "先保持距离，再相处一段时间看看", "坦诚说出自己的顾虑"],
+  health: ["立刻去检查，把身体放在第一位", "先调整作息，观察一阵再决定", "咨询专业的人，别自己扛"],
+  finance: ["保守一点，先稳住手里的", "留一部分，拿一部分去试试", "找懂行的人问清楚再决定"],
+  family: ["把家人叫到一起，把话说开", "先稳住自己，再照顾大家", "按自己的想法来，但和家人说明白"],
+  random: ["顺着这个变化往前走", "停下来想想再决定", "把这次变化当成一次机会"],
+};
+
+// 修复层：严格契约不过时，把可修复的问题就地解决（不再重试）：
+// - choices 不足 2 个 → 自动补齐
+// - 价值张力轴重复 → 接受（轮换改为下一轮提示词预防，见 buildSystemPrompt 的 avoidAxis）
+// 不可修复的问题（核心字段缺失、含姓名指示词）返回 null，仍走重试。
+export function repairGeneratedEvent(value: unknown, expectChoices: boolean): NextEvent | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
+  if (!event) return null;
+  if (typeof candidate.story !== "string" || !candidate.story.trim()) return null;
+  if (typeof event.title !== "string" || !event.title.trim()) return null;
+  const type = normalizeEventType(event.type);
+  if (!type) return null;
+  const texts = [candidate.story, candidate.memory, event.title].filter((item): item is string => typeof item === "string");
+  if (texts.some(containsNameInstruction)) return null;
+  const choices = normalizeChoices(candidate.choices);
+  if (expectChoices) {
+    const pool = FILL_CHOICES[type] ?? FILL_CHOICES.random;
+    const letters = ["A", "B", "C"].filter((letter) => !choices.some((item) => item.id === letter));
+    let poolIndex = 0;
+    while (choices.length < 3 && letters.length > 0) {
+      choices.push({ id: letters.shift() as string, text: pool[poolIndex % pool.length] });
+      poolIndex += 1;
+    }
+  }
+  return {
+    timePassed: Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
+    story: (candidate.story as string).trim(),
+    event: { type, title: (event.title as string).trim(), importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
+    choices: expectChoices ? choices.slice(0, 3) : [],
     objectiveChanges: normalizeObjectiveChanges(candidate.objectiveChanges ?? candidate.objective_changes),
     memory: typeof candidate.memory === "string" && candidate.memory.trim() ? candidate.memory.trim() : undefined,
   };
@@ -492,52 +582,71 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   // 从 14 岁起直接进入决策阶段：下一次跳跃（timePassed ≥ 1）必然落地 ≥15 岁，
   // 因此迈入点直接用决策提示词生成带选项的事件，不需要先出童年事件再重生成。
   const expectChoices = state.basic.age + 1 >= CHILDHOOD_BOUNDARY;
+  // 预防式张力轴轮换：把上一节点的张力轴写进本轮提示词，让模型主动避开（而不是写重复了再重试）
+  const previousChoices = lastChoiceNode(state)?.choices;
+  const avoidAxis = detectValueAxis(previousChoices);
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
+    let controller: AbortController | undefined;
+    let firstTokenSeen = false;
     try {
-      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags), expectChoices && state.basic.age < CHILDHOOD_BOUNDARY);
+      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags), expectChoices && state.basic.age < CHILDHOOD_BOUNDARY, avoidAxis);
       const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
-      const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS), body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages: withRetryCorrection(attempt, messages, lastFailureReason, "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。") }) });
-      if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
-      if (!response.body) throw new ModelError("模型服务未返回内容");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const blocks = buffer.split("\n\n");
-        buffer = blocks.pop() ?? "";
-        for (const block of blocks) {
-          const data = block.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
-          if (!data || data === "[DONE]") continue;
-          try {
-            const packet = JSON.parse(data) as {
-              choices?: Array<{ delta?: { content?: string } }>;
-              usage?: Record<string, unknown>;
-            };
-            const content = packet.choices?.[0]?.delta?.content;
-            if (typeof content === "string") {
-              generatedText += content;
-              yield { text: content };
-            }
-            if (packet.usage && typeof packet.usage === "object") usageRaw = packet.usage;
-          } catch { /* Ignore malformed keepalive frames. */ }
+      controller = new AbortController();
+      // 首 token 看门狗：25 秒没开始输出就中断本轮，快速进入重试（避免干等 60 秒）
+      const watchdog = setTimeout(() => { if (!firstTokenSeen) controller?.abort(); }, FIRST_TOKEN_TIMEOUT_MS);
+      const overall = setTimeout(() => controller?.abort(), MODEL_REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: controller.signal, body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages: withRetryCorrection(attempt, messages, lastFailureReason, "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。") }) });
+        if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
+        if (!response.body) throw new ModelError("模型服务未返回内容");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const blocks = buffer.split("\n\n");
+          buffer = blocks.pop() ?? "";
+          for (const block of blocks) {
+            const data = block.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+            if (!data || data === "[DONE]") continue;
+            try {
+              const packet = JSON.parse(data) as {
+                choices?: Array<{ delta?: { content?: string } }>;
+                usage?: Record<string, unknown>;
+              };
+              const content = packet.choices?.[0]?.delta?.content;
+              if (typeof content === "string") {
+                firstTokenSeen = true;
+                generatedText += content;
+                yield { text: content };
+              }
+              if (packet.usage && typeof packet.usage === "object") usageRaw = packet.usage;
+            } catch { /* Ignore malformed keepalive frames. */ }
+          }
         }
+      } finally {
+        clearTimeout(watchdog);
+        clearTimeout(overall);
       }
-      const generated = parseGeneratedJson(generatedText || "{}");
-      const previousChoices = lastChoiceNode(state)?.choices;
-      const reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices);
-      if (reason) {
-        logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason, raw: generatedText });
-        throw new ModelError(`模型返回内容未满足${expectChoices ? "事件" : "童年"}契约：${reason}`);
+      const generated = parseWithTruncationRepair(generatedText || "{}");
+      // 修复优先：先走严格契约；不过则尝试就地修复（补齐选项/接受张力轴重复），
+      // 只有不可修复的问题（核心字段缺失、含姓名）才进入重试。
+      let parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices);
+      let reason: string | null = null;
+      if (!parsed) {
+        reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices);
+        parsed = repairGeneratedEvent(generated, expectChoices);
       }
-      const parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices);
-      if (!parsed) throw new ModelError("模型返回内容未满足事件契约");
+      if (!parsed) {
+        logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason: reason ?? "事件契约未通过且无法自动修复", raw: generatedText });
+        throw new ModelError(`模型返回内容未满足${expectChoices ? "事件" : "童年"}契约：${reason ?? "无法自动修复"}`);
+      }
       if (!expectChoices && crossesAdulthoodBoundary(state.basic.age, parsed.timePassed)) {
         // 安全兜底：童年提示词要求落地 <15 岁，若模型仍越界，硬钳制落地到 14 岁（不重生成）。
         // 正常路径下从 14 岁起已切到决策提示词，这里只防模型违规。
@@ -547,7 +656,16 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       const usage: ModelUsage = { promptTokens: num(usageRaw.prompt_tokens), completionTokens: num(usageRaw.completion_tokens), totalTokens: num(usageRaw.total_tokens), estimatedCostUsd: num(usageRaw.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageRaw.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, promptCacheHitTokens: num(usageRaw.prompt_cache_hit_tokens), promptCacheMissTokens: num(usageRaw.prompt_cache_miss_tokens) };
       return { ...parsed, usage };
     } catch (error) {
-      lastError = toModelError(error);
+      if (controller?.signal.aborted) {
+        // 看门狗/总超时中断：区分"迟迟没开始输出"与"整体超时"，给玩家可理解的提示
+        lastError = new ModelError(
+          firstTokenSeen
+            ? "模型响应超时（超过 60 秒），请稍后重试或更换模型"
+            : "模型迟迟未开始输出（超过 25 秒），正在重试"
+        );
+      } else {
+        lastError = toModelError(error);
+      }
       if (!lastFailureReason) {
         lastFailureReason = lastError.message.includes("无法解析为 JSON")
           ? "JSON 无法解析（可能被截断或混入多余文字）"
