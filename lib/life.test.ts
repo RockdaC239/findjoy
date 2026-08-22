@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyNextEvent, buildEnding, createStarterLife, resolveOfferedChoice, type NextEvent } from "./life";
+import { applyNextEvent, buildEnding, computeDeathChance, createStarterLife, resolveOfferedChoice, type NextEvent } from "./life";
 import { buildFallbackEvent } from "./model-adapter";
 
 const event: NextEvent = {
@@ -64,6 +64,15 @@ describe("life state", () => {
 
     expect(aliveLife.dead).toBe(false);
     expect(aliveLife.basic.age).toBe(32);
+  });
+
+  it("does not roll natural death for young healthy lives (below 50)", () => {
+    const life = createStarterLife({ age: 27 });
+    life.health.physical = 92;
+    expect(computeDeathChance(life, 4)).toBe(0);
+    const aliveLife = applyNextEvent(life, { ...event, timePassed: 4 }, event.choices[0], { random: () => 0.5 });
+    expect(aliveLife.dead).toBe(false);
+    expect(aliveLife.basic.age).toBe(31);
   });
 
   it("marks death when the probability roll succeeds", () => {

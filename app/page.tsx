@@ -179,6 +179,8 @@ export default function Home() {
   const [resumableLife, setResumableLife] = useState<LifeView | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
+  const [loadingRetries, setLoadingRetries] = useState(0);
+  const [waitSeconds, setWaitSeconds] = useState(0);
 
   // timePassed 是流式 JSON 的第一个字段：一旦到达，顶栏年龄立即显示落地年龄（旧年龄 + timePassed），
   // 不必等整段 story/choices 流完；落地年龄与 life.ts 的 applyNextEvent 保持一致（上限 110 岁）。
@@ -186,9 +188,18 @@ export default function Home() {
     ? Math.min(110, life.age + streamingEvent.timePassed)
     : life.age;
 
+  // 加载等待计时：每秒 +1，让玩家知道系统仍在工作（而不是卡死）
+  useEffect(() => {
+    if (!isLoading) return;
+    const timer = window.setInterval(() => setWaitSeconds((s) => s + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [isLoading]);
+
   async function requestLife(url: string, body?: Record<string, unknown>) {
     setIsLoading(true);
     setRequestError("");
+    setLoadingRetries(0);
+    setWaitSeconds(0);
     setStreamingEvent({ story: "", title: "", choices: [] });
     try {
       const response = await fetch(url, {
@@ -221,6 +232,8 @@ export default function Home() {
             }
           } else if (message.event === "retry") {
             generated = "";
+            setLoadingRetries((n) => n + 1);
+            setWaitSeconds(0);
             setStreamingEvent({ story: "", title: "", choices: [] });
           } else if (message.event === "complete") {
             return JSON.parse(message.data) as unknown;
@@ -240,6 +253,7 @@ export default function Home() {
       return null;
     } finally {
       setIsLoading(false);
+      setWaitSeconds(0);
       setStreamingEvent({ story: "", title: "", choices: [] });
     }
   }
@@ -502,6 +516,12 @@ export default function Home() {
               {(isLoading ? streamingEvent.story : life.story).split("\n\n").filter(Boolean).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               {isLoading && !streamingEvent.story && <span className="story-cursor" aria-label="正在生成" />}
             </div>
+            {isLoading && (
+              <p className="loading-status" role="status">
+                {loadingRetries > 0 ? "本次生成未达标，正在重新生成（第 " + loadingRetries + " 次）" : "正在生成下一段人生"}
+                {waitSeconds > 0 ? " · 已等待 " + waitSeconds + " 秒" : ""}
+              </p>
+            )}
             <p className="event-tagline" id="event-title">
               {(() => {
                 const title = isLoading ? streamingEvent.title : life.eventTitle;

@@ -1,6 +1,7 @@
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, ModelUsage, LifeEnding } from "./life";
 import { getProvider, resolveProviderModel } from "./provider-catalog";
 import { buildBackgroundDirective, flagsToBackground, type LifeBackground } from "./background";
+import { DEATH_CAUSE_LABEL } from "./life";
 
 const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实、复杂、不确定的人生，不定义幸福。全程只用第二人称“你”称呼玩家。禁止出现任何人物姓名、昵称、英文名、姓名占位符；其他人物只能使用关系或角色称谓，例如父亲、母亲、同学、伴侣、老师、邻居。
 
@@ -24,6 +25,7 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
   **张力轴轮换硬约束：本次事件的张力轴必须与上一个事件的张力轴不同。** 上一条事件的选项用的是什么价值轴，这一条就换一条别的轴。例如上一条是"追梦/顾家、闯荡/安稳"，这一条就改写成"理性/感性"（如：按数据和利弊判断 vs 凭直觉和热爱 vs 先不表态再想想）、"名声/自由"（如：要名气和认可 vs 要自在随心 vs 两者都想要一点）、"守成/创新"（如：维持现状 vs 大胆变革 vs 小步试水）、"独行/合作"、"服从/反叛"、"短利/长利"、"逃避/面对"等。同一局内相邻两个节点绝不能用同一条价值轴；连续两三个节点都出现"闯出去/留守/折中"这类三件套，说明你没有换轴。
   写法建议：选项文本里直接点出你要表达的价值立场（如"为了撑住这个家，..."、"我不想被这件事拖住，..."、"找专业的人来帮忙，比我自己扛更靠谱..."），让玩家一眼看出区别。
   **连续性硬约束**：事件必须随时间和玩家的选择推进。严禁原样或近乎原样地复述上一条事件的故事、标题或选项——即使玩家选择了"维持现状、顺其自然"，也要写出新的处境、新的变化和新的选项；连续两个节点绝不能是同一个事件。
+   **去模板化硬约束**：人生路径必须多样、自然，不得对任何剧本有偏向。职业不要集中在运动员、艺术家、创业者、医生等少数"有故事感"的模板上——程序员、教师、工人、司机、店员、小生意、自由职业、体制内……任何职业都能承载重要的人生节点。出身档案里的天赋（艺术/运动/学业/社交/动手）只是性格底色与爱好，**不等于职业方向**：有艺术天赋的人可以一生与艺术无关，有运动天赋的人也可以只把它当业余爱好，没有天赋标签的人同样可以学音乐、画画、练体育。不要因为档案里写了天赋，就自动把人生写成"体育生/艺术生/学霸"的剧本；同类剧本连续出现（上一局刚写过运动员，这一局又写运动员）更要避免。
   人生阶段要均衡：工作、家庭、健康、关系、情感都要有机会出现，不要从头到尾只写事业打拼。尤其是感情线：恋爱、婚姻、伴侣、亲密关系是人生的重要部分，应当自然而然地出现并发展——可以是学生时代的初恋、青年时的相遇、中年时的陪伴或晚年的相守。不要总是让玩家一直单身、迟迟不婚或永远只谈事业；也不必强行圆满，一段真实的感情可以有遗憾，但要有发生、有推进、有温度。婚姻的时点可以多样（有人早婚、有人晚婚、有人不婚），关键是有真实的关系与情感线索贯穿人生，而不是全程回避。
 - objectiveChanges：本次事件造成的客观变化，可为空对象。
 - memory：一句话浓缩这次事件。`;
@@ -575,8 +577,8 @@ const ENDING_SYSTEM_PROMPT = `你是一位温和的观察者，正在为一生�
 全程只用第二人称“你”称呼当事人；不出现任何姓名、昵称、英文名或姓名占位符；其他人只能用身份词，如父亲、母亲、伴侣、孩子、朋友。
 不评价人生好坏，不给出分数、等级或“你就是……”这样的断言；使用“似乎、也许、可能、从你的选择来看”这样的语气。
 只返回一个 JSON 对象，不要 Markdown 代码块，不要任何额外文字或解释。必须严格使用下面的 camelCase 字段：
-{"age":81,"death":"自然离世","facts":{"occupation":"程序员","city":"深圳","events":34},"highlights":[{"age":27,"title":"你放弃了第一次创业机会"},{"age":45,"title":"你选择回到家人身边"}],"patterns":["从你的选择来看，你常常会在真正重要的时刻为关系停下来。","年轻时你也许很在意别人的认可，后来你越来越愿意按照自己的判断生活。"]}
-highlights 必须是 4 至 8 个真正改变人生方向的节点；patterns 必须是 1 至 3 句观察，不带价值判断。`;
+{"age":34,"death":"因病离世","facts":{"occupation":"教师","city":"成都","events":18},"highlights":[{"age":19,"title":"你第一次离开家"},{"age":27,"title":"你选择回到家人身边"}],"patterns":["从你的选择来看，你常常会在真正重要的时刻为关系停下来。","年轻时你也许很在意别人的认可，后来你越来越愿意按照自己的判断生活。"]}
+**硬事实约束**：age 必须等于 user 消息里的 current_age（人生实际结束年龄），严禁编造更大或更小的年龄；facts.events 必须等于实际经历的事件数量，不得夸大。highlights 必须是 4 至 8 个真正改变人生方向的节点；patterns 必须是 1 至 3 句观察，不带价值判断。`;
 
 // 诊断人生回顾契约失败原因：返回 null 表示通过，否则返回具体原因。
 export function diagnoseEnding(value: unknown): string | null {
@@ -619,6 +621,18 @@ export function normalizeEnding(value: unknown): LifeEnding | null {
   };
 }
 
+// 结局硬事实纠正：年龄、事件数、死因必须以状态为准（LLM 可能抄示例编造年龄，
+// 如"27 岁人生被写成 81 岁"）；LLM 只负责回顾文字本身。
+export function applyEndingHardFacts(ending: LifeEnding, state: LifeState): LifeEnding {
+  const cause = typeof state.flags.deathCause === "string" ? DEATH_CAUSE_LABEL[state.flags.deathCause] : undefined;
+  return {
+    ...ending,
+    age: state.basic.age,
+    death: cause ?? ending.death,
+    facts: { ...ending.facts, events: state.history.length },
+  };
+}
+
 export async function generateEnding(state: LifeState, requestConfig?: Partial<ModelConfig>): Promise<LifeEnding> {
   const config = resolveModelConfig(requestConfig);
   const { apiKey, baseUrl, model } = config;
@@ -654,7 +668,7 @@ export async function generateEnding(state: LifeState, requestConfig?: Partial<M
       }
       const ending = normalizeEnding(generated);
       if (!ending) throw new ModelError("模型返回内容未满足人生回顾契约");
-      return ending;
+      return applyEndingHardFacts(ending, state);
     } catch (error) {
       lastError = toModelError(error);
       if (!lastFailureReason) {

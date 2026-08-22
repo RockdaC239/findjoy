@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, generateNextEvent, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { applyEndingHardFacts, buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, generateNextEvent, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
 import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
@@ -390,6 +390,25 @@ describe("model configuration", () => {
     expect(result).not.toBeNull();
     expect(result!.highlights).toHaveLength(2);
     expect(result!.patterns).toHaveLength(1);
+  });
+
+  it("pins ending age/events/death to the actual state (no hallucinated old age)", () => {
+    const state = createStarterLife({ age: 27 });
+    state.flags.deathCause = "natural";
+    const ending = {
+      age: 81,
+      death: "自然离世",
+      facts: { occupation: "短跑教练", city: "杭州", events: 34 },
+      highlights: [{ age: 18, title: "你选择了进省队" }],
+      patterns: ["从你的选择来看，你似乎总在追逐风的速度。"],
+      question: "如果可以再活一次，你会做出不同的选择吗？",
+    };
+    const fixed = applyEndingHardFacts(ending, state);
+    expect(fixed.age).toBe(27);
+    expect(fixed.facts.events).toBe(0);
+    expect(fixed.death).toBe("自然离世");
+    expect(fixed.facts.occupation).toBe("短跑教练");
+    expect(fixed.facts.city).toBe("杭州");
   });
 });
 

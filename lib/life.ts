@@ -63,11 +63,10 @@ function randomCity(random: () => number = Math.random) {
 }
 
 // 年度基础死亡率（近似真实生命表量级），随年龄上升。
+// 50 岁以下基础死亡率置零：年轻人生只可能因疾病（physical<=0 或慢性病风险）或意外离世，
+// 避免"二十几岁、身体健康却自然离世"这类破坏可信度的死亡。
 function baseMortalityRate(age: number): number {
-  if (age < 20) return 0.0008;
-  if (age < 30) return 0.001;
-  if (age < 40) return 0.0016;
-  if (age < 50) return 0.003;
+  if (age < 50) return 0;
   if (age < 60) return 0.007;
   if (age < 70) return 0.018;
   if (age < 80) return 0.045;
@@ -162,13 +161,14 @@ export function applyNextEvent(state: LifeState, event: NextEvent, choice?: Life
       next.flags.deathCause = "accident";
     } else if (random() < computeDeathChance(next, event.timePassed || 1)) {
       next.dead = true;
-      next.flags.deathCause = next.health.physical <= 40 ? "disease" : "natural";
+      // 50 岁以下的死亡只可能是疾病路径（基础死亡率已置零），不要标注成"自然离世"
+      next.flags.deathCause = next.health.physical <= 40 || next.basic.age < 50 ? "disease" : "natural";
     }
   }
   return next;
 }
 
-const DEATH_CAUSE_LABEL: Record<string, string> = {
+export const DEATH_CAUSE_LABEL: Record<string, string> = {
   natural: "自然离世",
   disease: "因病离世",
   accident: "意外离世",
