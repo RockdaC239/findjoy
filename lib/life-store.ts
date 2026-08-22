@@ -4,6 +4,7 @@ import path from "node:path";
 import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 import { flagsToBackground, type BackgroundAvoid } from "./background";
+import { extractLifeStorylines } from "./storyline";
 
 const DEFAULT_DB_FILE = path.join(process.cwd(), ".data", "life.db");
 
@@ -105,13 +106,12 @@ export const lifeStore = {
   },
 
   // 收集最近几局人生用过的出身维度取值，供新一局开局避开，避免连续人生反复落到
-  // 同一条线上（例如反复“艺术天赋 + 再婚家庭 → 画画/艺考/继父”）。只统计有完整出身档案的存档。
+  // 同一条线上。只统计有完整出身档案的存档。
   recentBackgroundAvoid(limit = 5): BackgroundAvoid {
     const rows = getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<{ state: string }>;
     const economy: string[] = [];
     const structure: string[] = [];
     const event: string[] = [];
-    const talent: string[] = [];
     for (const row of rows) {
       let state: LifeState;
       try { state = JSON.parse(row.state) as LifeState; } catch { continue; }
@@ -120,14 +120,29 @@ export const lifeStore = {
       if (!economy.includes(bg.economy)) economy.push(bg.economy);
       if (!structure.includes(bg.structure)) structure.push(bg.structure);
       if (!event.includes(bg.event)) event.push(bg.event);
-      if (!talent.includes(bg.talent)) talent.push(bg.talent);
     }
     return {
       economy: economy as BackgroundAvoid["economy"],
       structure: structure as BackgroundAvoid["structure"],
       event: event as BackgroundAvoid["event"],
-      talent: talent as BackgroundAvoid["talent"],
     };
+  },
+
+  // 收集最近几局人生的实际主线（剧本防重）：从各局历史提取职业/题材域（见 lib/storyline.ts），
+  // 供新一局开局写入 flags.avoidStorylines，作为跨人生防重指令与硬契约——
+  // 最近几局刚活过运动员/艺术家，新一局就不得再走同一题材（"无天赋也刷到艺术生"由此被堵住）。
+  recentStorylines(limit = 6, maxDomains = 3): string[] {
+    const rows = getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<{ state: string }>;
+    const seen: string[] = [];
+    for (const row of rows) {
+      let state: LifeState;
+      try { state = JSON.parse(row.state) as LifeState; } catch { continue; }
+      for (const domain of extractLifeStorylines(state)) {
+        if (!seen.includes(domain)) seen.push(domain);
+      }
+      if (seen.length >= maxDomains) break;
+    }
+    return seen.slice(0, maxDomains);
   },
 
   delete(id: string): void {

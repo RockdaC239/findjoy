@@ -8,17 +8,19 @@ const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cac
 
 export async function POST(request: Request) {
   const input = await request.json().catch(() => ({}));
-  // 四维出身档案随机生成（家庭经济 × 家庭结构 × 开局事件 × 天赋，600 种组合），
+  // 三维出身档案随机生成（家庭经济 × 家庭结构 × 开局事件，100 种组合），
   // 经济底色写入初始财务状态，档案写入 flags 并作为本局系统提示词的固定后缀。
-  // 结合最近几局用过的出身维度，避开近期反复出现的取值（如“艺术+再婚家庭 → 画画/艺考/继父”），
+  // 出身维度防重（避开最近几局用过的取值）+ 剧本主线防重（收集最近几局的实际
+  // 职业/题材域，写入 flags.avoidStorylines，作为跨人生防重指令与硬契约），
   // 让玩家每次重新开始人生都能换一种人生，而不是落在同一条线上。
   const recentAvoid = lifeStore.recentBackgroundAvoid(6);
   const background = rollBackground(undefined, recentAvoid);
+  const recentStorylines = lifeStore.recentStorylines(6);
   const starter = createStarterLife(input);
   const state = lifeStore.set({
     ...starter,
     finance: { ...starter.finance, ...backgroundToFinance(background) },
-    flags: backgroundToFlags(background),
+    flags: { ...backgroundToFlags(background), avoidStorylines: recentStorylines.join(",") },
   });
   const transcript: TranscriptMessage[] = [];
   const encoder = new TextEncoder();

@@ -465,7 +465,7 @@ describe("life background system prompt", () => {
   });
 
   it("appends the fixed per-game background profile to the system prompt", () => {
-    const background: LifeBackground = { economy: "小康", structure: "双亲完整", event: "机会降临", talent: "学业" };
+    const background: LifeBackground = { economy: "小康", structure: "双亲完整", event: "机会降临" };
     const prompt = buildSystemPrompt(true, background);
     expect(prompt).toContain("【本局出身档案】");
     expect(prompt).toContain("家庭经济：小康");
@@ -474,7 +474,7 @@ describe("life background system prompt", () => {
   });
 
   it("reads the per-game background from state flags", () => {
-    const state = { ...createStarterLife(), flags: backgroundToFlags({ economy: "大富", structure: "收养", event: "家庭变故", talent: "无" }) };
+    const state = { ...createStarterLife(), flags: backgroundToFlags({ economy: "大富", structure: "收养", event: "家庭变故" }) };
     const prompt = buildSystemPrompt(false, flagsToBackground(state.flags));
     expect(prompt).toContain("家庭经济：大富");
     expect(prompt).toContain("家庭结构：收养");
@@ -501,3 +501,55 @@ describe("adulthood transition prompt", () => {
     expect(buildSystemPrompt(true, undefined, false)).not.toContain("【成年后的第一个决策节点】");
   });
 });
+
+describe("storyline guards (题材域层防重)", () => {
+  const careerEvent = (occupation: string, title = "新的机会") => ({
+    timePassed: 3,
+    story: "你站在一条新的路上，决定已经压在你身上。",
+    event: { type: "career", title, importance: 0.8 },
+    choices: [{ id: "A", text: "全力投入" }, { id: "B", text: "留一条退路" }],
+    objectiveChanges: { occupation },
+  });
+
+  it("rejects a career direction that repeats a recent life's main storyline (cross-life)", () => {
+    const value = careerEvent("运动员", "进省队");
+    const reason = diagnoseGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports"] });
+    expect(reason).toContain("体育竞技");
+    expect(normalizeGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports"] })).toBeNull();
+    expect(repairGeneratedEvent(value, true, { avoidStorylines: ["sports"] })).toBeNull();
+  });
+
+  it("accepts a career direction outside the recent storylines", () => {
+    const value = careerEvent("程序员", "入职软件公司");
+    expect(diagnoseGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports", "arts"] })).toBeNull();
+    expect(normalizeGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports", "arts"] })).not.toBeNull();
+  });
+
+  it("rejects a career that returns to a storyline the life already left (within-life)", () => {
+    const value = careerEvent("画家", "重新拿起画笔");
+    const reason = diagnoseGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] });
+    expect(reason).toContain("艺术创作");
+    expect(normalizeGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] })).toBeNull();
+    expect(repairGeneratedEvent(value, true, { leftStorylines: ["arts"] })).toBeNull();
+  });
+
+  it("accepts continuing the current career domain (not treated as repetition)", () => {
+    const value = careerEvent("财务主管", "升任财务主管");
+    expect(diagnoseGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] })).toBeNull();
+    expect(normalizeGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] })).not.toBeNull();
+  });
+
+  it("does not flag incidental mentions in non-career events (only career-bearing content)", () => {
+    const value = { timePassed: 5, story: "那年母亲住院，家里一下安静下来。", event: { type: "family", title: "母亲住院", importance: 0.8 }, objectiveChanges: {} };
+    expect(diagnoseGeneratedEvent(value, false, undefined, { avoidStorylines: ["medical"] })).toBeNull();
+  });
+
+  it("appends cross-life and within-life storyline guards to the system prompt", () => {
+    const prompt = buildSystemPrompt(true, undefined, false, undefined, { avoidStorylines: ["sports"], leftStorylines: ["arts"] });
+    expect(prompt).toContain("【跨人生防重】");
+    expect(prompt).toContain("体育竞技");
+    expect(prompt).toContain("【单局内防重】");
+    expect(prompt).toContain("艺术创作");
+  });
+});
+

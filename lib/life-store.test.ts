@@ -62,16 +62,31 @@ describe("life store", () => {
   });
 
   it("collects recently-used background dimensions for the next life to avoid", () => {
-    const artRemarried = createStarterLife();
-    artRemarried.flags = { bgEconomy: "小康", bgStructure: "再婚家庭", bgEvent: "机会降临", bgTalent: "艺术" };
-    const artRemarried2 = createStarterLife();
-    artRemarried2.flags = { bgEconomy: "普通", bgStructure: "再婚家庭", bgEvent: "家庭变故", bgTalent: "艺术" };
-    lifeStore.set(artRemarried2);
-    lifeStore.set(artRemarried);
+    const remarried = createStarterLife();
+    remarried.flags = { bgEconomy: "小康", bgStructure: "再婚家庭", bgEvent: "机会降临" };
+    const upheaval = createStarterLife();
+    upheaval.flags = { bgEconomy: "普通", bgStructure: "单亲", bgEvent: "家庭变故" };
+    lifeStore.set(upheaval);
+    lifeStore.set(remarried);
 
     const avoid = lifeStore.recentBackgroundAvoid(5);
-    expect(avoid.talent).toContain("艺术");
     expect(avoid.structure).toContain("再婚家庭");
+    expect(avoid.event).toContain("家庭变故");
+  });
+
+  it("collects recent lives' main storylines for the next life to avoid", () => {
+    const athlete = createStarterLife({ age: 24 });
+    athlete.career.occupation = "运动员";
+    athlete.history = [{ id: "1", age: 18, type: "career", title: "进省队", story: "你加入了省队。", importance: 0.8, objectiveChanges: { occupation: "运动员" } }] as never;
+    const painter = createStarterLife({ age: 30 });
+    painter.career.occupation = "画家";
+    painter.history = [{ id: "1", age: 22, type: "career", title: "成为画家", story: "你开始了创作。", importance: 0.8, objectiveChanges: { occupation: "画家" } }] as never;
+    lifeStore.set(painter);
+    lifeStore.set(athlete);
+
+    const storylines = lifeStore.recentStorylines(100);
+    expect(storylines).toContain("sports");
+    expect(storylines).toContain("arts");
   });
 
   it("lists life summaries with correct fields", () => {

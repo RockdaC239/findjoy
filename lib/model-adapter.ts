@@ -1,6 +1,7 @@
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, ModelUsage, LifeEnding } from "./life";
 import { getProvider, resolveProviderModel } from "./provider-catalog";
 import { buildBackgroundDirective, flagsToBackground, type LifeBackground } from "./background";
+import { buildStorylinePromptHint, detectStorylineDomains, leftStorylines, parseAvoidStorylines, storylineLabel, type StorylineGuards } from "./storyline";
 import { DEATH_CAUSE_LABEL } from "./life";
 
 const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实、复杂、不确定的人生，不定义幸福。全程只用第二人称“你”称呼玩家。禁止出现任何人物姓名、昵称、英文名、姓名占位符；其他人物只能使用关系或角色称谓，例如父亲、母亲、同学、伴侣、老师、邻居。
@@ -9,7 +10,7 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
 
 人生推演节奏：这不是娓娓道来的小说，而是一次浓缩的人生。时间可以大幅跳跃（每次 1~8 年，童年也可以一次跳过数年）。每一个事件都必须是人生节点级别的重要事件——转折、变故、机会、失去、关系变化、关键决定；不要写日常琐事或流水账。每一段现状都要说得准、说得透。
 
-开局第一个事件更要重要：必须从至少 4 岁写起（timePassed 硬约束 4~7，绝对不要在 0/1/2/3 岁写开局），直接反映那个年龄阶段最重要的节点，让玩家一开局就面临第一个有分量的抉择。重要不等于惨：一个安稳家庭里孩子第一次为自己争取什么、一次天赋被发现，同样有分量。本局固定的"出身档案"指令（家庭经济/家庭结构/开局事件基调/天赋）会随本提示词给出，照指令写开局即可；不要默认写家庭变故或亲人患病。
+开局第一个事件更要重要：必须从至少 4 岁写起（timePassed 硬约束 4~7，绝对不要在 0/1/2/3 岁写开局），直接反映那个年龄阶段最重要的节点，让玩家一开局就面临第一个有分量的抉择。重要不等于惨：一个安稳家庭里孩子第一次为自己争取什么、一次兴趣被发现，同样有分量。本局固定的"出身档案"指令（家庭经济/家庭结构/开局事件基调）会随本提示词给出，照指令写开局即可；不要默认写家庭变故或亲人患病。
 
 只返回一个 JSON 对象，不要 Markdown 代码块，不要任何额外文字或解释。必须严格使用下面的 camelCase 字段，并按此顺序输出（story 在前、event 在后）：
 {"timePassed":3,"story":"...","event":{"type":"family","title":"...","importance":0.8},"choices":[{"id":"A","text":"..."},{"id":"B","text":"..."},{"id":"C","text":"..."}],"objectiveChanges":{},"memory":"..."}
@@ -25,7 +26,7 @@ const SYSTEM_PROMPT = `你不是奖励玩家成功的游戏系统。模拟真实
   **张力轴轮换硬约束：本次事件的张力轴必须与上一个事件的张力轴不同。** 上一条事件的选项用的是什么价值轴，这一条就换一条别的轴。例如上一条是"追梦/顾家、闯荡/安稳"，这一条就改写成"理性/感性"（如：按数据和利弊判断 vs 凭直觉和热爱 vs 先不表态再想想）、"名声/自由"（如：要名气和认可 vs 要自在随心 vs 两者都想要一点）、"守成/创新"（如：维持现状 vs 大胆变革 vs 小步试水）、"独行/合作"、"服从/反叛"、"短利/长利"、"逃避/面对"等。同一局内相邻两个节点绝不能用同一条价值轴；连续两三个节点都出现"闯出去/留守/折中"这类三件套，说明你没有换轴。
   写法建议：选项文本里直接点出你要表达的价值立场（如"为了撑住这个家，..."、"我不想被这件事拖住，..."、"找专业的人来帮忙，比我自己扛更靠谱..."），让玩家一眼看出区别。
   **连续性硬约束**：事件必须随时间和玩家的选择推进。严禁原样或近乎原样地复述上一条事件的故事、标题或选项——即使玩家选择了"维持现状、顺其自然"，也要写出新的处境、新的变化和新的选项；连续两个节点绝不能是同一个事件。
-   **去模板化硬约束**：人生路径必须多样、自然，不得对任何剧本有偏向。职业不要集中在运动员、艺术家、创业者、医生等少数"有故事感"的模板上——程序员、教师、工人、司机、店员、小生意、自由职业、体制内……任何职业都能承载重要的人生节点。出身档案里的天赋（艺术/运动/学业/社交/动手）只是性格底色与爱好，**不等于职业方向**：有艺术天赋的人可以一生与艺术无关，有运动天赋的人也可以只把它当业余爱好，没有天赋标签的人同样可以学音乐、画画、练体育。不要因为档案里写了天赋，就自动把人生写成"体育生/艺术生/学霸"的剧本；同类剧本连续出现（上一局刚写过运动员，这一局又写运动员）更要避免。
+   **去模板化硬约束**：人生路径必须多样、自然，不得对任何剧本有偏向。职业不要集中在运动员、艺术家、创业者、医生等少数"有故事感"的模板上——程序员、教师、工人、司机、店员、小生意、自由职业、体制内……任何职业都能承载重要的人生节点。系统不预设你的性格与天赋——你是什么样的人，由你自己的选择来回答；故事里的兴趣、特长可以自然生长，但不要为了"有故事感"硬凑模板。本局提示词尾部会附带【跨人生防重】与【单局内防重】：列出最近几局的人生主线与本局已走过的方向，必须照指令避开，不要让这一局又活成同一本剧本。
   人生阶段要均衡：工作、家庭、健康、关系、情感都要有机会出现，不要从头到尾只写事业打拼。尤其是感情线：恋爱、婚姻、伴侣、亲密关系是人生的重要部分，应当自然而然地出现并发展——可以是学生时代的初恋、青年时的相遇、中年时的陪伴或晚年的相守。不要总是让玩家一直单身、迟迟不婚或永远只谈事业；也不必强行圆满，一段真实的感情可以有遗憾，但要有发生、有推进、有温度。婚姻的时点可以多样（有人早婚、有人晚婚、有人不婚），关键是有真实的关系与情感线索贯穿人生，而不是全程回避。
 - objectiveChanges：本次事件造成的客观变化，可为空对象。
 - memory：一句话浓缩这次事件。`;
@@ -58,12 +59,12 @@ export function crossesAdulthoodBoundary(stateAge: number, timePassed: number): 
   return stateAge < CHILDHOOD_BOUNDARY && stateAge + Math.max(1, timePassed) >= CHILDHOOD_BOUNDARY;
 }
 
-// 出身档案：见 lib/background.ts。每局开局由 start 路由掷出四维出身并写入 flags，
+// 出身档案：见 lib/background.ts。每局开局由 start 路由掷出三维出身并写入 flags，
 // 这里把本局出身档案作为系统提示词的固定后缀；同一局内前缀字节稳定，不破坏 DeepSeek 上下文缓存。
 // 旧存档（无出身档案）返回基础提示词。
 // transitioning=true 表示"成年后的第一个决策节点"（14 岁迈入 15+），追加专属指令：
 // 时间已过去、写落地年龄的你、严禁复述上一条童年事件——修"14 岁节点内容在 18 岁重生成"。
-export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackground, transitioning = false, avoidAxis?: string | null): string {
+export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackground, transitioning = false, avoidAxis?: string | null, storylineGuards?: StorylineGuards): string {
   const base = expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
   const profile = background ? `\n\n${buildBackgroundDirective(background)}` : "";
   // 预防式张力轴轮换：把上一节点的价值张力轴写进提示词，让模型主动避开，
@@ -71,8 +72,11 @@ export function buildSystemPrompt(expectChoices: boolean, background?: LifeBackg
   const axisHint = expectChoices && avoidAxis
     ? `\n\n【张力轴轮换】上一节点的价值张力轴是"${avoidAxis}"。本轮选项的张力轴必须与它不同（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要重复"${avoidAxis}"这一条。`
     : "";
-  if (!transitioning) return `${base}${profile}${axisHint}`;
-  return `${base}${profile}${axisHint}\n\n【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。`;
+  // 题材域层防重指令（预防式）：跨人生主线固定、单局内已离开方向逐轮动态，
+  // 与张力轴一样放在提示词尾部，只作为追加后缀，不破坏 DeepSeek 前缀缓存。
+  const storylineHint = buildStorylinePromptHint(storylineGuards);
+  if (!transitioning) return `${base}${profile}${axisHint}${storylineHint}`;
+  return `${base}${profile}${axisHint}${storylineHint}\n\n【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。`;
 }
 
 export class ModelError extends Error {
@@ -158,7 +162,7 @@ export function createBirthBackground(state: LifeState) {
   return backgrounds[variationIndex(state, backgrounds.length)];
 }
 
-export function buildFallbackEvent(state: LifeState, choice?: LifeChoice): NextEvent {
+export function buildFallbackEvent(state: LifeState, choice?: LifeChoice, avoidStorylines: string[] = []): NextEvent {
   const age = state.basic.age;
   const openings = [
     { type: "family" as const, title: "你的童年开始了", story: "你还不能理解周围的声音，但你会在陪伴与日常中慢慢认识这个世界。", timePassed: 6 },
@@ -177,7 +181,12 @@ export function buildFallbackEvent(state: LifeState, choice?: LifeChoice): NextE
           : age < 40
             ? { type: "relationship" as const, title: "一个需要回应的人", story: "一个重要的人向你提出了请求，你意识到继续沉默也是一种选择。", timePassed: 3 }
             : { type: "health" as const, title: "身体发来的提醒", story: "一次体检提醒你，过去习惯的生活方式正在留下痕迹。", timePassed: 3 };
-  const objectiveChanges = age < 18 ? {} : phase.type === "career" ? { occupation: occupations[(age / 2) % occupations.length | 0], incomeYearly: 120000, cash: 20000 } : phase.type === "health" ? { physical: -8, cash: -5000 } : { partnerStatus: "稳定交往" };
+  // 兜底职业也避开最近几局的主线（剧本防重最后一环）；候选全被避开时回落到完整池。
+  const occupationPool = avoidStorylines.length > 0
+    ? occupations.filter((occupation) => !detectStorylineDomains([occupation]).some((domain) => avoidStorylines.includes(domain)))
+    : occupations;
+  const safeOccupations = occupationPool.length > 0 ? occupationPool : occupations;
+  const objectiveChanges = age < 18 ? {} : phase.type === "career" ? { occupation: safeOccupations[(age / 2) % safeOccupations.length | 0], incomeYearly: 120000, cash: 20000 } : phase.type === "health" ? { physical: -8, cash: -5000 } : { partnerStatus: "稳定交往" };
   return { timePassed: phase.timePassed, story: choice ? `你选择了“${choice.text}”。生活没有给出即时答案，但一些方向开始改变。` : phase.story, event: { type: phase.type, title: phase.title, importance: 0.65 }, choices: [{ id: "A", text: "顺着眼前的变化慢慢适应" }, { id: "B", text: "在熟悉的节奏里再停留一会儿" }, { id: "C", text: "试着用自己的方式回应" }], objectiveChanges, psychologicalObservation: { uncertainty: "你似乎愿意为重要的人承担一些不确定性。" }, memory: `在${age}岁，你面对了${phase.title}。` };
 }
 
@@ -373,10 +382,28 @@ function withRetryCorrection(attempt: number, messages: NextEventMessage[], fail
   ];
 }
 
+// 从生成的 JSON 里提取"职业载体"主线域：occupation 变化 + career 事件的标题。
+// 只认职业信号，不扫 story/choices——"妈妈住院"的家庭剧情、业余爱好都不会被误判为主线。
+function generatedStorylineDomains(candidate: Record<string, unknown>): string[] {
+  const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
+  const type = event ? normalizeEventType(event.type) : undefined;
+  if (!type || !event) return [];
+  const changes = (candidate.objectiveChanges && typeof candidate.objectiveChanges === "object"
+    ? candidate.objectiveChanges as Record<string, unknown>
+    : candidate.objective_changes && typeof candidate.objective_changes === "object"
+      ? candidate.objective_changes as Record<string, unknown>
+      : {});
+  const texts: string[] = [];
+  if (typeof changes.occupation === "string" && changes.occupation.trim()) texts.push(changes.occupation);
+  if (type === "career" && typeof event.title === "string") texts.push(event.title);
+  return detectStorylineDomains(texts);
+}
+
 // 诊断哪一道契约关卡失败：返回 null 表示通过，否则返回具体原因。
 // expectChoices=false 表示童年阶段，不要求 choices 字段。
 // previousChoices=上一个节点的选项，用于“相邻节点张力轴不得相同”的轮换硬约束。
-export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined): string | null {
+// storylineGuards=题材域层防重守卫（跨人生 avoidStorylines / 单局内 leftStorylines）。
+export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, storylineGuards?: StorylineGuards): string | null {
   if (!value || typeof value !== "object") return "返回内容不是 JSON 对象";
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
@@ -392,6 +419,16 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
       return "价值张力轴与上一节点重复（都是\"" + currentAxis + "\"）。相邻节点必须换一条价值轴：上一节点已是\"" + currentAxis + "\"，本次请改用其它张力轴（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要再用\"闯出去/留守/折中\"同套模板。";
     }
   }
+  // 题材域层防重（第三层硬契约）：跨人生主线与本局已离开方向都不得再进入。
+  const generatedStorylines = generatedStorylineDomains(candidate);
+  if (storylineGuards?.avoidStorylines && storylineGuards.avoidStorylines.length > 0) {
+    const hit = generatedStorylines.find((domain) => storylineGuards!.avoidStorylines!.includes(domain));
+    if (hit) return "题材与最近一局人生主线重复（" + storylineLabel(hit) + "）。最近几局已经走过" + storylineGuards.avoidStorylines.map(storylineLabel).join("、") + "，本局不要再进入这些题材，请换一个完全不同的方向。";
+  }
+  if (storylineGuards?.leftStorylines && storylineGuards.leftStorylines.length > 0) {
+    const hit = generatedStorylines.find((domain) => storylineGuards!.leftStorylines!.includes(domain));
+    if (hit) return "又回到了本局已经离开的方向（" + storylineLabel(hit) + "）。你在这局人生里已经走过" + storylineGuards.leftStorylines.map(storylineLabel).join("、") + "并已离开，不要再回头进入这些题材；可以继续当前职业，也可以转向全新的方向。";
+  }
   const texts = [candidate.story, candidate.memory, event.title, ...normalizeChoices(candidate.choices).map((item) => item.text)]
     .filter((item): item is string => typeof item === "string");
   if (texts.some(containsNameInstruction)) return "文本含姓名指示词（名叫/名字叫/叫作…）";
@@ -399,8 +436,8 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
 }
 
 // 严格契约：任何关键字段缺失、类型非法、含姓名指示词或张力轴重复都返回 null，调用方抛错。
-export function normalizeGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined): NextEvent | null {
-  if (diagnoseGeneratedEvent(value, expectChoices, previousChoices) !== null) return null;
+export function normalizeGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, storylineGuards?: StorylineGuards): NextEvent | null {
+  if (diagnoseGeneratedEvent(value, expectChoices, previousChoices, storylineGuards) !== null) return null;
   const candidate = value as Record<string, unknown>;
   const event = candidate.event as Record<string, unknown>;
   const story = (candidate.story as string).trim();
@@ -432,7 +469,7 @@ const FILL_CHOICES: Record<string, string[]> = {
 // - choices 不足 2 个 → 自动补齐
 // - 价值张力轴重复 → 接受（轮换改为下一轮提示词预防，见 buildSystemPrompt 的 avoidAxis）
 // 不可修复的问题（核心字段缺失、含姓名指示词）返回 null，仍走重试。
-export function repairGeneratedEvent(value: unknown, expectChoices: boolean): NextEvent | null {
+export function repairGeneratedEvent(value: unknown, expectChoices: boolean, storylineGuards?: StorylineGuards): NextEvent | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
@@ -443,6 +480,11 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean): Ne
   if (!type) return null;
   const texts = [candidate.story, candidate.memory, event.title].filter((item): item is string => typeof item === "string");
   if (texts.some(containsNameInstruction)) return null;
+  // 题材冲突不可修复（修复层只解决格式问题）：命中跨局防重或单局内防重的主线 → 返回 null 走重试。
+  if (storylineGuards && ((storylineGuards.avoidStorylines?.length ?? 0) > 0 || (storylineGuards.leftStorylines?.length ?? 0) > 0)) {
+    const hit = generatedStorylineDomains(candidate).find((domain) => (storylineGuards.avoidStorylines?.includes(domain) ?? false) || (storylineGuards.leftStorylines?.includes(domain) ?? false));
+    if (hit) return null;
+  }
   const choices = normalizeChoices(candidate.choices);
   if (expectChoices) {
     const pool = FILL_CHOICES[type] ?? FILL_CHOICES.random;
@@ -585,6 +627,14 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   // 预防式张力轴轮换：把上一节点的张力轴写进本轮提示词，让模型主动避开（而不是写重复了再重试）
   const previousChoices = lastChoiceNode(state)?.choices;
   const avoidAxis = detectValueAxis(previousChoices);
+  // 题材域层防重守卫：
+  // - avoidStorylines（跨人生防重）：开局时写入 flags.avoidStorylines（最近几局主线），本局固定；
+  // - leftStorylines（单局内防重）：本局已确立且已离开的方向，逐轮动态计算。
+  const storylineGuards: StorylineGuards | undefined = (() => {
+    const avoidStorylines = parseAvoidStorylines(state.flags.avoidStorylines);
+    const left = leftStorylines(state);
+    return avoidStorylines.length > 0 || left.length > 0 ? { avoidStorylines, leftStorylines: left } : undefined;
+  })();
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
@@ -593,7 +643,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
     let controller: AbortController | undefined;
     let firstTokenSeen = false;
     try {
-      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags), expectChoices && state.basic.age < CHILDHOOD_BOUNDARY, avoidAxis);
+      const systemPrompt = buildSystemPrompt(expectChoices, flagsToBackground(state.flags), expectChoices && state.basic.age < CHILDHOOD_BOUNDARY, avoidAxis, storylineGuards);
       const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
       controller = new AbortController();
       // 首 token 看门狗：25 秒没开始输出就中断本轮，快速进入重试（避免干等 60 秒）
@@ -637,11 +687,11 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       const generated = parseWithTruncationRepair(generatedText || "{}");
       // 修复优先：先走严格契约；不过则尝试就地修复（补齐选项/接受张力轴重复），
       // 只有不可修复的问题（核心字段缺失、含姓名）才进入重试。
-      let parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices);
+      let parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards);
       let reason: string | null = null;
       if (!parsed) {
-        reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices);
-        parsed = repairGeneratedEvent(generated, expectChoices);
+        reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards);
+        parsed = repairGeneratedEvent(generated, expectChoices, storylineGuards);
       }
       if (!parsed) {
         logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason: reason ?? "事件契约未通过且无法自动修复", raw: generatedText });
@@ -680,7 +730,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   // 兜底：模型连续失败也不让一局人生永远卡在同一个决策节点上。
   // 用确定性回退事件推进，保证玩家始终能继续；转录同样记录这份回退事件。
   logModelDiagnostic("event-fallback", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", reason: lastFailureReason || lastError.message });
-  const fallback = buildFallbackEvent(state, choice);
+  const fallback = buildFallbackEvent(state, choice, parseAvoidStorylines(state.flags.avoidStorylines));
   return { ...fallback, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedCostUsd: 0, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
 }
 

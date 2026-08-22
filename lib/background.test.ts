@@ -8,7 +8,6 @@ import {
   flagsToBackground,
   OPENING_EVENT_GENRES,
   rollBackground,
-  TALENTS,
 } from "./background";
 
 function seededRandom(seed: number) {
@@ -20,13 +19,12 @@ function seededRandom(seed: number) {
 }
 
 describe("life background", () => {
-  it("rolls valid values for all four dimensions", () => {
+  it("rolls valid values for all three dimensions", () => {
     for (let i = 0; i < 50; i++) {
       const background = rollBackground(seededRandom(i));
       expect(FAMILY_ECONOMY).toContain(background.economy);
       expect(FAMILY_STRUCTURE).toContain(background.structure);
       expect(OPENING_EVENT_GENRES).toContain(background.event);
-      expect(TALENTS).toContain(background.talent);
     }
   });
 
@@ -62,37 +60,39 @@ describe("life background", () => {
     const background = rollBackground(seededRandom(7));
     expect(flagsToBackground(backgroundToFlags(background))).toEqual(background);
     expect(flagsToBackground({})).toBeUndefined();
+    // 旧存档遗留的 bgTalent 应被忽略，取值非法仍按原逻辑拒绝
     expect(flagsToBackground({ bgEconomy: "暴富", bgStructure: "双亲完整", bgEvent: "安稳温暖", bgTalent: "无" })).toBeUndefined();
+    expect(flagsToBackground({ bgEconomy: "普通", bgStructure: "双亲完整", bgEvent: "安稳温暖", bgTalent: "艺术" })).toEqual({ economy: "普通", structure: "双亲完整", event: "安稳温暖" });
   });
 
   it("avoids recently-used values so consecutive lives differ", () => {
-    // 连续多局都用了 艺术天赋 + 再婚家庭，新一局应尽量避开，给玩家换一种人生。
-    let sawOtherTalent = false;
+    // 连续多局都是 再婚家庭 + 家庭变故，新一局应尽量避开，给玩家换一种人生。
     let sawOtherStructure = false;
+    let sawOtherEvent = false;
     for (let i = 0; i < 500; i++) {
-      const bg = rollBackground(seededRandom(i), { talent: ["艺术"], structure: ["再婚家庭"] });
-      if (bg.talent !== "艺术") sawOtherTalent = true;
+      const bg = rollBackground(seededRandom(i), { structure: ["再婚家庭"], event: ["家庭变故"] });
       if (bg.structure !== "再婚家庭") sawOtherStructure = true;
+      if (bg.event !== "家庭变故") sawOtherEvent = true;
     }
-    expect(sawOtherTalent).toBe(true);
     expect(sawOtherStructure).toBe(true);
+    expect(sawOtherEvent).toBe(true);
   });
 
   it("rolls a valid fallback when every value of a dimension is avoided", () => {
     // 某维度全部被避开时回落到完整池，仍返回合法取值。
     for (let i = 0; i < 50; i++) {
-      const bg = rollBackground(seededRandom(i), { talent: [...TALENTS], structure: [...FAMILY_STRUCTURE] });
-      expect(TALENTS).toContain(bg.talent);
+      const bg = rollBackground(seededRandom(i), { structure: [...FAMILY_STRUCTURE], event: [...OPENING_EVENT_GENRES] });
       expect(FAMILY_STRUCTURE).toContain(bg.structure);
+      expect(OPENING_EVENT_GENRES).toContain(bg.event);
     }
   });
 
-  it("builds a directive that covers all four dimensions", () => {
-    const directive = buildBackgroundDirective({ economy: "富裕", structure: "再婚家庭", event: "平凡开端", talent: "运动" });
+  it("builds a directive that covers all three dimensions and no talent", () => {
+    const directive = buildBackgroundDirective({ economy: "富裕", structure: "再婚家庭", event: "平凡开端" });
     expect(directive).toContain("【本局出身档案】");
     expect(directive).toContain("家庭经济：富裕");
     expect(directive).toContain("家庭结构：再婚家庭");
     expect(directive).toContain("开局事件基调：平凡开端");
-    expect(directive).toContain("天赋：运动");
+    expect(directive).not.toContain("天赋");
   });
 });
