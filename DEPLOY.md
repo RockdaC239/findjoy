@@ -53,8 +53,7 @@ sudo bash ~/bootstrap-server.sh
 放行：
 
 - `22`（SSH）
-- `3939`（findjoy 对外端口）
-- `80` / `443`（以后绑定域名、上 HTTPS 用）
+- `80` / `443`（Web 对外端口；findjoy 挂在 `https://findfire.club/findjoy`）
 
 ## 第 3 步：配置 GitHub Secrets
 
@@ -92,8 +91,9 @@ git push origin main
 
 ```bash
 # 本地任意机器
-curl http://<服务器公网IP>:3939        # 应该返回 HTML 页面
-curl http://<服务器公网IP>:3939/api/models
+curl -I http://findfire.club/findjoy       # 期望 301 -> https
+curl -I https://findfire.club/findjoy      # 期望 200 / 308
+curl -s https://findfire.club/findjoy/api/models | head
 ```
 
 服务器上排查：
@@ -102,18 +102,70 @@ curl http://<服务器公网IP>:3939/api/models
 sudo systemctl status findjoy          # 服务状态
 sudo journalctl -u findjoy -f          # 实时日志
 sudo systemctl restart findjoy         # 手动重启
-curl http://127.0.0.1:3030/            # 内网健康检查
+curl -s http://127.0.0.1:3001/findjoy   # 内网健康检查（next start 只监听 127.0.0.1:3001）
 ```
 
-## 第 6 步（可选）：绑定域名 + HTTPS
+## 第 6 步：绑定域名 + HTTPS（腾讯云免费证书）
 
-1. 域名解析 A 记录指向服务器 IP
-2. `deploy.config.yml` 的 `nginx.server_name` 改成域名，并把 nginx 监听改为 80/443
-3. 用 certbot 签证书：
-   ```bash
-   sudo apt install -y certbot python3-certbot-nginx
-   sudo certbot --nginx -d your-domain.com
-   ```
+域名 `findfire.club` 的 A 记录已指向 `124.221.235.9`。免费证书签发后，剩下的就是把证书放到服务器上。
+
+部署脚本已内置 HTTPS：**`/etc/nginx/ssl/` 下存在证书时，自动生成 443 server 块并把 80 全站 301 跳转到 HTTPS；没有证书则保持纯 HTTP，不影响部署。**
+因此不要手工改服务器上的 `/etc/nginx/conf.d/findjoy.conf`——每次部署都会按模板重写它；要改配置就改 `deploy/deploy-production.sh`。
+
+### 6.1 下载证书（腾讯云控制台）
+
+SSL 证书 → 我的证书 → 找到 `findfire.club` → 下载 → 选择 **Nginx** 格式 → 解压得到：
+
+- `findfire.club_bundle.crt`：证书 + 中间证书链
+- `findfire.club.key`：私钥
+
+### 6.2 上传到服务器
+
+证书放在 `SERVER_PATH/certs/`（默认 `/home/rocc/apps/findjoy/certs/`）。这个目录在 `src/` 之外，**部署的 `rsync --delete` 不会覆盖它**，所以续期只需替换文件。
+
+```bash
+# 本机执行
+scp findfire.club_bundle.crt findfire.club.key rocc@124.221.235.9:/home/rocc/apps/findjoy/certs/
+
+# 登录服务器后执行：改成脚本期望的文件名并收紧权限
+ssh rocc@124.221.235.9
+cd /home/rocc/apps/findjoy/certs
+mv findfire.club_bundle.crt findfire.club.crt
+chmod 644 findfire.club.crt
+chmod 600 findfire.club.key
+```
+
+脚本按 `${CERT_DIR}/${SERVER_NAME}.crt` 和 `.key` 找证书；要换目录就设置部署时的 `CERT_DIR` / `SSL_CERT` / `SSL_KEY` 环境变量。
+
+### 6.3 放行 443 端口
+
+腾讯云控制台 → **轻量应用服务器**（CVM 则为云服务器）→ 选中该实例 → **防火墙**（CVM 是安全组）→ 添加规则：应用类型 `HTTPS(443)`、协议 `TCP`、端口 `443`、来源 `0.0.0.0/0`、策略 `允许`。
+
+> 只放行 80、没放行 443 时，服务器上 `curl -k https://127.0.0.1/ -H "Host: findfire.club"` 正常，但外网访问会超时——这是云防火墙，不是 nginx 的问题。
+
+### 6.4 触发部署
+
+```bash
+git push origin main        # 或在仓库 Actions 页面点 Run workflow
+```
+
+脚本会检测到证书，自动加上 443 的 HTTPS 站点并把 80 跳转到 https，日志里会打印 `对外: https://findfire.club/findjoy`。
+
+### 6.5 验证
+
+```bash
+curl -I http://findfire.club/findjoy     # 期望 301 -> https
+curl -I https://findfire.club/findjoy    # 期望 200 / 308
+openssl s_client -connect findfire.club:443 -servername findfire.club </dev/null 2>/dev/null | openssl x509 -noout -subject -dates
+```
+
+### 6.6 免费证书只有 90 天
+
+腾讯云免费证书有效期 90 天。到期前重新申请、替换 `/etc/nginx/ssl/` 下的两个文件、再触发一次部署即可。想一劳永逸可以改用 `acme.sh` 做 HTTP 校验自动续期：nginx 配置里已预留 `/.well-known/acme-challenge/` location。
+
+### 6.7 二维码与分享链接
+
+`app/showcase/ShowcaseDeck.tsx` 的链接文案和 `public/findjoy-qr.png` 目前指向 `http://124.221.235.9/findjoy`。强制 HTTPS 后，用 IP 访问的 HTTP 会被 301 到 `https://<IP>`，触发证书不匹配警告；建议把二维码和文案改成 `https://findfire.club/findjoy`。
 
 ## 回滚
 

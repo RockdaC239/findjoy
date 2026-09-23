@@ -30,8 +30,14 @@ health:
 
 nginx:
   server_name: findfire.club   # 域名；findjoy 挂载在 /findjoy/ 子路径
-  listen: 80                   # HTTP；之后上 HTTPS 改为 443
+  listen: 80                   # HTTP；证书就绪后自动 301 跳转 HTTPS
   client_max_body_size: 10m
+  # HTTPS：certs/ 下存在证书即自动启用（见 deploy/deploy-production.sh）
+  # 证书覆盖 SERVER_NAME 时自动给 443 加主域名站点；证书 SAN 含 www 时再给 www 加 301 跳转
+  ssl_listen: 443
+  ssl_cert_dir: /home/rocc/apps/findjoy/certs              # 部署不会覆盖（在 src/ 之外）
+  ssl_certificate: /home/rocc/apps/findjoy/certs/findfire.club.crt      # 腾讯云 *_bundle.crt
+  ssl_certificate_key: /home/rocc/apps/findjoy/certs/findfire.club.key  # 腾讯云 *.key
 
 # 服务器路径（由 GitHub Secrets 里的 DEPLOY_USER 决定，默认 rocc）
 paths:

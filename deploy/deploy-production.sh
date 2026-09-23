@@ -17,11 +17,19 @@ SERVER_NAME="${SERVER_NAME:-findfire.club}"
 LISTEN_PORT="${LISTEN_PORT:-80}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}${PUBLIC_BASE}}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
+# HTTPS：证书存在即自动启用 443 并强制跳转，不存在则保持纯 HTTP
+# 证书默认放 SERVER_PATH/certs（部署不会覆盖，私钥可保持 600），也可用 SSL_CERT/SSL_KEY 覆盖
+CERT_DIR="${CERT_DIR:-${SERVER_PATH}/certs}"
+SSL_LISTEN_PORT="${SSL_LISTEN_PORT:-443}"
+SSL_CERT="${SSL_CERT:-${CERT_DIR}/${SERVER_NAME}.crt}"
+SSL_KEY="${SSL_KEY:-${CERT_DIR}/${SERVER_NAME}.key}"
+# 唯一入口是主域名 SERVER_NAME；SERVER_ALIAS（默认 www）只在 HTTP 上 301 跳到主域名
+SERVER_ALIAS="${SERVER_ALIAS:-www.${SERVER_NAME}}"
 
 log() { echo "==> $*"; }
 die() { echo "!! $*" >&2; exit 1; }
 
-[ -d "$SRC_DIR" ] || die "源码目录不存在：$SRC_DIR（先运行 scripts/bootstrap-server.sh）"
+[ -d "$SRC_DIR" ] || die "源码目录不存在：${SRC_DIR}（先运行 scripts/bootstrap-server.sh）"
 cd "$SRC_DIR"
 
 log "1/5 安装依赖并构建（失败自动回滚 .next）"
@@ -83,14 +91,10 @@ fi
 
 log "4/5 创建/更新 nginx 反向代理（幂等，内容变化才更新）"
 NGINX_CONF="/etc/nginx/conf.d/${APP_NAME}.conf"
+
+# 转发 location 在 HTTP / HTTPS 两个 server 块中复用，避免重复维护。
 # location 用无尾斜杠前缀 /findjoy（Next basePath 下 /findjoy 直接 200；/findjoy/ 会 308 一次到 /findjoy）
-NGINX_BODY=$(cat <<'NGEOF'
-server {
-    listen 80_PLACEHOLDER;
-    server_name SERVER_NAME_PLACEHOLDER;
-
-    client_max_body_size 10m;
-
+LOCATIONS=$(cat <<'NGEOF'
     location /findjoy {
         proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
         proxy_http_version 1.1;
@@ -111,10 +115,121 @@ server {
         return 200 'findfire.club - 主产品部署中';
         add_header Content-Type text/plain;
     }
+
+    # 预留：acme.sh / certbot 续签用的 HTTP 校验路径
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+NGEOF
+)
+
+if [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then
+  TLS_ENABLED=1
+  log "检测到证书 ${SSL_CERT}，本次将启用 HTTPS 并统一跳转到 https://${SERVER_NAME}"
+  HTTP_SERVER=$(cat <<'NGEOF'
+server {
+    listen HTTP_LISTEN_PLACEHOLDER;
+    server_name SERVER_NAME_PLACEHOLDER SERVER_ALIAS_PLACEHOLDER;
+
+    # 证书就绪后 HTTP 全站 301 到 HTTPS，并统一到唯一入口主域名，
+    # 这样 www / IP / 其它 Host 都不会因为证书域名不匹配而报警告。
+    # 保留 acme 校验路径，方便以后换 acme.sh 自动续签。
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 https://SERVER_NAME_PLACEHOLDER$request_uri;
+    }
 }
 NGEOF
 )
-  NGINX_BODY=$(printf '%s' "$NGINX_BODY" | sed -e "s/80_PLACEHOLDER/${LISTEN_PORT}/" -e "s/SERVER_NAME_PLACEHOLDER/${SERVER_NAME}/" -e "s/APP_PORT_PLACEHOLDER/${APP_PORT}/")
+  HTTPS_SERVER=$(cat <<'NGEOF'
+server {
+    listen HTTPS_LISTEN_PLACEHOLDER ssl;
+    server_name SERVER_NAME_PLACEHOLDER;
+
+    ssl_certificate SSL_CERT_PLACEHOLDER;
+    ssl_certificate_key SSL_KEY_PLACEHOLDER;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    client_max_body_size 10m;
+
+LOCATIONS_PLACEHOLDER
+}
+NGEOF
+)
+  HTTPS_SERVER="${HTTPS_SERVER/LOCATIONS_PLACEHOLDER/$LOCATIONS}"
+  # 只有证书确实覆盖了别名域名时才在 443 上给别名加跳转块，避免证书不匹配
+  ALIAS_HTTPS=0
+  if command -v openssl >/dev/null 2>&1 && openssl x509 -in "$SSL_CERT" -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:${SERVER_ALIAS}"; then
+    ALIAS_HTTPS=1
+  fi
+  if [ "$ALIAS_HTTPS" = 1 ]; then
+    log "证书包含 ${SERVER_ALIAS}，HTTPS 上同样 301 到 https://${SERVER_NAME}"
+    HTTPS_ALIAS_SERVER=$(cat <<'NGEOF'
+
+# 别名域名（www）在 HTTPS 上也 301 到唯一入口主域名
+server {
+    listen HTTPS_LISTEN_PLACEHOLDER ssl;
+    server_name SERVER_ALIAS_PLACEHOLDER;
+
+    ssl_certificate SSL_CERT_PLACEHOLDER;
+    ssl_certificate_key SSL_KEY_PLACEHOLDER;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    return 301 https://SERVER_NAME_PLACEHOLDER$request_uri;
+}
+NGEOF
+)
+  else
+    log "证书未覆盖 ${SERVER_ALIAS}，不加别名 HTTPS 跳转块"
+    HTTPS_ALIAS_SERVER=""
+  fi
+  NGINX_BODY="${HTTP_SERVER}
+${HTTPS_SERVER}${HTTPS_ALIAS_SERVER}"
+else
+  TLS_ENABLED=0
+  log "未找到证书（${SSL_CERT} / ${SSL_KEY}），保持纯 HTTP；放好证书后重新部署即自动开启 HTTPS"
+  # 主域名 server 放在前面，作为 80 端口默认 server：IP / 未知 Host 仍可直接访问
+  NGINX_BODY=$(cat <<'NGEOF'
+server {
+    listen HTTP_LISTEN_PLACEHOLDER;
+    server_name SERVER_NAME_PLACEHOLDER;
+
+    client_max_body_size 10m;
+
+LOCATIONS_PLACEHOLDER
+}
+
+# 别名（www）在 HTTP 上 301 跳到主域名；此时还没有证书，先不跳 HTTPS
+server {
+    listen HTTP_LISTEN_PLACEHOLDER;
+    server_name SERVER_ALIAS_PLACEHOLDER;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 http://SERVER_NAME_PLACEHOLDER$request_uri;
+    }
+}
+NGEOF
+)
+  NGINX_BODY="${NGINX_BODY/LOCATIONS_PLACEHOLDER/$LOCATIONS}"
+fi
+
+NGINX_BODY=$(printf '%s\n' "$NGINX_BODY" | sed \
+  -e "s/HTTP_LISTEN_PLACEHOLDER/${LISTEN_PORT}/" \
+  -e "s/HTTPS_LISTEN_PLACEHOLDER/${SSL_LISTEN_PORT}/" \
+  -e "s/SERVER_NAME_PLACEHOLDER/${SERVER_NAME}/" \
+  -e "s/SERVER_ALIAS_PLACEHOLDER/${SERVER_ALIAS}/" \
+  -e "s|SSL_CERT_PLACEHOLDER|${SSL_CERT}|" \
+  -e "s|SSL_KEY_PLACEHOLDER|${SSL_KEY}|" \
+  -e "s/APP_PORT_PLACEHOLDER/${APP_PORT}/")
   if ! diff -q <(echo "$NGINX_BODY") <(sudo cat "$NGINX_CONF" 2>/dev/null) >/dev/null 2>&1; then
     echo "$NGINX_BODY" | sudo tee "$NGINX_CONF" >/dev/null
     sudo nginx -t || die "nginx 配置校验失败"
@@ -139,5 +254,9 @@ fi
 
 log "✅ ${APP_NAME} 部署完成"
 log "   内网: ${HEALTH_URL}"
-log "   对外: http://${SERVER_NAME}${PUBLIC_BASE}"
+if [ "$TLS_ENABLED" = 1 ]; then
+  log "   对外: https://${SERVER_NAME}${PUBLIC_BASE}（HTTP 已 301 跳转 HTTPS）"
+else
+  log "   对外: http://${SERVER_NAME}${PUBLIC_BASE}"
+fi
 log "   注意: ${SERVER_NAME}${PUBLIC_BASE}/ 会 308 到无尾斜杠版本（浏览器自动跟随）"
