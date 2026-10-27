@@ -4,10 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
+import { ModeLauncher } from "../components/ModeLauncher";
+import { MusicToggle } from "../components/MusicToggle";
 import { parseSseMessages } from "../lib/sse";
 import { readStreamedEvent, type StreamedEvent } from "../lib/stream-event";
 import { buildLifeView, type LifeView } from "../lib/life-view";
-import type { Gender } from "../lib/life";
+import type { EventType, Gender } from "../lib/life";
+import { useAmbientMusic } from "../lib/use-ambient-music";
+import { musicSceneFor } from "../lib/music-scene";
+import { setMusicEnabledPreference, useMusicEnabledPreference } from "../lib/music-preference";
+import { getLifeScenario, getScenarioLabel, getScenarioReviewQuestion, NORMAL_SCENARIO, normalizeLifeScenario } from "../lib/modes/scenario";
+import { previewStart } from "../lib/modes/start";
+import type { LifeScenario, StartSelection } from "../lib/modes/types";
 
 type Phase = "start" | "birth" | "event" | "review";
 
@@ -24,6 +32,8 @@ type LifeData = {
   eventTitle: string;
   story: string;
   choices: Choice[];
+  scenario: LifeScenario;
+  eventType?: EventType;
 };
 
 type Review = {
@@ -32,6 +42,9 @@ type Review = {
   facts: string[];
   moments: string[];
   observation: string;
+  question: string;
+  modeLabel: string;
+  modeDetail: string;
 };
 
 type ModelConfig = {
@@ -59,6 +72,9 @@ type LifeSummary = {
   events: number;
   dead: boolean;
   updatedAt: string;
+  mode: string;
+  modeLabel: string;
+  modeShort: string;
 };
 
 const defaultModelConfig: ModelConfig = {
@@ -81,6 +97,8 @@ const demoLife: LifeData = {
     { id: "B", text: "在熟悉的节奏里再停留一会儿" },
     { id: "C", text: "试着用自己的方式回应" },
   ],
+  scenario: NORMAL_SCENARIO,
+  eventType: "family",
 };
 
 const demoReview: Review = {
@@ -95,6 +113,9 @@ const demoReview: Review = {
   ],
   observation:
     "从你的选择来看，你常常会在真正重要的时刻为关系停下来。年轻时，你也许很在意证明自己；后来，你似乎越来越愿意把时间留给那些无法替代的人和事。",
+  question: "如果这是你真实的一生，你愿意这样活吗？",
+  modeLabel: "普通人生",
+  modeDetail: "随机出身 · 从 0 岁开始",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,6 +124,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+const EVENT_TYPES: EventType[] = ["career", "relationship", "health", "finance", "random", "family"];
+
+function getEventType(value: unknown): EventType | undefined {
+  return typeof value === "string" && (EVENT_TYPES as string[]).includes(value) ? value as EventType : undefined;
 }
 
 function getChoices(value: unknown): Choice[] {
@@ -138,11 +165,25 @@ function parseLife(payload: unknown): LifeData {
     eventTitle: getString(event.title, demoLife.eventTitle),
     story: getString(nextEvent.story, demoLife.story),
     choices: getChoices(nextEvent.choices),
+    scenario: normalizeLifeScenario(state.scenario),
+    eventType: getEventType(event.type),
   };
 }
 
 function parseReview(payload: unknown, current: LifeData): Review {
-  if (!isRecord(payload) || !isRecord(payload.ending)) return demoReview;
+  if (!isRecord(payload) || !isRecord(payload.ending)) {
+    const meta = getScenarioLabel(current.scenario);
+    return {
+      ...demoReview,
+      age: current.age,
+      facts: [current.occupation, `在${current.city}生活过`, "回顾暂时没有生成"],
+      moments: [],
+      observation: "这一生的回顾暂时没有生成，但你做过的选择已经留在这段人生里。",
+      question: getScenarioReviewQuestion(current.scenario),
+      modeLabel: meta.label,
+      modeDetail: meta.detail,
+    };
+  }
   const ending = payload.ending;
   const facts = isRecord(ending.facts) ? ending.facts : {};
   const highlights = Array.isArray(ending.highlights) ? ending.highlights : [];
@@ -160,6 +201,9 @@ function parseReview(payload: unknown, current: LifeData): Review {
     facts: [getString(facts.occupation, current.occupation), `在${getString(facts.city, current.city)}生活过`, eventCount],
     moments: moments.length ? moments : demoReview.moments,
     observation: patterns.filter((item): item is string => typeof item === "string").join(" ") || demoReview.observation,
+    question: getScenarioReviewQuestion(current.scenario),
+    modeLabel: getScenarioLabel(current.scenario).label,
+    modeDetail: getScenarioLabel(current.scenario).detail,
   };
 }
 
@@ -182,6 +226,8 @@ export default function Home() {
   const [resumableLife, setResumableLife] = useState<LifeView | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
+  const [pendingStart, setPendingStart] = useState<StartSelection>({ mode: "normal" });
+  const musicEnabled = useMusicEnabledPreference();
 
   useEffect(() => {
     let cancelled = false;
@@ -204,6 +250,21 @@ export default function Home() {
     ? Math.min(110, life.age + streamingEvent.timePassed)
     : life.age;
 
+  const musicPhase = phase === "birth" ? "start" : phase;
+  const musicScene = musicSceneFor({ phase: musicPhase, scenario: life.scenario, eventType: life.eventType });
+  const music = useAmbientMusic(musicScene);
+
+  function toggleMusic() {
+    const next = !musicEnabled;
+    setMusicEnabledPreference(next);
+    if (next) music.start();
+    else music.stop();
+  }
+
+  function startMusicIfEnabled() {
+    if (musicEnabled) music.start();
+  }
+
   async function requestLife(url: string, body?: Record<string, unknown>) {
     setIsLoading(true);
     setRequestError("");
@@ -215,7 +276,10 @@ export default function Home() {
         signal: AbortSignal.timeout(LIFE_REQUEST_TIMEOUT_MS),
         body: JSON.stringify({ ...(body ?? {}), modelConfig }),
       });
-      if (!response.ok) throw new Error("Life service unavailable");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "人生服务暂时不可用，请稍后重试。");
+      }
       if (response.headers.get("content-type")?.includes("application/json")) return (await response.json()) as unknown;
       if (!response.body) throw new Error("Life stream unavailable");
       const reader = response.body.getReader();
@@ -264,20 +328,34 @@ export default function Home() {
 
   async function startLife(gender: Gender) {
     setShowGenderDialog(false);
+    const preview = previewStart(pendingStart);
+    setLife({
+      ...demoLife,
+      scenario: preview.scenario,
+      age: preview.age,
+      city: preview.city ?? demoLife.city,
+      eventTitle: "",
+      story: "",
+      choices: [],
+    });
     setPhase("event");
-    const payload = await requestLife(`${API_BASE}/api/life/start`, { gender });
+    startMusicIfEnabled();
+    const payload = await requestLife(`${API_BASE}/api/life/start`, { gender, ...pendingStart });
     if (!payload) {
       setPhase("start");
+      music.stop();
       return;
     }
     const next = parseLife(payload);
     setLife(next);
     setResumableLife(null);
+    setHistoryLives(null);
     try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* storage unavailable */ }
   }
 
   async function choose(choiceId: string) {
     const choice = life.choices.find((item) => item.id === choiceId);
+    startMusicIfEnabled();
     const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { choice });
     if (isRecord(payload) && payload.ended === true) {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
@@ -287,11 +365,13 @@ export default function Home() {
     } else if (payload) {
       const next = parseLife(payload);
       setLife(next);
+      setHistoryLives(null);
       try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* ignore */ }
     }
   }
 
   async function continueLife() {
+    startMusicIfEnabled();
     const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`);
     if (isRecord(payload) && payload.ended === true) {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
@@ -301,6 +381,7 @@ export default function Home() {
     } else if (payload) {
       const next = parseLife(payload);
       setLife(next);
+      setHistoryLives(null);
       try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* ignore */ }
     }
   }
@@ -308,6 +389,9 @@ export default function Home() {
   function restart() {
     setLife(demoLife);
     setReview(demoReview);
+    setPendingStart({ mode: "normal" });
+    setRequestError("");
+    setHistoryLives(null);
     setPhase("start");
   }
 
@@ -340,6 +424,7 @@ export default function Home() {
     const targetId = lifeId ?? resumableLife?.lifeId;
     if (!targetId || isResuming) return;
     setIsResuming(true);
+    startMusicIfEnabled();
     setRequestError("");
     setShowHistory(false);
     setPhase("event");
@@ -404,10 +489,34 @@ export default function Home() {
     }
   }
 
+  const modeMeta = getScenarioLabel(life.scenario);
+  const historyMeta = historyDetail ? getScenarioLabel(getLifeScenario(historyDetail)) : null;
+
   return (
     <main className={`page page--${phase}`}>
-      <header className="topbar" aria-label="Primary navigation">
-        {phase === "event" ? <p className="current-age">{displayAge} 岁</p> : <><BrandLogo href="/showcase" className="wordmark" /><div className="topbar-actions"><Link className="settings-button" href="/bookmarks">觅乐书签</Link><button className="settings-button" onClick={openHistory}>过往人生</button><button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button></div></>}
+      <header className={`topbar${phase === "event" ? " topbar--event" : ""}`} aria-label="Primary navigation">
+        {phase === "event" ? (
+          <>
+            <div className="event-mode">
+              <span className="mode-chip">{modeMeta.label}</span>
+              <span className="event-mode-detail">{modeMeta.detail}{life.city ? ` · ${life.city}` : ""}</span>
+            </div>
+            <p className="current-age">{displayAge} 岁</p>
+            <div className="topbar-actions">
+              <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />
+            </div>
+          </>
+        ) : (
+          <>
+            <BrandLogo href="/showcase" className="wordmark" />
+            <div className="topbar-actions">
+              <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
+              <button className="settings-button" onClick={openHistory}>过往人生</button>
+              <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>
+              <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} />
+            </div>
+          </>
+        )}
       </header>
 
       {showSettings && (
@@ -440,7 +549,7 @@ export default function Home() {
             {historyDetail ? (
               <div className="history-detail">
                 <button className="text-button" onClick={() => setHistoryDetail(null)}>← 返回列表</button>
-                <p className="history-detail-meta">{historyDetail.basic.city} · {historyDetail.basic.age} 岁 · {historyDetail.history.length} 个节点{historyDetail.dead ? " · 已故" : " · 在世"}
+                <p className="history-detail-meta">{historyMeta ? `${historyMeta.label} · ${historyMeta.detail} · ` : ""}{historyDetail.basic.city} · {historyDetail.basic.age} 岁 · {historyDetail.history.length} 个节点{historyDetail.dead ? " · 已故" : " · 在世"}
                   {(() => {
                     const bg = [historyDetail.flags.bgEconomy, historyDetail.flags.bgStructure, historyDetail.flags.bgEvent].filter((v): v is string => typeof v === "string");
                     return bg.length === 3 ? ` · 出身 ${bg.join("·")}` : "";
@@ -481,7 +590,7 @@ export default function Home() {
                       <div className="history-item" key={item.lifeId}>
                         <button className="history-item-main" onClick={() => loadLifeDetail(item.lifeId)}>
                           <span className="history-item-time">{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                          <span className="history-item-text">{item.city} · {item.age} 岁 · {item.events} 个节点</span>
+                          <span className="history-item-text"><span className="history-item-mode">{item.modeLabel || "普通人生"}</span>{item.city} · {item.age} 岁 · {item.events} 个节点</span>
                           <span className={`history-item-status ${item.dead ? "is-dead" : ""}`}>{item.dead ? "已故" : "在世"}</span>
                         </button>
                         {!item.dead && (
@@ -522,18 +631,20 @@ export default function Home() {
       )}
 
       {phase === "start" && (
-        <section className="intro" aria-labelledby="intro-title">
+        <section className="intro intro--modes" aria-labelledby="intro-title">
           <p className="eyebrow">FIND YOUR WAY TO JOY</p>
           <h1 id="intro-title">人生没有答案，只有选择</h1>
           <p className="intro-copy"><span>这一生会从这里开始，而幸福不在别处，就在你的每一次选择里。</span><span className="intro-copy-line--nowrap">阿德勒说，决定我们的不是经历，而是我们赋予经历的意义——没有统一标准，你怎样定义，就有怎样的幸福。</span><span>直到终点回望时，你看见它如何一点点，变成了你自己。</span></p>
-          <button className="primary-button" onClick={() => setShowGenderDialog(true)} disabled={isLoading}>
-            {isLoading ? "正在开始..." : "开始人生"}
-          </button>
-          {resumableLife && !resumableLife.dead && (
-            <button className="resume-button" onClick={() => resumeLife()} disabled={isLoading || isResuming}>
-              {isResuming ? "正在恢复..." : `继续上次的人生（${resumableLife.age} 岁 · ${resumableLife.city}）`}
-            </button>
-          )}
+          <ModeLauncher
+            disabled={isLoading || isResuming}
+            resumableLife={resumableLife}
+            isResuming={isResuming}
+            onStart={(selection) => {
+              setPendingStart(selection);
+              setShowGenderDialog(true);
+            }}
+            onResume={() => resumeLife()}
+          />
         </section>
       )}
 
@@ -590,12 +701,13 @@ export default function Home() {
       {phase === "review" && (
         <section className="review" aria-labelledby="review-title">
           <p className="eyebrow">A LIFE REMEMBERED</p>
+          <p className="review-mode">{review.modeLabel} · {review.modeDetail}</p>
           <h1 id="review-title">你的<br />一生。</h1>
           <p className="lived">享年 <strong>{review.age}</strong> 岁<span className="death-cause">，{review.death}</span></p>
           <div className="review-section facts"><p className="section-label">这一生</p>{review.facts.map((fact) => <p key={fact}>{fact}</p>)}</div>
           <div className="review-section"><p className="section-label">改变方向的时刻</p>{review.moments.map((moment) => <p className="moment" key={moment}>{moment}</p>)}</div>
           <div className="reflection"><p className="section-label">回望</p><p>{review.observation}</p></div>
-          <div className="final-question"><p>如果这是你真实的一生，<br />你愿意这样活吗？</p><div><button className="text-button" onClick={restart}>我愿意。</button><button className="primary-button" onClick={restart}>我想再活一次 <span aria-hidden="true">↗</span></button></div></div>
+          <div className="final-question"><p>{review.question}</p><div><button className="text-button" onClick={restart}>我愿意。</button><button className="primary-button" onClick={restart}>我想再活一次 <span aria-hidden="true">↗</span></button></div></div>
         </section>
       )}
     </main>
