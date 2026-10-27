@@ -2,7 +2,7 @@
 # ============================================================
 # 腾讯云新服务器一键初始化（以 root 运行一次）
 # 用法：  sudo bash scripts/bootstrap-server.sh
-# 会安装 Node 20 / nginx / 构建工具，创建部署用户与部署密钥，
+# 会安装 Node 22 / nginx / 构建工具，创建部署用户与部署密钥，
 # 并打印需要填入 GitHub Secrets 的私钥。
 # ============================================================
 set -euo pipefail
@@ -10,8 +10,8 @@ set -euo pipefail
 DEPLOY_USER="${DEPLOY_USER:-rocc}"
 APP_NAME="${APP_NAME:-findjoy}"
 SERVER_PATH="${SERVER_PATH:-/home/${DEPLOY_USER}/apps/${APP_NAME}}"
-PUBLIC_PORT="${PUBLIC_PORT:-3939}"
-NODE_MAJOR="${NODE_MAJOR:-20}"
+PUBLIC_PORT="${PUBLIC_PORT:-80}"
+NODE_MAJOR="${NODE_MAJOR:-22}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -63,7 +63,7 @@ echo "=============================================================="
 echo "✅ 服务器初始化完成！请完成以下 4 步："
 echo ""
 echo "1. 腾讯云控制台 -> 安全组/防火墙，放行端口："
-echo "    22（SSH）、${PUBLIC_PORT}（应用）、80/443（以后绑定域名用）"
+echo "    22（SSH）、${PUBLIC_PORT}（HTTP）、443（HTTPS）"
 echo ""
 echo "2. 在 GitHub 仓库 Settings -> Secrets and variables -> Actions 添加："
 echo "    DEPLOY_HOST = 服务器公网 IP"

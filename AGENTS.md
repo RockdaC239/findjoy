@@ -9,7 +9,7 @@ Treat [`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-
 Use the scripts in `package.json`:
 
 - `npm install` — install the lockfile dependencies.
-- `npm run dev` — start the local server at `http://localhost:3000`.
+- `npm run dev` — start the local server at `http://localhost:3000/findjoy`.
 - `npm run build` — create the production build.
 - `npm test` — run Vitest domain tests.
 - `npm run typecheck` — run TypeScript without emitting files.

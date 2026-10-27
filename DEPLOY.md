@@ -10,7 +10,7 @@
 | 服务器初始化 | 一次性脚本 | `scripts/bootstrap-server.sh` |
 
 架构：`GitHub push main` → Actions 跑测试 → rsync 代码到服务器 → 执行部署脚本
-（npm ci + build → systemd 守护 `next start` 监听 127.0.0.1:3030 → nginx 反代对外 :3939 → 健康检查）。
+（npm ci + build → systemd 守护 `next start` 监听 127.0.0.1:3001 → nginx 反代对外 80/443 → 健康检查）。
 
 ---
 
@@ -40,7 +40,7 @@ sudo bash ~/bootstrap-server.sh
 
 脚本会依次：
 1. 安装 git / nginx / rsync / 构建工具（better-sqlite3 原生编译需要）
-2. 安装 Node.js 20（Next.js 16 要求 ≥20.9）
+2. 安装 Node.js 22（`better-sqlite3@13` 要求 ≥22）
 3. 创建部署用户 `rocc`（默认），并配置 systemctl/nginx 免密 sudo
 4. 创建目录 `/home/rocc/apps/findjoy/{src,data,logs}`
 5. 生成部署密钥 `findjoy_deploy`，并把**私钥打印出来**
@@ -109,7 +109,7 @@ curl -s http://127.0.0.1:3001/findjoy   # 内网健康检查（next start 只监
 
 域名 `findfire.club` 的 A 记录已指向 `124.221.235.9`。免费证书签发后，剩下的就是把证书放到服务器上。
 
-部署脚本已内置 HTTPS：**`/etc/nginx/ssl/` 下存在证书时，自动生成 443 server 块并把 80 全站 301 跳转到 HTTPS；没有证书则保持纯 HTTP，不影响部署。**
+部署脚本已内置 HTTPS：**`SERVER_PATH/certs/` 下存在证书时，自动生成 443 server 块并把 80 全站 301 跳转到 HTTPS；没有证书则保持纯 HTTP，不影响部署。**
 因此不要手工改服务器上的 `/etc/nginx/conf.d/findjoy.conf`——每次部署都会按模板重写它；要改配置就改 `deploy/deploy-production.sh`。
 
 ### 6.1 下载证书（腾讯云控制台）
@@ -161,7 +161,7 @@ openssl s_client -connect findfire.club:443 -servername findfire.club </dev/null
 
 ### 6.6 免费证书只有 90 天
 
-腾讯云免费证书有效期 90 天。到期前重新申请、替换 `/etc/nginx/ssl/` 下的两个文件、再触发一次部署即可。想一劳永逸可以改用 `acme.sh` 做 HTTP 校验自动续期：nginx 配置里已预留 `/.well-known/acme-challenge/` location。
+腾讯云免费证书有效期 90 天。到期前重新申请、替换 `SERVER_PATH/certs/` 下的两个文件、再触发一次部署即可。想一劳永逸可以改用 `acme.sh` 做 HTTP 校验自动续期：nginx 配置里已预留 `/.well-known/acme-challenge/` location。
 
 ### 6.7 二维码与分享链接
 
@@ -174,6 +174,6 @@ openssl s_client -connect findfire.club:443 -servername findfire.club </dev/null
 ## 常见问题
 
 - **SSH Permission denied**：确认 `DEPLOY_SSH_KEY` 是 bootstrap 打印的私钥全文；`DEPLOY_USER` 与 bootstrap 的 `DEPLOY_USER` 一致。
-- **端口访问不了**：安全组没放行 3939；或 nginx 未 reload（看 `sudo nginx -t`）。
+- **端口访问不了**：安全组没放行 80/443；或 nginx 未 reload（看 `sudo nginx -t`）。
 - **better-sqlite3 编译失败**：服务器缺 build-essential/python3，重跑 bootstrap。
 - **服务反复重启**：`sudo journalctl -u findjoy -n 50` 看日志，多为 `.env` 缺 `LLM_API_KEY`。
