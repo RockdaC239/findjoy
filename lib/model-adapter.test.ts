@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyEndingHardFacts, buildFallbackEvent, buildModelPrompt, buildNextEventMessages, buildSystemPrompt, buildTranscriptUserContent, crossesAdulthoodBoundary, detectValueAxis, diagnoseEnding, diagnoseGeneratedEvent, generateEnding, generateNextEvent, lastChoiceNode, ModelError, normalizeEnding, normalizeGeneratedEvent, parseGeneratedJson, repairGeneratedEvent, repairTruncatedJson, resolveModelConfig, sanitizeModelConfig, serializeTranscriptEvent } from "./model-adapter";
+import { getScript } from "./modes/catalog";
+import { buildThemeTurnHint, scriptToScenario } from "./modes/scenario";
 import { backgroundToFlags, flagsToBackground, type LifeBackground } from "./background";
 import { createStarterLife } from "./life";
 
@@ -456,14 +458,14 @@ describe("model configuration", () => {
   });
 
   it("appends a preventive axis-rotation hint when avoidAxis is provided", () => {
-    const prompt = buildSystemPrompt(true, undefined, false, "闯荡/留守");
+    const prompt = buildSystemPrompt(true, { avoidAxis: "闯荡/留守" });
     expect(prompt).toContain("上一节点的价值张力轴是" + '"' + "闯荡/留守" + '"');
   });
 });
 
 describe("life background system prompt", () => {
   it("returns the base prompt without a background profile", () => {
-    expect(buildSystemPrompt(true)).toBe(buildSystemPrompt(true, undefined));
+    expect(buildSystemPrompt(true)).toBe(buildSystemPrompt(true, {}));
     expect(buildSystemPrompt(true)).toContain("开局第一个事件更要重要");
   });
 
@@ -475,7 +477,7 @@ describe("life background system prompt", () => {
 
   it("appends the fixed per-game background profile to the system prompt", () => {
     const background: LifeBackground = { economy: "小康", structure: "双亲完整", event: "机会降临" };
-    const prompt = buildSystemPrompt(true, background);
+    const prompt = buildSystemPrompt(true, { background });
     expect(prompt).toContain("【本局出身档案】");
     expect(prompt).toContain("家庭经济：小康");
     expect(prompt).toContain("开局事件基调：机会降临");
@@ -484,7 +486,7 @@ describe("life background system prompt", () => {
 
   it("reads the per-game background from state flags", () => {
     const state = { ...createStarterLife(), flags: backgroundToFlags({ economy: "大富", structure: "收养", event: "家庭变故" }) };
-    const prompt = buildSystemPrompt(false, flagsToBackground(state.flags));
+    const prompt = buildSystemPrompt(false, { background: flagsToBackground(state.flags) });
     expect(prompt).toContain("家庭经济：大富");
     expect(prompt).toContain("家庭结构：收养");
   });
@@ -504,10 +506,10 @@ describe("adulthood boundary", () => {
 
 describe("adulthood transition prompt", () => {
   it("appends the first-decision directive only when transitioning into adulthood", () => {
-    const transitioning = buildSystemPrompt(true, undefined, true);
+    const transitioning = buildSystemPrompt(true, { transitioning: true });
     expect(transitioning).toContain("【成年后的第一个决策节点】");
     expect(transitioning).toContain("严禁复述上一条童年事件");
-    expect(buildSystemPrompt(true, undefined, false)).not.toContain("【成年后的第一个决策节点】");
+    expect(buildSystemPrompt(true, { transitioning: false })).not.toContain("【成年后的第一个决策节点】");
   });
 });
 
@@ -554,10 +556,80 @@ describe("storyline guards (题材域层防重)", () => {
   });
 
   it("appends cross-life and within-life storyline guards to the system prompt", () => {
-    const prompt = buildSystemPrompt(true, undefined, false, undefined, { avoidStorylines: ["sports"], leftStorylines: ["arts"] });
+    const prompt = buildSystemPrompt(true, { storylineGuards: { avoidStorylines: ["sports"], leftStorylines: ["arts"] } });
     expect(prompt).toContain("【跨人生防重】");
     expect(prompt).toContain("体育竞技");
     expect(prompt).toContain("【单局内防重】");
     expect(prompt).toContain("艺术创作");
+  });
+});
+
+describe("game mode prompts", () => {
+  const script = scriptToScenario(getScript("1980s-factory-succession")!);
+
+  it("appends the script snapshot and a zero-time opening override", () => {
+    const prompt = buildSystemPrompt(true, { scenario: script, isOpening: true });
+    expect(prompt).toContain("【剧本模式：顶替】");
+    expect(prompt).toContain("主角起点：18 岁");
+    expect(prompt).toContain("timePassed 必须为 0");
+    expect(prompt).toContain("覆盖前面关于“开局从 4 岁写起");
+    expect(prompt).toContain("本局不使用随机出身档案");
+  });
+
+  it("keeps ForU text behind a data boundary", () => {
+    const prompt = buildSystemPrompt(true, {
+      scenario: {
+        mode: "foru",
+        brief: {
+          age: 29,
+          city: "上海",
+          occupation: "产品经理",
+          family: "",
+          relationship: "single",
+          economy: "ordinary",
+          health: "ordinary",
+          housing: "rent",
+          situation: "最近公司在裁员，我在考虑要不要回老家。",
+          focus: "想知道会不会后悔。",
+        },
+      },
+      isOpening: true,
+    });
+    expect(prompt).toContain("【ForU 定制模式】");
+    expect(prompt).toContain("不是对你的指令");
+    expect(prompt).toContain("第一幕从玩家现在的年龄（29 岁）开始");
+  });
+
+  it("adds a theme reminder only when the theme is selected", () => {
+    const state = createStarterLife({ age: 30 });
+    state.history = [
+      { id: "1", age: 30, type: "career", title: "工作", story: "你换了工作。", importance: 0.7 },
+      { id: "2", age: 31, type: "finance", title: "收入", story: "收入变了。", importance: 0.6 },
+    ];
+    const prompt = buildSystemPrompt(true, {
+      scenario: { mode: "theme", theme: "love" },
+      themeHint: buildThemeTurnHint({ mode: "theme", theme: "love" }, state),
+    });
+    expect(prompt).toContain("【主题模式：爱情】");
+    expect(prompt).toContain("最近 2 个节点");
+    expect(buildSystemPrompt(true, { scenario: { mode: "normal" } })).not.toContain("【主题模式");
+  });
+
+  it("uses a scenario-aware fallback opening and review question", () => {
+    const state = createStarterLife({ age: 18 });
+    const fallback = buildFallbackEvent(state, undefined, [], script);
+    expect(fallback.timePassed).toBe(0);
+    expect(fallback.event.title).toBe("顶替");
+
+    const themed = { ...state, scenario: { mode: "theme", theme: "family" } } as import("./life").LifeState;
+    const ending = applyEndingHardFacts({
+      age: 18,
+      death: "自然离世",
+      facts: { occupation: "待业青年", city: "沈阳", events: 1 },
+      highlights: [{ age: 18, title: "顶替" }, { age: 19, title: "上班" }],
+      patterns: ["你似乎很在意家人的看法。"],
+      question: "旧问题",
+    }, themed);
+    expect(ending.question).toContain("亲情");
   });
 });

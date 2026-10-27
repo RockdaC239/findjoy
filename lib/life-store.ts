@@ -5,6 +5,8 @@ import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 import { flagsToBackground, type BackgroundAvoid } from "./background";
 import { extractLifeStorylines } from "./storyline";
+import { getLifeScenario, getScenarioLabel, getScenarioShortLabel } from "./modes/scenario";
+import type { LifeMode } from "./modes/types";
 
 const DEFAULT_DB_FILE = path.join(process.cwd(), ".data", "life.db");
 
@@ -44,6 +46,18 @@ function getDb(): Database.Database {
 }
 
 interface LifeRow { state: string }
+
+export interface LifeSummary {
+  lifeId: string;
+  age: number;
+  city: string;
+  events: number;
+  dead: boolean;
+  updatedAt: string;
+  mode: LifeMode;
+  modeLabel: string;
+  modeShort: string;
+}
 
 function checkpointIfNeeded(): void {
   writeCount += 1;
@@ -85,15 +99,17 @@ export const lifeStore = {
     return state;
   },
 
-  listSummaries(): Array<{ lifeId: string; age: number; city: string; events: number; dead: boolean; updatedAt: string }> {
+  listSummaries(): LifeSummary[] {
     const rows = getDb().prepare("SELECT life_id, state, updated_at FROM lives ORDER BY updated_at DESC").all() as Array<{ life_id: string; state: string; updated_at: string }>;
     return rows.map((row) => {
       let state: LifeState;
       try {
         state = JSON.parse(row.state) as LifeState;
       } catch {
-        return { lifeId: row.life_id, age: 0, city: "", events: 0, dead: false, updatedAt: row.updated_at };
+        return { lifeId: row.life_id, age: 0, city: "", events: 0, dead: false, updatedAt: row.updated_at, mode: "normal", modeLabel: "普通人生", modeShort: "普通" };
       }
+      const scenario = getLifeScenario(state);
+      const meta = getScenarioLabel(scenario);
       return {
         lifeId: row.life_id,
         age: state.basic.age,
@@ -101,6 +117,9 @@ export const lifeStore = {
         events: state.history.length,
         dead: state.dead,
         updatedAt: row.updated_at,
+        mode: scenario.mode,
+        modeLabel: meta.label,
+        modeShort: getScenarioShortLabel(scenario),
       };
     });
   },

@@ -1,27 +1,26 @@
-import { applyNextEvent, createStarterLife } from "../../../../lib/life";
-import { backgroundToFinance, backgroundToFlags, rollBackground } from "../../../../lib/background";
+import { NextResponse } from "next/server";
+import { applyNextEvent } from "../../../../lib/life";
 import { buildTranscriptUserContent, sanitizeModelConfig, serializeTranscriptEvent, streamNextEvent, type TranscriptMessage } from "../../../../lib/model-adapter";
 import { lifeStore } from "../../../../lib/life-store";
+import { createStartLife, parseStartLifeRequest, resolveStartPlan } from "../../../../lib/modes/start";
 import { encodeSseMessage } from "../../../../lib/sse";
 
 const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" };
 
 export async function POST(request: Request) {
   const input = await request.json().catch(() => ({}));
-  // 三维出身档案随机生成（家庭经济 × 家庭结构 × 开局事件，100 种组合），
-  // 经济底色写入初始财务状态，档案写入 flags 并作为本局系统提示词的固定后缀。
-  // 出身维度防重（避开最近几局用过的取值）+ 剧本主线防重（收集最近几局的实际
-  // 职业/题材域，写入 flags.avoidStorylines，作为跨人生防重指令与硬契约），
-  // 让玩家每次重新开始人生都能换一种人生，而不是落在同一条线上。
-  const recentAvoid = lifeStore.recentBackgroundAvoid(6);
-  const background = rollBackground(undefined, recentAvoid);
-  const recentStorylines = lifeStore.recentStorylines(6);
-  const starter = createStarterLife(input);
-  const state = lifeStore.set({
-    ...starter,
-    finance: { ...starter.finance, ...backgroundToFinance(background) },
-    flags: { ...backgroundToFlags(background), avoidStorylines: recentStorylines.join(",") },
-  });
+  const parsed = parseStartLifeRequest(input);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  // 普通/主题模式沿用随机出身档案与跨局防重；剧本/ForU 的情境由目录或玩家资料决定，
+  // 不掷出身、也不让跨人生防重把主线拉走。
+  const selection = parsed.selection;
+  const usesBackground = selection.mode === "normal" || selection.mode === "theme";
+  const recentAvoid = usesBackground ? lifeStore.recentBackgroundAvoid(6) : undefined;
+  const recentStorylines = selection.mode === "normal" ? lifeStore.recentStorylines(6) : [];
+  const plan = resolveStartPlan(selection, { backgroundAvoid: recentAvoid });
+  const state = lifeStore.set(createStartLife(plan, parsed.gender, { recentStorylines }));
+
   const transcript: TranscriptMessage[] = [];
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -40,7 +39,13 @@ export async function POST(request: Request) {
         }
         // 开局事件以“待定节点”写入 history（含完整选项/时间戳/usage），不丢开局；
         // 开局不参与死亡判定（rollDeath:false），避免开局即死。
-        const openedState = lifeStore.set(applyNextEvent(state, item.value, undefined, { rollDeath: false }));
+        // 剧本/ForU 的第一幕发生在当前年龄，允许 timePassed=0，不凭空加一岁。
+        const openedState = lifeStore.set(
+          applyNextEvent(state, item.value, undefined, {
+            rollDeath: false,
+            allowZeroTime: plan.openingAtCurrentAge,
+          }),
+        );
         transcript.push({ role: "user", content: buildTranscriptUserContent(state, undefined, true) });
         transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });
         lifeStore.setTranscript(state.lifeId, transcript);

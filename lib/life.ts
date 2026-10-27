@@ -1,3 +1,5 @@
+import type { LifeScenario } from "./modes/types";
+
 export type Gender = "female" | "male" | "nonbinary" | "unspecified";
 export type EventType = "career" | "relationship" | "health" | "finance" | "random" | "family";
 
@@ -19,6 +21,8 @@ export interface LifeState {
   history: LifeEvent[];
   majorMemories: string[];
   flags: Record<string, boolean | string | number>;
+  /** 玩法情境；旧存档没有该字段时按普通人生处理。 */
+  scenario?: LifeScenario;
   dead: boolean;
   createdAt: string;
 }
@@ -100,7 +104,7 @@ export function createStarterLife(input: Partial<LifeBasics> = {}): LifeState {
     health: { physical: 92, conditions: [], lifestyle: "普通" },
     relationships: { partner: { status: "单身", years: 0 }, children: [], parents: { status: "健在" }, friends: [] },
     psychology: { valueProfile: {}, behaviorPatterns: [], internalConflicts: [] },
-    history: [], majorMemories: [], flags: {}, dead: false, createdAt: new Date().toISOString(),
+    history: [], majorMemories: [], flags: {}, scenario: { mode: "normal" }, dead: false, createdAt: new Date().toISOString(),
   };
 }
 
@@ -109,9 +113,16 @@ export function createStarterLife(input: Partial<LifeBasics> = {}): LifeState {
 //   而不是挂到本节点，消除时间轴上决策错位一格的问题；
 // - 新节点以“待定”状态入列（choiceId/choiceText 暂缺），等玩家做出选择后由下一次调用补齐；
 // - 开局节点（start 路由，无 choice + rollDeath:false）同样以待定节点入列，不再丢失。
-export function applyNextEvent(state: LifeState, event: NextEvent, choice?: LifeChoice, options: { random?: () => number; rollDeath?: boolean } = {}): LifeState {
+export function applyNextEvent(
+  state: LifeState,
+  event: NextEvent,
+  choice?: LifeChoice,
+  options: { random?: () => number; rollDeath?: boolean; allowZeroTime?: boolean } = {},
+): LifeState {
   const changes = event.objectiveChanges ?? {};
-  const age = Math.min(110, state.basic.age + Math.max(1, event.timePassed || 1));
+  // ForU/剧本的第一幕发生在“当前年龄”，timePassed=0；其余节点仍至少推进 1 年。
+  const rawTimePassed = options.allowZeroTime ? Math.max(0, event.timePassed || 0) : Math.max(1, event.timePassed || 1);
+  const age = Math.min(110, state.basic.age + rawTimePassed);
   const next: LifeState = structuredClone(state);
   next.basic.age = age;
   if (changes.occupation) next.career.occupation = changes.occupation;

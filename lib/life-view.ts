@@ -1,4 +1,6 @@
-import type { LifeState, LifeChoice } from "./life";
+import type { LifeState, LifeChoice, EventType } from "./life";
+import { getLifeScenario, NORMAL_SCENARIO } from "./modes/scenario";
+import type { LifeScenario } from "./modes/types";
 
 // 前端「断点恢复」：从已持久化的 LifeState 重建当前要展示的事件节点。
 // 服务器每步都把整局状态存入 SQLite，玩家刷新/关页后再进来，
@@ -14,6 +16,8 @@ export interface LifeView {
   eventTitle: string;
   story: string;
   choices: LifeChoice[];
+  scenario: LifeScenario;
+  eventType?: EventType;
   dead: boolean;
 }
 
@@ -28,6 +32,7 @@ const FALLBACK_VIEW: LifeView = {
   eventTitle: "",
   story: "",
   choices: [],
+  scenario: NORMAL_SCENARIO,
   dead: false,
 };
 
@@ -52,6 +57,8 @@ export function buildLifeView(state: LifeState | null | undefined): LifeView {
     eventTitle: text(last?.title),
     story: text(last?.story),
     choices: Array.isArray(last?.choices) ? last.choices : [],
+    scenario: getLifeScenario(state),
+    eventType: last?.type,
     dead: state.dead === true,
   };
 }
