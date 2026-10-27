@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Treat [`人生模拟器 MVP 产品开发文档 v0.1.md`](./人生模拟器%20MVP 产品开发文档%20v0.1.md) as the product source of truth. The app is a Next.js App Router project: UI and API routes live in `app/`, game/state logic and the model adapter live in `lib/`, and behavior tests live beside the domain code (for example, `lib/life.test.ts`). The four user-facing phases are start, birth/early life, the life-event loop, and death/life review. Static assets belong in `public/`.
+Treat [`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-v0.1.md) as the product source of truth. The app is a Next.js App Router project: UI and API routes live in `app/`, game/state logic and the model adapter live in `lib/`, and behavior tests live beside the domain code (for example, `lib/life.test.ts`). The four user-facing phases are start, birth/early life, the life-event loop, and death/life review. Static assets belong in `public/`; product specs, design notes, and sample runs belong in `docs/`.
 
 ## Build, Test, and Development Commands
 
@@ -21,6 +21,8 @@ Use TypeScript, two-space indentation, semicolons, and the formatter/linter conf
 
 ## Testing Guidelines
 
+前端开发必须同时适配桌面端和移动端，不能仅以桌面网页效果作为完成标准。新增或调整页面、导航、卡片、弹窗时，需检查手机上的排版、字号、触控目标、换行与间距；不得出现横向溢出、内容重叠、裁切或隐藏必要入口来迁就布局。允许导航换行时，容器高度必须随内容自适应。交付前至少在 375px、390px、768px 和 1440px 宽度验证布局与核心交互，并提供桌面和手机截图。
+
 Vitest covers state transitions, event outcomes, age progression, and score-free end-of-life summaries. Name tests after behavior (for example, `life-state.test.ts`) and add focused component or browser tests when UI behavior changes. Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` before submitting.
 
 ## Commit & Pull Request Guidelines
@@ -29,7 +31,7 @@ Use `type:中文描述` with no space after the colon: `feat:实现人生事件�
 
 ## Security & Configuration Tips
 
-Never commit API keys or local secrets. The UI stores optional model configuration in browser `localStorage` and sends it per request; do not copy it into `lifeStore`, logs, or Git. Keep server defaults in environment variables (for example, `.env.local`) and provide a redacted `.env.example`. Avoid logging player data or prompt contents in production.
+Never commit API keys or local secrets. In local mode the server stores optional model configuration in `.data/model-config.json` (ignored by Git); browser `localStorage` only remembers the active life id. Do not copy secrets into `lifeStore`, logs, responses, or Git. Keep production defaults in environment variables (for example, `.env.local`) and provide a redacted `.env.example`. Avoid logging player data or prompt contents in production.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
