@@ -2,6 +2,27 @@
   "name": "findjoy-life-simulator",
   "version": "0.1.0",
   "private": true,
+  "description": "一款由 AI 驱动的人生模拟游戏：在选择中回望一生，不提供统一的幸福或成功分数。",
+  "license": "MIT",
+  "author": "FindJoy contributors",
+  "homepage": "https://github.com/RockdaC239/findjoy#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RockdaC239/findjoy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RockdaC239/findjoy/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "ai",
+    "life-simulator",
+    "nextjs",
+    "react",
+    "typescript"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
