@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/node-%3E%3D22-417e38" alt="Node.js >= 22" />
 </p>
 
-FindJoy 是一款由 AI 驱动的人生模拟游戏。你从 0 岁出生开始，在关系、工作、家庭、健康、金钱和自我实现之间不断做出选择，直到生命结束，再回望这一生。
+FindJoy 是一款由 AI 驱动的人生模拟游戏。你从人生的某个起点开始，在关系、工作、家庭、健康、金钱和自我实现之间不断做出选择，直到生命结束，再回望这一生。
 
 它不提供“人生成功分数”，也不替你判断什么样的人生才是正确答案。每一次选择、每一段关系、每一个遗憾，都只构成一面关于你自己的镜子：
 
@@ -18,10 +18,12 @@ FindJoy 是一款由 AI 驱动的人生模拟游戏。你从 0 岁出生开始�
 
 ## 核心体验
 
-- **从出生开始**：新人生从 0 岁开始，经历童年、求学、工作、关系与衰老。
-- **选择推动故事**：AI 根据你过去的经历和当前处境生成下一段人生事件，而不是套用固定剧本。
+- **四种并列玩法**：普通人生（随机出身，从 0 岁开始）、主题人生（爱情/亲情/事业主线）、剧本人生（年代短剧与固定开局）、ForU 人生（以你写下的当前人生为起点）。
+- **同一个核心循环**：四种模式共享事件、选择、客观变化、死亡与回顾；模式只改变情境和叙事侧重，不改变“不评判人生”的原则。
+- **选择推动故事**：AI 根据你过去的经历和当前处境生成下一段人生事件，而不是套用固定模板。
 - **没有统一评分**：人生回顾只整理关键选择、关系、健康、财务与未竟之事，不给出“成功/失败”结论。
-- **可以停下来再继续**：未完结的人生保存在本地 SQLite 中，下次打开可以继续。
+- **可以停下来再继续**：未完结的人生保存在本地 SQLite 中，下次打开可以继续，并沿用原模式与情境。
+- **可关闭的背景音乐**：程序化环境音随阶段、模式和事件类型变化，默认开启，首次交互后发声，偏好会被记住。
 - **可选的内容分享**：「觅乐书签」收录关于幸福、人生意义与如何生活的外部内容。
 
 ## 技术栈
@@ -94,10 +96,11 @@ npm run build
 
 ```text
 app/                页面、布局与 API 路由
-components/         可复用的 React 组件
-lib/                人生状态、事件生成、模型适配与书签数据
+components/         可复用的 React 组件（模式选择、音乐开关等）
+lib/                人生状态、事件生成、模型适配、模式目录、音频与书签数据
+lib/modes/          四种玩法的类型、目录、情境归一化与开局逻辑
 public/             静态资源
-docs/               产品文档、设计说明、开发计划与示例记录
+docs/               产品文档、技术规格、设计过程与示例记录
 deploy/             部署执行脚本
 scripts/            服务器初始化脚本
 ```
@@ -105,9 +108,13 @@ scripts/            服务器初始化脚本
 关键入口：
 
 - 首页与游戏流程：[`app/page.tsx`](./app/page.tsx)
-- 产品原则与玩法定义：[`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-v0.1.md)
+- 模式选择 UI：[`components/ModeLauncher.tsx`](./components/ModeLauncher.tsx)
+- 产品原则与核心玩法：[`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-v0.1.md)
+- 四种玩法定义：[`docs/product/game-modes-v0.1.md`](./docs/product/game-modes-v0.1.md)
+- 模式目录：[`lib/modes/catalog.ts`](./lib/modes/catalog.ts)
 - 模型适配层：[`lib/model-adapter.ts`](./lib/model-adapter.ts)
 - 人生状态与存档：[`lib/life-store.ts`](./lib/life-store.ts)
+- 背景音乐：[`lib/ambient-music.ts`](./lib/ambient-music.ts)、[`lib/music-scene.ts`](./lib/music-scene.ts)
 - 觅乐书签：[`app/bookmarks/page.tsx`](./app/bookmarks/page.tsx)、[`lib/bookmarks.ts`](./lib/bookmarks.ts)
 
 ## 文档
@@ -115,6 +122,8 @@ scripts/            服务器初始化脚本
 | 文档 | 内容 |
 | --- | --- |
 | [产品开发文档](./docs/product/mvp-product-spec-v0.1.md) | 产品定位、核心玩法与体验原则 |
+| [玩法模式产品定义](./docs/product/game-modes-v0.1.md) | 四种模式、音乐、付费扩展点与验收原则 |
+| [模式实施规格](./docs/specs/2026-10-27-game-modes-implementation.md) | 模式架构、开局 API、提示词、音频层与测试 |
 | [文档索引](./docs/README.md) | 规格、计划、设计稿与示例记录 |
 | [觅乐书签规格](./docs/specs/2026-10-11-bookmarks.md) | 内容分享栏目的范围与验收标准 |
 | [模型配置设计](./docs/specs/2026-08-22-model-config-design.md) | 本地/线上模型配置双模式 |
