@@ -25,6 +25,8 @@ function database() {
       idempotency_key TEXT NOT NULL, UNIQUE(user_id,idempotency_key)
     );
     CREATE INDEX IF NOT EXISTS joy_orders_user ON joy_orders(user_id, created_at);
+    CREATE TABLE IF NOT EXISTS joy_order_checks(order_id TEXT PRIMARY KEY,checked_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS joy_payment_attempts(order_id TEXT PRIMARY KEY, request_id TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS joy_payment_events (event_id TEXT PRIMARY KEY, order_id TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS joy_life_operations (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, life_id TEXT NOT NULL,
@@ -81,6 +83,20 @@ export const commerceStore = {
   listOrders(userId: string): JoyOrder[] {
     return database().prepare(`${ORDER_SELECT} WHERE user_id=? ORDER BY created_at DESC LIMIT 100`).all(userId) as JoyOrder[];
   },
+  claimQuery(id:string,now=Date.now()):boolean {
+    return database().prepare(`INSERT INTO joy_order_checks VALUES (?,?) ON CONFLICT(order_id) DO UPDATE SET checked_at=excluded.checked_at WHERE joy_order_checks.checked_at<=?`).run(id,now,now-4500).changes===1;
+  },
+  outstandingOrders(now=Date.now()):JoyOrder[] {
+    const ids=database().prepare(`SELECT o.id,o.user_id AS userId FROM joy_orders o LEFT JOIN joy_order_checks c ON c.order_id=o.id
+      WHERE o.demo=0 AND o.status!='SUCCEEDED' AND o.created_at>? ORDER BY COALESCE(c.checked_at,0) ASC LIMIT 10`).all(now-30*24*60*60*1000) as Array<{id:string;userId:string}>;
+    return ids.map(row=>commerceStore.getOrder(row.id,row.userId)!);
+  },
+  attemptRequestId(id:string):string {
+    const db=database();
+    db.prepare("INSERT OR IGNORE INTO joy_payment_attempts VALUES (?,?)").run(id,randomUUID());
+    return (db.prepare("SELECT request_id FROM joy_payment_attempts WHERE order_id=?").get(id) as {request_id:string}).request_id;
+  },
+  finishAttempt(id:string):void {database().prepare("DELETE FROM joy_payment_attempts WHERE order_id=?").run(id);},
   saveOrderRequest(id: string, body: string): string {
     const db=database();
     db.prepare("UPDATE joy_orders SET request_body=COALESCE(request_body,?) WHERE id=?").run(body,id);
