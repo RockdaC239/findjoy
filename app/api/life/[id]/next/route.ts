@@ -1,3 +1,5 @@
+import { currentUser, appOrigin } from "../../../../../lib/auth";
+import { hasSameOrigin } from "../../../../../lib/auth-policy";
 import { NextResponse } from "next/server";
 import { applyNextEvent, resolveOfferedChoice } from "../../../../../lib/life";
 import { buildTranscriptUserContent, sanitizeModelConfig, serializeTranscriptEvent, streamNextEvent, type TranscriptMessage } from "../../../../../lib/model-adapter";
@@ -7,8 +9,11 @@ import { encodeSseMessage } from "../../../../../lib/sse";
 const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
   const { id } = await params;
-  const state = lifeStore.get(id);
+  const state = lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
   if (state.dead) return NextResponse.json({ error: "人生已经结束", state }, { status: 409 });
   const body = await request.json().catch(() => ({}));
@@ -35,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
         // 选择可能为空（童年纯叙事节点）。applyNextEvent 会把真实选择挂到给出它的节点上，
         // 新节点以待定状态入列；不选择则不补齐任何 choiceText。
-        const nextState = lifeStore.set(applyNextEvent(state, item.value, choiceForModel));
+        const nextState = lifeStore.set(applyNextEvent(state, item.value, choiceForModel), user.id);
         if (transcript) {
           transcript.push({ role: "user", content: buildTranscriptUserContent(state, choiceForModel, false) });
           transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });

@@ -20,7 +20,7 @@ Owner 当前是单人创业，开发、运营与商业化均需自己承担；�
 
 - 默认优先成熟托管服务、现有能力与最小实现；按开发时间、持续运维、故障处理、接入费用一起比较总成本。
 - 不因 owner 有部署能力就推荐自托管。只有托管方案无法满足已确认的需求，或总成本明显不合适时，才考虑自己维护基础设施，并明确新增负担。
-- 当前统一身份优先验证托管认证（Authing 等）；Casdoor 自托管不作为默认首选。供应商尚未最终选定，须先核验国内登录渠道准入、当前套餐、多应用身份和导出能力。
+- 当前统一身份优先验证托管认证（Authing 等）；Casdoor 自托管不作为默认首选。Owner 已指定 Authing；实施时须核验国内登录渠道准入、当前套餐、多应用身份和导出能力。
 - 不为未来 SSO、规模化和多客户端提前建设；保持稳定身份边界，按实际产品进度扩展。
 - 后续技术建议先给适合单人创业的默认选择及关键代价，避免无必要的选项堆叠。
 
@@ -70,7 +70,7 @@ FindFire（觅火）通过现实活动、地点推荐与娱乐决策帮助用户
 
 ## 4. 推荐身份架构（待实现）
 
-采用支持标准 OIDC 的托管认证：统一用户池，FindJoy Web、FindFire Web、未来 iOS 分别注册客户端。供应商、套餐和首期登录方式待选型验证，不预设已采购。
+采用支持标准 OIDC 的托管认证：统一用户池，FindJoy Web、FindFire Web、未来 iOS 分别注册客户端。Owner 已指定 Authing，FindJoy 已接入标准 OIDC + PKCE；真实验证码登录、短信包和生产配置仍待验证。小豆支付为指定支付渠道，商品价格先 mock。
 
 认证供应商负责凭证、登录验证和标准授权流程；我们持有稳定的全局 UUID `user_id`，通过身份映射关联外部账号。业务不能直接以手机号、邮箱、`rocc` 或未经验证的请求 user_id 作为身份。
 
@@ -188,3 +188,9 @@ FindFire 部署用 PostgreSQL Docker 初始化目录；该机制不能当作已�
 - [SQLite：synchronous 与 WAL 持久性](https://www.sqlite.org/pragma.html#pragma_synchronous)
 - [微信支付：支付成功回调](https://pay.wechatpay.cn/doc/v3/merchant/4013070368)
 - [Apple：App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
+
+## 2026-11-01 实施进度
+
+FindJoy 新增 identity_users / identity_links / identity_sessions 与一次性 OIDC 登录事务；自有全局 UUID 映射外部 issuer + subject，业务不使用手机号为主键。新增 Authing 登录入口、回调、本产品退出与当前用户接口；人生列表、读取、推进、结局已按登录身份校验，旧无归属数据不开放认领。当前不是独立身份服务，FindFire 尚未接入，不能在两个产品分别生成不同 UUID。
+
+本地验证已跳到真实认证页，尚未发送验证码完成真实用户登录。登录页沿用纸白/橙色风格，移动端与桌面均检查；支付和次数模块继续实施，不视为已上线。实际进度见 FindJoy 的 docs/development/2026-11-01-authing-xiaodou-implementation.md。

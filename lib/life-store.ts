@@ -43,6 +43,9 @@ export function getDb(): Database.Database {
       updated_at TEXT NOT NULL
     );
   `);
+  const columns = db.pragma("table_info(lives)") as Array<{ name: string }>;
+  if (!columns.some(column => column.name === "user_id")) db.exec("ALTER TABLE lives ADD COLUMN user_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS lives_user_updated ON lives(user_id, updated_at)");
   return db;
 }
 
@@ -73,8 +76,10 @@ function checkpointIfNeeded(): void {
 }
 
 export const lifeStore = {
-  get(id: string): LifeState | null {
-    const row = getDb().prepare("SELECT state FROM lives WHERE life_id = ?").get(id) as LifeRow | undefined;
+  get(id: string, userId?: string): LifeState | null {
+    const row = (userId === undefined
+      ? getDb().prepare("SELECT state FROM lives WHERE life_id = ?").get(id)
+      : getDb().prepare("SELECT state FROM lives WHERE life_id = ? AND user_id = ?").get(id, userId)) as LifeRow | undefined;
     if (!row) return null;
     try {
       return JSON.parse(row.state) as LifeState;
@@ -83,14 +88,14 @@ export const lifeStore = {
     }
   },
 
-  set(state: LifeState): LifeState {
+  set(state: LifeState, userId?: string): LifeState {
     try {
-      getDb()
-        .prepare(
-          `INSERT INTO lives (life_id, state, updated_at) VALUES (?, ?, ?)
-           ON CONFLICT(life_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at`,
-        )
-        .run(state.lifeId, JSON.stringify(state), new Date().toISOString());
+      const result = getDb().prepare(
+        `INSERT INTO lives (life_id, state, updated_at, user_id) VALUES (?, ?, ?, ?)
+         ON CONFLICT(life_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at
+         WHERE lives.user_id IS excluded.user_id`,
+      ).run(state.lifeId, JSON.stringify(state), new Date().toISOString(), userId ?? null);
+      if (result.changes !== 1) throw new Error("人生归属不匹配");
       checkpointIfNeeded();
     } catch (error) {
       // 持久化失败绝不静默：打日志并向上抛，避免"以为保存了其实没有"
@@ -100,8 +105,10 @@ export const lifeStore = {
     return state;
   },
 
-  listSummaries(): LifeSummary[] {
-    const rows = getDb().prepare("SELECT life_id, state, updated_at FROM lives ORDER BY updated_at DESC").all() as Array<{ life_id: string; state: string; updated_at: string }>;
+  listSummaries(userId?: string): LifeSummary[] {
+    const rows = (userId === undefined
+      ? getDb().prepare("SELECT life_id, state, updated_at FROM lives ORDER BY updated_at DESC").all()
+      : getDb().prepare("SELECT life_id, state, updated_at FROM lives WHERE user_id = ? ORDER BY updated_at DESC").all(userId)) as Array<{ life_id: string; state: string; updated_at: string }>;
     return rows.map((row) => {
       let state: LifeState;
       try {
@@ -127,8 +134,10 @@ export const lifeStore = {
 
   // 收集最近几局人生用过的出身维度取值，供新一局开局避开，避免连续人生反复落到
   // 同一条线上。只统计有完整出身档案的存档。
-  recentBackgroundAvoid(limit = 5): BackgroundAvoid {
-    const rows = getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<{ state: string }>;
+  recentBackgroundAvoid(limit = 5, userId?: string): BackgroundAvoid {
+    const rows = (userId === undefined
+      ? getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit)
+      : getDb().prepare("SELECT state FROM lives WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(userId, limit)) as Array<{ state: string }>;
     const economy: string[] = [];
     const structure: string[] = [];
     const event: string[] = [];
@@ -151,8 +160,10 @@ export const lifeStore = {
   // 收集最近几局人生的实际主线（剧本防重）：从各局历史提取职业/题材域（见 lib/storyline.ts），
   // 供新一局开局写入 flags.avoidStorylines，作为跨人生防重指令与硬契约——
   // 最近几局刚活过运动员/艺术家，新一局就不得再走同一题材（"无天赋也刷到艺术生"由此被堵住）。
-  recentStorylines(limit = 6, maxDomains = 3): string[] {
-    const rows = getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<{ state: string }>;
+  recentStorylines(limit = 6, maxDomains = 3, userId?: string): string[] {
+    const rows = (userId === undefined
+      ? getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit)
+      : getDb().prepare("SELECT state FROM lives WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(userId, limit)) as Array<{ state: string }>;
     const seen: string[] = [];
     for (const row of rows) {
       let state: LifeState;

@@ -6,6 +6,13 @@ export interface IdentityUser {
   displayName: string;
 }
 
+export interface LoginTransaction {
+  state: string;
+  nonce: string;
+  verifier: string;
+  returnTo: string;
+}
+
 const SESSION_LIFETIME = 30 * 24 * 60 * 60 * 1000;
 
 function database() {
@@ -27,6 +34,11 @@ function database() {
       user_id TEXT NOT NULL REFERENCES identity_users(user_id),
       expires_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS identity_login_transactions (
+      token_hash TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS identity_sessions_expiry ON identity_sessions(expires_at);
   `);
   return db;
@@ -37,6 +49,27 @@ function tokenHash(token: string): string {
 }
 
 export const identityStore = {
+  beginLogin(pending: LoginTransaction, now = Date.now()): string {
+    const token = randomBytes(32).toString("base64url");
+    const db = database();
+    db.transaction(() => {
+      db.prepare("DELETE FROM identity_login_transactions WHERE expires_at <= ?").run(now);
+      db.prepare("INSERT INTO identity_login_transactions VALUES (?, ?, ?)")
+        .run(tokenHash(token), JSON.stringify(pending), now + 10 * 60 * 1000);
+    })();
+    return token;
+  },
+
+  consumeLogin(token: string, now = Date.now()): LoginTransaction | null {
+    if (!token || token.length > 128) return null;
+    const db = database();
+    return db.transaction(() => {
+      const row = db.prepare("DELETE FROM identity_login_transactions WHERE token_hash = ? RETURNING payload, expires_at")
+        .get(tokenHash(token)) as { payload: string; expires_at: number } | undefined;
+      if (!row || row.expires_at <= now) return null;
+      return JSON.parse(row.payload) as LoginTransaction;
+    }).immediate();
+  },
   resolveUser(issuer: string, subject: string, displayName = "探索者"): IdentityUser {
     if (!issuer || issuer.length > 512 || !subject || subject.length > 512) {
       throw new Error("身份标识无效");

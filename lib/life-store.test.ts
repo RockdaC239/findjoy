@@ -104,3 +104,18 @@ describe("life store", () => {
     expect(summaries.some((item) => item.lifeId === second.lifeId && item.age === 50)).toBe(true);
   });
 });
+
+it("scopes history and life access to the authenticated owner, excluding legacy saves", () => {
+  const alice = createStarterLife();
+  const bob = createStarterLife();
+  const legacy = createStarterLife();
+  lifeStore.set(alice, "alice");
+  lifeStore.set(bob, "bob");
+  lifeStore.set(legacy);
+  expect(lifeStore.get(alice.lifeId, "alice")?.lifeId).toBe(alice.lifeId);
+  expect(lifeStore.get(alice.lifeId, "bob")).toBeNull();
+  expect(lifeStore.get(legacy.lifeId, "alice")).toBeNull();
+  expect(lifeStore.listSummaries("alice").map(life => life.lifeId)).toEqual([alice.lifeId]);
+  expect(() => lifeStore.set({...alice, basic: {...alice.basic, city: "不应保存"}}, "bob")).toThrow();
+  expect(lifeStore.get(alice.lifeId, "alice")?.basic.city).toBe(alice.basic.city);
+});

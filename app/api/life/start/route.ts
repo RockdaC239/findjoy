@@ -1,3 +1,5 @@
+import { currentUser, appOrigin } from "../../../../lib/auth";
+import { hasSameOrigin } from "../../../../lib/auth-policy";
 import { NextResponse } from "next/server";
 import { applyNextEvent } from "../../../../lib/life";
 import { buildTranscriptUserContent, sanitizeModelConfig, serializeTranscriptEvent, streamNextEvent, type TranscriptMessage } from "../../../../lib/model-adapter";
@@ -8,6 +10,9 @@ import { encodeSseMessage } from "../../../../lib/sse";
 const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" };
 
 export async function POST(request: Request) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
   const input = await request.json().catch(() => ({}));
   const parsed = parseStartLifeRequest(input);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -16,10 +21,10 @@ export async function POST(request: Request) {
   // 不掷出身、也不让跨人生防重把主线拉走。
   const selection = parsed.selection;
   const usesBackground = selection.mode === "normal" || selection.mode === "theme";
-  const recentAvoid = usesBackground ? lifeStore.recentBackgroundAvoid(6) : undefined;
-  const recentStorylines = selection.mode === "normal" ? lifeStore.recentStorylines(6) : [];
+  const recentAvoid = usesBackground ? lifeStore.recentBackgroundAvoid(6, user.id) : undefined;
+  const recentStorylines = selection.mode === "normal" ? lifeStore.recentStorylines(6, 3, user.id) : [];
   const plan = resolveStartPlan(selection, { backgroundAvoid: recentAvoid });
-  const state = lifeStore.set(createStartLife(plan, parsed.gender, { recentStorylines }));
+  const state = lifeStore.set(createStartLife(plan, parsed.gender, { recentStorylines }), user.id);
 
   const transcript: TranscriptMessage[] = [];
   const encoder = new TextEncoder();
@@ -45,6 +50,7 @@ export async function POST(request: Request) {
             rollDeath: false,
             allowZeroTime: plan.openingAtCurrentAge,
           }),
+          user.id,
         );
         transcript.push({ role: "user", content: buildTranscriptUserContent(state, undefined, true) });
         transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });

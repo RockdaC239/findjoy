@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
+import { AccountNav } from "../components/AccountNav";
 import { ModeLauncher } from "../components/ModeLauncher";
 import { MusicToggle } from "../components/MusicToggle";
 import { parseSseMessages } from "../lib/sse";
@@ -208,6 +210,7 @@ function parseReview(payload: unknown, current: LifeData): Review {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>("start");
   const [life, setLife] = useState<LifeData>(demoLife);
   const [review, setReview] = useState<Review>(demoReview);
@@ -276,6 +279,10 @@ export default function Home() {
         signal: AbortSignal.timeout(LIFE_REQUEST_TIMEOUT_MS),
         body: JSON.stringify({ ...(body ?? {}), modelConfig }),
       });
+      if (response.status === 401) {
+        router.push("/login");
+        return null;
+      }
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error || "人生服务暂时不可用，请稍后重试。");
@@ -502,14 +509,14 @@ export default function Home() {
               <span className="event-mode-detail">{modeMeta.detail}{life.city ? ` · ${life.city}` : ""}</span>
             </div>
             <p className="current-age">{displayAge} 岁</p>
-            <div className="topbar-actions">
+            <div className="topbar-actions"><AccountNav />
               <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />
             </div>
           </>
         ) : (
           <>
             <BrandLogo href="/showcase" className="wordmark" />
-            <div className="topbar-actions">
+            <div className="topbar-actions"><AccountNav />
               <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
               <button className="settings-button" onClick={openHistory}>过往人生</button>
               <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>

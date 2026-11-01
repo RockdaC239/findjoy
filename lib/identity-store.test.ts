@@ -35,3 +35,14 @@ describe("shared identity boundary", () => {
     expect(() => identityStore.resolveUser("https://identity.example/oidc", "")).toThrow();
   });
 });
+
+describe("login transaction", () => {
+  it("is single use and expires so a callback cannot be replayed", () => {
+    const pending = { state: "random-state", nonce: "random-nonce", verifier: "pkce", returnTo: "/findjoy" };
+    const token = identityStore.beginLogin(pending, 1_000);
+    expect(identityStore.consumeLogin(token, 2_000)).toEqual(pending);
+    expect(identityStore.consumeLogin(token, 3_000)).toBeNull();
+    const expired = identityStore.beginLogin(pending, 1_000);
+    expect(identityStore.consumeLogin(expired, 602_000)).toBeNull();
+  });
+});

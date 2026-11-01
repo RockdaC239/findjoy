@@ -235,3 +235,42 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
   .music-toggle--compact { min-width:44px; min-height:44px; }
   .history-item-mode { margin-right:5px; }
 }
+
+/* 账号与购买沿用纸张、墨色和橙色，让工具入口也属于同一本人生故事。 */
+.account-page { max-width:1600px; margin:auto; }
+.account-back { color:var(--muted); font-size:13px; text-decoration:none; padding:12px 0; display:inline-block; }
+.account-back:hover { color:var(--orange); }
+.login-layout { display:grid; grid-template-columns:1.15fr 1fr; gap:clamp(40px,7vw,120px); align-items:center; min-height:calc(100svh - 160px); padding:64px 0; }
+.login-story h1 { font-family:inherit; font-size:clamp(34px,4.2vw,64px); font-weight:500; line-height:1.35; letter-spacing:-.045em; }
+.login-story h1 span { color:var(--orange); }
+.account-lead { color:var(--muted); line-height:1.9; margin-top:24px; font-size:16px; }
+.login-story-foot { color:var(--muted); font-size:12px; }
+.life-lines { position:relative; height:160px; margin:36px 0 20px; overflow:hidden; }
+.life-lines i { position:absolute; width:90%; height:140px; border-top:1px solid var(--line); border-radius:50%; left:0; top:65px; transform:rotate(-12deg); }
+.life-lines i:nth-child(2) { transform:rotate(14deg); top:55px; border-color:var(--orange); }
+.life-lines i:nth-child(3) { transform:rotate(-28deg); top:65px; width:70%; }
+.life-lines span { position:absolute; right:10%; bottom:4px; font-size:11px; color:var(--muted); background:var(--paper); padding:4px 10px; }
+.login-card { border:1px solid var(--line); background:#fffdf9; border-radius:24px; padding:clamp(26px,3.5vw,52px); box-shadow:0 20px 70px #11110f05; }
+.account-kicker { font-size:10px; letter-spacing:.15em; color:var(--orange); font-weight:600; }
+.login-card h2 { font-size:clamp(25px,2.5vw,34px); font-weight:500; letter-spacing:-.04em; margin:20px 0 14px; }
+.login-card>p { font-size:14px; color:var(--muted); line-height:1.8; }
+.login-benefits { display:grid; gap:16px; margin:30px 0; padding:24px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.login-benefits span { display:flex; gap:20px; font-size:11px; color:var(--orange); align-items:center; }
+.login-benefits b { font-size:13px; font-weight:400; color:var(--ink); }
+.account-primary { text-decoration:none; justify-content:space-between; width:100%; }
+.login-card .login-note { font-size:11px; line-height:1.8; margin:20px 0 8px; }
+.account-footer { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px 24px; border-top:1px solid var(--line); padding:20px 0 0; font-size:10px; color:var(--muted); }
+.account-error,.login-card .account-error { color:#a53618; border-left:2px solid var(--orange); padding:10px 14px; background:#fff0e8; }
+.account-notice { padding:14px; background:var(--soft); border-radius:12px; }
+.account-page a:focus-visible,.account-page button:focus-visible { outline:2px solid var(--orange); outline-offset:5px; }
+@media(max-width:767px) {
+  .login-layout { grid-template-columns:1fr; padding:40px 0; gap:30px; min-height:0; }
+  .login-story h1 { font-size:36px; }
+  .login-story .eyebrow { margin-bottom:16px; }
+  .life-lines { height:90px; margin:18px 0; }
+  .life-lines i { top:45px; }
+  .account-lead { font-size:14px; margin-top:16px; }
+  .login-card { border-radius:20px; }
+  .account-footer { margin-top:12px; }
+  .account-page .topbar a { min-height:44px; display:inline-flex; align-items:center; }
+}

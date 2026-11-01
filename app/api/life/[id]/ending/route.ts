@@ -1,10 +1,15 @@
+import { currentUser, appOrigin } from "../../../../../lib/auth";
+import { hasSameOrigin } from "../../../../../lib/auth-policy";
 import { NextResponse } from "next/server";
 import { generateEnding, sanitizeModelConfig } from "../../../../../lib/model-adapter";
 import { lifeStore } from "../../../../../lib/life-store";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
   const { id } = await params;
-  const state = lifeStore.get(id);
+  const state = lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
   const body = await request.json().catch(() => ({}));
   try {
