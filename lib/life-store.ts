@@ -24,12 +24,13 @@ function resolveDbFile(): string {
 let db: Database.Database | null = null;
 let writeCount = 0;
 
-function getDb(): Database.Database {
+export function getDb(): Database.Database {
   if (db) return db;
   db = new Database(resolveDbFile());
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
-  db.pragma("synchronous = NORMAL");
+  db.pragma("synchronous = FULL");
+  db.pragma("foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS lives (
       life_id    TEXT PRIMARY KEY,
