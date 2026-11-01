@@ -40,7 +40,13 @@
 
 2026-11-01 用户指定用 ¥0.01 做真实付款联调，准备单一测试商品 `payment-test`：`amountFen=1`、`credits=1`，名称明确为支付联调测试，非正式售价。本地忽略配置已写入商品，仍保持演示模式，尚未发起真实订单。
 
-门户核查：来源 IP 校验已开启，白名单为空；已准备填入服务器 IP，需用户短信验证保存。服务器 nginx 具备 HTTPS 与覆盖 `X-Real-IP` 的配置；线上仍是旧版，未部署本次账号支付代码。完成白名单、公网回调与测试环境部署后再开启真实付款。测试结束恢复演示配置或替换经确认的正式价格。
+2026-11-01 已确认服务器 IP 白名单生效，服务器使用真实签名查单返回预期的 `404 OPEN_API_RESOURCE_NOT_FOUND`。测试发布已构建并由 `findjoy.service` 启动，目录为 `/home/rocc/apps/findjoy/releases/payment-test-20261101-1915`，使用 `/home/rocc/apps/findjoy/payment-test.env`，暂保持 demo。公网认证接口、登录保护、拒绝伪造支付回调已检查；现有 nginx 与 FindFire 路由保持原样。
+
+原数据库已通过 SQLite backup API 保存到服务器 `backups/life-before-auth-payment-20261101.db`；旧服务定义备份为 `backups/findjoy-before-payment-20261101.service`，原 `src` 与 `.env` 保留。回滚时恢复服务定义并重启服务，不直接覆盖已发生交易的数据库。
+
+小豆经营范围、申报域名与通知地址已填入变更表单，需用户短信验证提交；未确认提交生效前不发起首单。收银台来源仍需实际签名建单响应核对。测试结束恢复演示配置或替换经确认的正式价格。
+
+此次测试发布未推送 GitHub，也未修改 CI 的 APP_ENV。后续自动部署前须同步身份/支付配置，并修复部署脚本会覆盖现有 FindFire 路由的问题，不能直接沿用旧流水线覆盖本次测试发布。
 
 ## 对账与异常恢复
 
