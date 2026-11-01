@@ -7,6 +7,7 @@ import type { LifeScenario } from "./modes/types";
 // 用最后一条 history 节点（待定决策或童年叙事）恢复出 story/title/choices。
 export interface LifeView {
   lifeId: string;
+  eventId?: string;
   age: number;
   city: string;
   occupation: string;
@@ -48,6 +49,7 @@ export function buildLifeView(state: LifeState | null | undefined): LifeView {
   const partner = state.relationships?.partner;
   return {
     lifeId: text(state.lifeId),
+    eventId: last?.id,
     age: typeof state.basic?.age === "number" ? state.basic.age : 0,
     city: text(state.basic?.city),
     occupation: text(state.career?.occupation),

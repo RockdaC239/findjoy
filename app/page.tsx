@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
@@ -24,6 +24,7 @@ type Phase = "start" | "birth" | "event" | "review";
 type Choice = { id: string; text: string };
 
 type LifeData = {
+  eventId?: string;
   lifeId: string;
   age: number;
   city: string;
@@ -153,11 +154,13 @@ function parseLife(payload: unknown): LifeData {
   const health = isRecord(state.health) ? state.health : {};
   const relationships = isRecord(state.relationships) ? state.relationships : {};
   const partner = isRecord(relationships.partner) ? relationships.partner : {};
-  const nextEvent = isRecord(payload.event) ? payload.event : {};
+  const latest = Array.isArray(state.history) ? state.history.at(-1) : undefined;
+  const nextEvent = isRecord(payload.event) ? payload.event : isRecord(latest) ? latest : {};
   const event = isRecord(nextEvent.event) ? nextEvent.event : nextEvent;
   return {
     ...demoLife,
     lifeId: getString(state.lifeId, demoLife.lifeId),
+    eventId: isRecord(latest) && typeof latest.id === "string" ? latest.id : undefined,
     age: typeof basic.age === "number" ? basic.age : demoLife.age,
     city: getString(basic.city, demoLife.city),
     occupation: getString(career.occupation, demoLife.occupation),
@@ -211,6 +214,11 @@ function parseReview(payload: unknown, current: LifeData): Review {
 
 export default function Home() {
   const router = useRouter();
+  const pendingStartKey = useRef("");
+  function clearPendingStart() {
+    pendingStartKey.current = "";
+    try { sessionStorage.removeItem("findjoy:pending-start"); } catch { /* 内存幂等键仍可用。 */ }
+  }
   const [phase, setPhase] = useState<Phase>("start");
   const [life, setLife] = useState<LifeData>(demoLife);
   const [review, setReview] = useState<Review>(demoReview);
@@ -268,14 +276,14 @@ export default function Home() {
     if (musicEnabled) music.start();
   }
 
-  async function requestLife(url: string, body?: Record<string, unknown>) {
+  async function requestLife(url: string, body?: Record<string, unknown>, idempotencyKey?: string) {
     setIsLoading(true);
     setRequestError("");
     setStreamingEvent({ story: "", title: "", choices: [] });
     try {
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
         signal: AbortSignal.timeout(LIFE_REQUEST_TIMEOUT_MS),
         body: JSON.stringify({ ...(body ?? {}), modelConfig }),
       });
@@ -283,8 +291,23 @@ export default function Home() {
         router.push("/login");
         return null;
       }
+      if (response.status === 402) {
+        router.push("/plans");
+        return null;
+      }
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        const payload = (await response.json().catch(() => null)) as { error?: string; code?: string; operationId?: string } | null;
+        if (payload?.code === "START_PENDING" && payload.operationId) {
+          for (let attempt = 0; attempt < 30; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const statusResponse = await fetch(`${API_BASE}/api/life/operations/${encodeURIComponent(payload.operationId)}`);
+            if (!statusResponse.ok) break;
+            const result = await statusResponse.json() as {status:string;state?:unknown};
+            if (result.status === "complete" && result.state) return {state:result.state};
+            if (result.status === "failed") { clearPendingStart(); break; }
+          }
+        }
+        if (payload?.code === "START_FAILED" || payload?.code === "IDEMPOTENCY_CONFLICT") clearPendingStart();
         throw new Error(payload?.error || "人生服务暂时不可用，请稍后重试。");
       }
       if (response.headers.get("content-type")?.includes("application/json")) return (await response.json()) as unknown;
@@ -314,7 +337,8 @@ export default function Home() {
           } else if (message.event === "complete") {
             return JSON.parse(message.data) as unknown;
           } else if (message.event === "error") {
-            const payload = JSON.parse(message.data) as { error?: string };
+            const payload = JSON.parse(message.data) as { error?: string; code?: string };
+            if (payload.code === "START_FAILED") clearPendingStart();
             throw new Error(payload.error ?? "Life service unavailable");
           }
         }
@@ -347,12 +371,18 @@ export default function Home() {
     });
     setPhase("event");
     startMusicIfEnabled();
-    const payload = await requestLife(`${API_BASE}/api/life/start`, { gender, ...pendingStart });
+    let startKey = pendingStartKey.current;
+    try { startKey ||= sessionStorage.getItem("findjoy:pending-start") ?? ""; } catch { /* storage unavailable */ }
+    startKey ||= crypto.randomUUID();
+    pendingStartKey.current = startKey;
+    try { sessionStorage.setItem("findjoy:pending-start", startKey); } catch { /* 内存键保持本次重试幂等。 */ }
+    const payload = await requestLife(`${API_BASE}/api/life/start`, { gender, ...pendingStart }, startKey);
     if (!payload) {
       setPhase("start");
       music.stop();
       return;
     }
+    clearPendingStart();
     const next = parseLife(payload);
     setLife(next);
     setResumableLife(null);
@@ -363,7 +393,7 @@ export default function Home() {
   async function choose(choiceId: string) {
     const choice = life.choices.find((item) => item.id === choiceId);
     startMusicIfEnabled();
-    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { choice });
+    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { choice, expectedEventId: life.eventId });
     if (isRecord(payload) && payload.ended === true) {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
       setReview(parseReview(ending, life));
@@ -379,7 +409,7 @@ export default function Home() {
 
   async function continueLife() {
     startMusicIfEnabled();
-    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`);
+    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { expectedEventId: life.eventId });
     if (isRecord(payload) && payload.ended === true) {
       const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
       setReview(parseReview(ending, life));
@@ -394,6 +424,7 @@ export default function Home() {
   }
 
   function restart() {
+    clearPendingStart();
     setLife(demoLife);
     setReview(demoReview);
     setPendingStart({ mode: "normal" });

@@ -1,3 +1,4 @@
+import { commerceStore } from "../../../../lib/commerce-store";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { appOrigin, cookieOptions, LOGIN_COOKIE, SESSION_COOKIE } from "../../../../lib/auth";
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
     if (!pending) throw new Error("登录已过期");
     const identity = await authenticateCallback(request, pending);
     const user = identityStore.resolveUser(identity.issuer, identity.subject, identity.displayName);
+    commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? 1));
     const previous = jar.get(SESSION_COOKIE)?.value;
     if (previous) identityStore.revokeSession(previous);
     const session = identityStore.createSession(user.id);
