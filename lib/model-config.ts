@@ -39,7 +39,7 @@ function validateModelConfig(value: unknown): StoredModelConfig {
 
 export function readLocalModelConfig(filePath = DEFAULT_MODEL_CONFIG_PATH): StoredModelConfig | undefined {
   try {
-    return validateModelConfig(JSON.parse(fs.readFileSync(filePath, "utf8")));
+    return validateModelConfig(JSON.parse(fs.readFileSync(/* turbopackIgnore: true */ filePath, "utf8")));
   } catch {
     return undefined;
   }

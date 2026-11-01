@@ -42,8 +42,8 @@ export function xiaodouConfig() {
   const privateKeyFile = process.env.XIAODOU_PRIVATE_KEY_FILE;
   const publicKeysFile = process.env.XIAODOU_PLATFORM_KEYS_FILE;
   if (!appId || !keyId || !privateKeyFile || !publicKeysFile) throw new Error("支付配置尚未完成");
-  const keys = JSON.parse(readFileSync(publicKeysFile, "utf8")) as Record<string, string>;
-  return { base, appId, keyId, privateKey: readFileSync(privateKeyFile, "utf8"), keys };
+  const keys = JSON.parse(readFileSync(/* turbopackIgnore: true */ publicKeysFile, "utf8")) as Record<string, string>;
+  return { base, appId, keyId, privateKey: readFileSync(/* turbopackIgnore: true */ privateKeyFile, "utf8"), keys };
 }
 
 export class XiaodouError extends Error {
