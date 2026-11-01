@@ -16,19 +16,19 @@ export const LIFE_MODES: ModeDefinition[] = [
     access: "free",
   },
   {
-    id: "theme",
-    label: "主题人生",
-    eyebrow: "THEME",
-    tagline: "爱情 · 亲情 · 事业",
-    description: "给一生加一条主线，看看它会把你带到哪里。",
-    access: "free",
-  },
-  {
     id: "script",
     label: "剧本人生",
     eyebrow: "SCRIPT",
     tagline: "年代短剧 · 脑洞开局",
     description: "进入一个别人的人生，在时代与命运里做自己的选择。",
+    access: "free",
+  },
+  {
+    id: "theme",
+    label: "主题人生",
+    eyebrow: "THEME",
+    tagline: "爱情 · 亲情 · 事业",
+    description: "给一生加一条主线，看看它会把你带到哪里。",
     access: "free",
   },
   {
