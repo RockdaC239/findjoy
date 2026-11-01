@@ -1,5 +1,13 @@
 # Repository Guidelines
 
+## FindJoy / FindFire 跨产品协作
+
+Owner 当前单人创业，时间优先投入营销和产品迭代。技术选型以敏捷交付、少运维和总时间成本为先；默认优先成熟托管服务，不因具备部署能力就推荐自托管或提前建设基础设施。
+
+涉及账号、全局 User ID、登录会话、付费权益、用户数据归属或跨产品部署时，先阅读[两产品关联与统一身份协作约定](docs/development/findjoy-findfire-shared-identity.md)。其中区分已实现现状、架构建议和待确认事项，不能将规划当成现有能力。两个产品共享身份方向，业务与收费独立。
+
+主文档在 FindJoy 仓库，同路径在 FindFire 保留同步副本；修改跨产品契约时按文档同步两边，只有一个仓库可用时明确标记未同步。保留各产品自己的技术栈与业务规则，不擅自替换或合并。
+
 ## Project Structure & Module Organization
 
 Treat [`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-v0.1.md) as the core product source of truth, and [`docs/product/game-modes-v0.1.md`](./docs/product/game-modes-v0.1.md) as the source of truth for the four gameplay modes. The app is a Next.js App Router project: UI and API routes live in `app/`, game/state logic and the model adapter live in `lib/`, mode catalogs/scenario/start logic live in `lib/modes/`, and behavior tests live beside the domain code (for example, `lib/life.test.ts`). The four user-facing phases are start, birth/early life, the life-event loop, and death/life review. Static assets belong in `public/`; product specs, technical specs, design notes, and sample runs belong in `docs/`.
