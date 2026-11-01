@@ -91,6 +91,9 @@ export const commerceStore = {
       WHERE o.demo=0 AND o.status!='SUCCEEDED' AND o.created_at>? ORDER BY COALESCE(c.checked_at,0) ASC LIMIT 10`).all(now-30*24*60*60*1000) as Array<{id:string;userId:string}>;
     return ids.map(row=>commerceStore.getOrder(row.id,row.userId)!);
   },
+  pendingAttemptRequestId(id:string):string|null {
+    return (database().prepare("SELECT request_id FROM joy_payment_attempts WHERE order_id=?").get(id) as {request_id:string}|undefined)?.request_id??null;
+  },
   attemptRequestId(id:string):string {
     const db=database();
     db.prepare("INSERT OR IGNORE INTO joy_payment_attempts VALUES (?,?)").run(id,randomUUID());

@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as xiaodou from "./xiaodou";
-import { processPaymentWebhook,validatePayUrl } from "./payments";
+import { createPayment,processPaymentWebhook,validatePayUrl } from "./payments";
 import { identityStore } from "./identity-store";
 import { commerceStore } from "./commerce-store";
 import { lifeStore } from "./life-store";
@@ -33,4 +33,26 @@ describe("payment trust boundary",()=>{
     processPaymentWebhook(input.headers,input.raw);processPaymentWebhook(input.headers,input.raw);
     expect(commerceStore.balance(id).available).toBe(3);
   });
+});
+
+it("recovers the same payment attempt after its successful response was lost",async()=>{
+ vi.stubEnv("FINDJOY_APP_ORIGIN","https://findfire.club");vi.stubEnv("XIAODOU_CASHIER_ORIGINS","https://cashier.example");
+ const id=identityStore.resolveUser("https://auth.example","alice").id;
+ const created=commerceStore.createOrder(id,{id:"test",name:"test",credits:1,amountFen:100,demo:false},"attempt-test","ALIPAY_H5");
+ commerceStore.saveOrderRequest(created.id,JSON.stringify({outTradeNo:created.id}));
+ const order=commerceStore.getOrder(created.id,id)!;
+ let attempts=0;const requestIds:string[]=[];
+ vi.spyOn(xiaodou,"xiaodouRequest").mockImplementation(async(method,path,_body,requestId)=>{
+  const snapshot={outTradeNo:order.id,amountFen:100,currency:"CNY",channel:"ALIPAY_H5",status:"PAYING",expireAt:new Date(Date.now()+600000).toISOString()};
+  if(method==="GET")return {...snapshot,...(attempts===0?{nextAction:"CREATE_ATTEMPT"}:{})};
+  if(path.endsWith("/attempts")){
+   attempts++;requestIds.push(requestId!);
+   if(attempts===1)throw new Error("response lost after platform commit");
+   return {...snapshot,payUrl:"https://cashier.example/new-attempt"};
+  }
+  return {...snapshot,payUrl:"https://cashier.example/obsolete-attempt"};
+ });
+ await expect(createPayment(order,new Request("https://findfire.club",{headers:{"x-real-ip":"8.8.8.8"}}))).rejects.toThrow("response lost");
+ const recovered=await createPayment(order,new Request("https://findfire.club",{headers:{"x-real-ip":"8.8.8.8"}}));
+ expect(recovered.payUrl).toBe("https://cashier.example/new-attempt");expect(requestIds).toHaveLength(2);expect(requestIds[0]).toBe(requestIds[1]);
 });

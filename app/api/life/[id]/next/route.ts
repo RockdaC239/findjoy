@@ -17,10 +17,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const state = lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
-  if (state.dead) return NextResponse.json({ error: "人生已经结束", state }, { status: 409 });
   const body = await request.json().catch(() => ({}));
   if (typeof body.expectedEventId !== "string") return NextResponse.json({error:"请恢复最新人生后继续"},{status:400});
   if (body.expectedEventId !== state.history.at(-1)?.id) return NextResponse.json({state,ended:state.dead});
+  if (state.dead) return NextResponse.json({ error: "人生已经结束", state }, { status: 409 });
   const offered = state.history.at(-1)?.choices;
   if (offered?.length && (!body.choice || !offered.some(choice => choice.id === body.choice.id))) return NextResponse.json({error:"请选择当前事件提供的选项"},{status:400});
   let lease;

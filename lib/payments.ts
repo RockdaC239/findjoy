@@ -39,9 +39,10 @@ export async function createPayment(order: JoyOrder, request: Request): Promise<
       const current=await xiaodouRequest("GET",`/api/open/v1/payments/${order.id}`);
       confirmSnapshot(order,current);
       if(current.status==="SUCCEEDED")return commerceStore.getOrder(order.id,order.userId)!;
-      if(current.nextAction==="CREATE_ATTEMPT"){
+      const pendingAttempt=commerceStore.pendingAttemptRequestId(order.id);
+      if(pendingAttempt || current.nextAction==="CREATE_ATTEMPT"){
         attempt=true;
-        snapshot=await xiaodouRequest("POST",`/api/open/v1/payments/${order.id}/attempts`,"",commerceStore.attemptRequestId(order.id));
+        snapshot=await xiaodouRequest("POST",`/api/open/v1/payments/${order.id}/attempts`,"",pendingAttempt??commerceStore.attemptRequestId(order.id));
       }
     }catch(error){if(!(!attempt && error instanceof XiaodouError && error.status===404))throw error;}
   }
