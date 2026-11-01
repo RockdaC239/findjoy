@@ -540,19 +540,19 @@ export default function Home() {
               <span className="event-mode-detail">{modeMeta.detail}{life.city ? ` · ${life.city}` : ""}</span>
             </div>
             <p className="current-age">{displayAge} 岁</p>
-            <div className="topbar-actions"><AccountNav />
+            <div className="topbar-actions"><AccountNav>
               <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />
-            </div>
+            </AccountNav></div>
           </>
         ) : (
           <>
             <BrandLogo href="/showcase" className="wordmark" />
-            <div className="topbar-actions"><AccountNav />
+            <div className="topbar-actions"><AccountNav>
               <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
               <button className="settings-button" onClick={openHistory}>过往人生</button>
               <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>
               <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} />
-            </div>
+            </AccountNav></div>
           </>
         )}
       </header>
