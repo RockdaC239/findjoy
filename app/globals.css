@@ -126,7 +126,7 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
 .mode-section-note { color:var(--muted); font-size:10px; letter-spacing:.02em; }
 .mode-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
 .mode-card { min-height:132px; display:flex; flex-direction:column; gap:6px; border:1px solid var(--line); border-radius:12px; background:transparent; padding:16px 14px; text-align:left; transition:border-color .2s, background .2s, transform .2s; }
-.mode-card:hover { border-color:var(--ink); transform:translateY(-2px); }
+.mode-card:hover:not(:disabled) { border-color:var(--ink); transform:translateY(-2px); }
 .mode-card[aria-pressed="true"] { border-color:var(--orange); background:rgba(255,90,31,.045); box-shadow:inset 0 0 0 1px var(--orange); }
 .mode-card-eyebrow { color:var(--muted); font-size:9px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
 .mode-card-title-row { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
@@ -403,3 +403,5 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
   .page:not(.account-page) .topbar:not(.topbar--event) .topbar-actions { width:100%; }
   .page:not(.account-page) .topbar:not(.topbar--event) .account-menu { position:absolute; top:0; right:0; }
 }
+
+.mode-card:disabled { opacity:.45; cursor:not-allowed; background:var(--soft); }

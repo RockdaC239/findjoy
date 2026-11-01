@@ -136,23 +136,28 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
       </div>
 
       <div className="mode-grid" role="group" aria-label="玩法模式">
-        {LIFE_MODES.map((definition) => (
-          <button
-            key={definition.id}
-            type="button"
-            className="mode-card"
-            aria-pressed={mode === definition.id}
-            data-mode={definition.id}
-            onClick={() => selectMode(definition.id)}
-          >
-            <span className="mode-card-eyebrow">{definition.eyebrow}</span>
-            <span className="mode-card-title-row">
-              <strong>{definition.label}</strong>
-              {definition.badge ? <span className="mode-card-badge">{definition.badge}</span> : null}
-            </span>
-            <span className="mode-card-tagline">{definition.tagline}</span>
-          </button>
-        ))}
+        {LIFE_MODES.map((definition) => {
+          const comingSoon = definition.id === "theme" || definition.id === "foru";
+          return (
+            <button
+              key={definition.id}
+              type="button"
+              className="mode-card"
+              disabled={comingSoon}
+              title={comingSoon ? "开发中，敬请期待" : undefined}
+              aria-pressed={mode === definition.id}
+              data-mode={definition.id}
+              onClick={() => selectMode(definition.id)}
+            >
+              <span className="mode-card-eyebrow">{definition.eyebrow}</span>
+              <span className="mode-card-title-row">
+                <strong>{definition.label}</strong>
+                {definition.badge ? <span className="mode-card-badge">{definition.badge}</span> : null}
+              </span>
+              <span className="mode-card-tagline">{comingSoon ? "开发中，敬请期待" : definition.tagline}</span>
+            </button>
+          );
+        })}
       </div>
 
       {resumableLife ? (

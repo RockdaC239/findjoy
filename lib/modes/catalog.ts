@@ -38,7 +38,6 @@ export const LIFE_MODES: ModeDefinition[] = [
     tagline: "以你现在的人生为起点",
     description: "把你此刻的处境交给 AI，推演接下来可能发生的人生。",
     access: "premium",
-    badge: "内测定制",
   },
 ];
 
