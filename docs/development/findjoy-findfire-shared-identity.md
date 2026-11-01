@@ -41,7 +41,7 @@ FindFire（觅火）通过现实活动、地点推荐与娱乐决策帮助用户
 
 | 项目 | FindJoy | FindFire |
 | --- | --- | --- |
-| Web | 根目录 Next.js 16.3.1 / React 19 / TypeScript | `apps/web`：Next.js 14.2.5 / React 18 / TypeScript |
+| Web | 根目录 Next.js 16.4.3 / React 19 / TypeScript | `apps/web`：Next.js 14.2.5 / React 18 / TypeScript |
 | 后端 | Next.js `app/api`，SSE 人生事件 | `apps/api`：FastAPI，Web Route Handler 转发，Agent runtime |
 | 持久化 | `better-sqlite3`，WAL，`lives` 和 `transcripts` 存 JSON | PostgreSQL 15 配置，psycopg；也有内存 store |
 | 身份 | 无账号或服务端会话；localStorage 保存最近人生 ID | localStorage 保存 `findfire_user_id`；默认 `rocc`，不是正式认证 |
@@ -194,3 +194,7 @@ FindFire 部署用 PostgreSQL Docker 初始化目录；该机制不能当作已�
 FindJoy 新增 identity_users / identity_links / identity_sessions 与一次性 OIDC 登录事务；自有全局 UUID 映射外部 issuer + subject，业务不使用手机号为主键。新增 Authing 登录入口、回调、本产品退出与当前用户接口；人生列表、读取、推进、结局已按登录身份校验，旧无归属数据不开放认领。当前不是独立身份服务，FindFire 尚未接入，不能在两个产品分别生成不同 UUID。
 
 本地验证已跳到真实认证页，尚未发送验证码完成真实用户登录。登录页沿用纸白/橙色风格，移动端与桌面均检查；支付和次数模块继续实施，不视为已上线。实际进度见 FindJoy 的 docs/development/2026-11-01-authing-xiaodou-implementation.md。
+
+实现更新：FindJoy 已完成次数预占/消费/释放、事件推进租约、结局缓存，以及小豆 RSA 签名/响应验签/webhook 与查询补偿；套餐/支付页默认 demo，不真实收款、不发付费次数。正式登录和收款仍须真实验证码及首单验证。首次赠送默认 1 次（可设 0）；超时预占按后续请求或对账任务惰性恢复。
+
+后续 FindFire 仍使用独立业务权益；建议支付应用/订单前缀和回调按产品独立，不把 FindJoy 支付凭证或次数账本当生态通用收费中心。当前没有实现 FindFire 订阅或生产账号迁移。运行步骤见 FindJoy 的 docs/development/authing-xiaodou-operations.md。
