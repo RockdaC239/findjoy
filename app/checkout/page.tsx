@@ -9,5 +9,5 @@ export default async function CheckoutPage({searchParams}:{searchParams:Promise<
   const product=products().find(item=>item.id===params.product);
   if(!product)redirect("/plans");
   if(!await currentUser())redirect(`/login?returnTo=${encodeURIComponent(`/findjoy/checkout?product=${product.id}`)}`);
-  return <AccountShell><Checkout product={product}/></AccountShell>;
+  return <AccountShell showRecharge={false}><Checkout product={product}/></AccountShell>;
 }

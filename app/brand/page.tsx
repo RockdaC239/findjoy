@@ -11,9 +11,9 @@ const logoSpecs = [
 export default function BrandPage() {
   return (
     <main className="brand-page">
-      <header className="brand-nav">
+      <header className="topbar">
         <BrandLogo href="/" />
-        <Link href="/" className="brand-nav-link">返回人生模拟器 <span aria-hidden="true">↗</span></Link>
+        <nav className="topbar-actions" aria-label="页面导航"><Link href="/" className="settings-button">返回首页</Link></nav>
       </header>
 
       <section className="brand-hero" aria-labelledby="brand-title">

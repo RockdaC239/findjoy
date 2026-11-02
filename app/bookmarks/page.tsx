@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo } from "../../components/BrandLogo";
+import { AccountNav } from "../../components/AccountNav";
 import { BookmarkCover } from "../../components/BookmarkCover";
 import { bookmarks, getBookmarkSource } from "../../lib/bookmarks";
 
@@ -14,7 +15,7 @@ export default function BookmarksPage() {
     <div className="page bookmarks-page">
       <header className="topbar" aria-label="书签导航">
         <BrandLogo href="/" />
-        <Link className="settings-button" href="/">← 返回首页</Link>
+        <nav className="topbar-actions" aria-label="页面导航"><Link className="settings-button" href="/">返回首页</Link><AccountNav showRecharge={false} /></nav>
       </header>
       <main className="bookmarks-content">
         <div className="bookmarks-heading">

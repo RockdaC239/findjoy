@@ -12,7 +12,7 @@ export default async function PlansPage() {
   const balance=user?commerceStore.balance(user.id):null;
   const catalog=products();
   const demo=catalog.every(product=>product.demo);
-  return <AccountShell>
+  return <AccountShell showRecharge={false}>
     <main className="plans-main">
       <section className="plans-heading"><p className="eyebrow">MORE THAN ONE WAY TO LIVE</p><h1>给好奇心，多一点可能。</h1><p className="account-lead">不必抵达某个标准答案。<br />只是再出发一次，看看另一条路上的风景。</p>
       {balance?<div className="credit-pill">我的积分 <strong>{balance.available}</strong> 积分{balance.held>0&&<span> · {balance.held} 积分正在开局</span>}</div>:<Link className="account-back" href="/login?returnTo=%2Ffindjoy%2Fplans">登录，查看我的积分 ↗</Link>}

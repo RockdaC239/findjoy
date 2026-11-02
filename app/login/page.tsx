@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const configured = authingConfigured();
   return (
     <div className="page account-page">
-      <header className="topbar"><BrandLogo href="/" /><Link className="account-back" href="/">回到觅乐 ↗</Link></header>
+      <header className="topbar"><BrandLogo href="/" /><nav className="topbar-actions" aria-label="页面导航"><Link className="settings-button" href="/">返回首页</Link></nav></header>
       <main className="login-layout">
         <section className="login-story">
           <p className="eyebrow">A LIFE WORTH EXPLORING</p>

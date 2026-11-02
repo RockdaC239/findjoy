@@ -79,7 +79,7 @@ export function Checkout({product,initialOrder}:{product?:Product;initialOrder?:
             <p className="payment-status" role="status">{alipayPaused?"支付宝已暂停，请返回积分充值，使用微信支付创建新订单。":order.status==="UNKNOWN"?"支付结果待确认，请勿重复付款。":order.status==="CLOSED"?"支付窗口已关闭，可查询最终结果。":order.status==="FAILED"?"支付尚未完成，请查询最终结果。":order.demo?"演示订单已创建，可模拟支付结果。":"等待支付，完成后将自动确认到账。"}</p>
             {order.demo?<button className="primary-button account-primary" onClick={()=>refresh(true)} disabled={busy}>{busy?"正在确认…":"模拟支付完成"}<span>↗</span></button>:<>{!alipayPaused&&order.payUrl&&<a href={order.payUrl} className="primary-button account-primary" target="_blank" rel="noopener noreferrer">前往安全收银台 <span>↗</span></a>}{!alipayPaused && !order.payUrl && order.status!=="UNKNOWN" && <button className="primary-button account-primary" onClick={retry} disabled={busy}>重新获取支付链接 <span>↗</span></button>}<button className="plan-button" onClick={()=>refresh()} disabled={busy}>{busy?"正在查询…":"我已支付，查询结果"}</button></>}
           </>}
-          <p className="login-note">{item.demo?"演示仅用于体验页面与流程。真实支付上线后，才会按已确认价格收款。":"支付由小豆支付收银台处理。到账以服务端核验为准，关闭页面不会丢失订单。"}</p>
+          <p className="login-note">{item.demo?"演示仅用于体验页面与流程。真实支付上线后，才会按已确认价格收款。":"温馨提示：支付完成后，积分将在确认到账后自动发放。关闭页面不会丢失订单，可在个人中心查看支付状态。"}</p>
         </>}
         {error&&<p className="account-error" role="alert">{error}</p>}
         <Link className="account-back" href="/account#orders">查看积分与订单 ↗</Link>

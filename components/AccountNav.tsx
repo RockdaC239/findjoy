@@ -1,21 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-export function AccountNav({ children }: { children?: ReactNode }) {
-  const [user, setUser] = useState<{ displayName: string } | null>(null);
+const AccountUserContext = createContext<{ displayName: string } | null>(null);
+
+export function AccountUserProvider({ user, children }: { user: { displayName: string } | null; children: ReactNode }) {
+  return <AccountUserContext.Provider value={user}>{children}</AccountUserContext.Provider>;
+}
+
+export function AccountNav({ children, showRecharge = true }: { children?: ReactNode; showRecharge?: boolean }) {
+  const user = useContext(AccountUserContext);
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const menuId = useId();
-  useEffect(() => {
-    let active = true;
-    fetch("/findjoy/api/auth/me").then(response => response.json()).then(data => {
-      if (active) setUser(data.user ?? null);
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
@@ -26,7 +25,7 @@ export function AccountNav({ children }: { children?: ReactNode }) {
   }, [open]);
 
   return <>
-    <Link className="settings-button" href="/plans">积分充值</Link>
+    {showRecharge && <Link className="settings-button" href="/plans">积分充值</Link>}
     {children}
     {user ? <div ref={menu} className="account-menu"
       onMouseEnter={() => { if (window.matchMedia("(hover: hover)").matches) setOpen(true); }}
