@@ -100,7 +100,7 @@ npm run lint
 npm run build
 ```
 
-开发分支的全部服务端存储现已要求 `DATABASE_URL`。应用启动前，先在目标独立数据库通过服务端环境注入连接串并运行 `npm run db:migrate`；生产切换还需完成旧 SQLite 数据导入和发布验收，不能直接将本分支部署覆盖旧版。
+开发分支的全部服务端存储现已要求 `DATABASE_URL`。应用启动前，先在目标独立数据库通过服务端环境注入连接串并运行 `npm run db:migrate`；生产切换还需按[数据导入说明](docs/development/sqlite-postgres-import.md)完成旧 SQLite 数据导入和发布验收，不能直接将本分支部署覆盖旧版。
 
 ## 项目结构
 

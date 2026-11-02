@@ -30,7 +30,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "node scripts/migrate-database.mjs"
+    "db:migrate": "node scripts/migrate-database.mjs",
+    "db:import-sqlite": "node scripts/import-sqlite.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
