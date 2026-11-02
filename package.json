@@ -31,7 +31,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:migrate": "node scripts/migrate-database.mjs",
-    "db:import-sqlite": "node scripts/import-sqlite.mjs"
+    "db:import-sqlite": "node scripts/import-sqlite.mjs",
+    "db:backup": "node scripts/backup-database.mjs",
+    "db:restore": "node scripts/restore-database.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

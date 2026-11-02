@@ -82,8 +82,10 @@ LLM_MODEL=deepseek-chat
 | `npm test` | 运行 Vitest 领域测试 |
 | `npm run typecheck` | 运行 TypeScript 类型检查 |
 | `npm run lint` | 运行 ESLint |
+| `npm run db:backup` | 生成 PostgreSQL 备份及校验摘要 |
+| `npm run db:restore` | 向显式指定的独立空库恢复并校验 |
 
-存储、登录、游戏和支付集成测试需要独立 PostgreSQL 测试库，通过 `TEST_DATABASE_URL` 显式提供；不要使用生产数据库。测试会在该库内创建并清理随机 schema，不隐式读取生产 `DATABASE_URL`。CI 已配置 PostgreSQL 15 测试服务。本地需先启动测试实例并创建测试库，再设置环境变量，例如：
+存储、登录、游戏和支付集成测试需要独立 PostgreSQL 测试库，通过 `TEST_DATABASE_URL` 显式提供；不要使用生产数据库。测试账号需有独立测试实例的建库/删库及建 schema 权限；测试会创建并清理随机 schema 和备份演练数据库，不隐式读取生产 `DATABASE_URL`。CI 已配置 PostgreSQL 15 测试服务。本地需先启动测试实例并创建测试库，再设置环境变量，例如：
 
 ```bash
 export TEST_DATABASE_URL='postgresql://findjoy_test@127.0.0.1:55439/findjoy_test'
@@ -101,6 +103,8 @@ npm run build
 ```
 
 开发分支的全部服务端存储现已要求 `DATABASE_URL`。应用启动前，先在目标独立数据库通过服务端环境注入连接串并运行 `npm run db:migrate`；生产切换还需按[数据导入说明](docs/development/sqlite-postgres-import.md)完成旧 SQLite 数据导入和发布验收，不能直接将本分支部署覆盖旧版。
+
+备份与恢复还需匹配版本的 PostgreSQL 客户端，使用方式及尚待配置的异机副本、定时任务见[备份恢复说明](docs/development/postgres-backup-restore.md)。
 
 ## 项目结构
 

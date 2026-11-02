@@ -40,6 +40,17 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      - name: 准备 PostgreSQL 15 备份恢复客户端
+        run: |
+          if [ ! -x /usr/lib/postgresql/15/bin/pg_dump ]; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-common
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client-15
+          fi
+          echo "FINDJOY_PG_BIN=/usr/lib/postgresql/15/bin" >> "$GITHUB_ENV"
+
       - name: 类型检查 / 测试 / Lint
         run: |
           npm run typecheck
