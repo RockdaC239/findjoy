@@ -14,7 +14,7 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 
 async function execute(file: string, args: string[], env: NodeJS.ProcessEnv) {
   try {
-    const result = await run("bash", [file, ...args], { env, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
+    const result = await run("bash", ["-x", file, ...args], { env, encoding: "utf8", maxBuffer: 10 * 1024 * 1024, timeout: 20000 });
     return { status: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     const failure = error as { code?: number; stdout?: string; stderr?: string };
@@ -112,14 +112,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
       await writeFile(path.join(server, ".env"), envText("one"), { mode: 0o600 });
       console.log("deploy-test: env ready");
 
-      await writeFake(bin, "sudo", 'exec "$@"');
-      await writeFake(bin, "systemctl", `echo "$*" >> "${state}/systemctl.log"`);
+      await writeFake(bin, "sudo", 'echo "sudo $*" >> "$FAKE_STATE/commands.log"; exec "$@"');
+      await writeFake(bin, "systemctl", `echo "systemctl $*" >> "$FAKE_STATE/commands.log"; echo "$*" >> "${state}/systemctl.log"`);
       await writeFake(bin, "journalctl", "exit 0");
       await writeFake(bin, "nginx", "exit 0");
       await writeFake(bin, "chown", "exit 0");
       await writeFake(bin, "sleep", "exit 0");
-      await writeFake(bin, "curl", 'target=$(readlink "$SERVER_PATH/current" 2>/dev/null || true)\ncase "$target" in *rel2) exit 1;; *) exit 0;; esac');
-      await writeFake(bin, "npm", 'if [ "$1" = "ci" ]; then exit 0; fi\nif [ "$1" = "run" ] && [ "$2" = "build" ]; then mkdir -p .next; echo build > .next/BUILD_ID; exit 0; fi\nexit 0');
+      await writeFake(bin, "curl", 'echo "curl $*" >> "$FAKE_STATE/commands.log"\ntarget=$(readlink "$SERVER_PATH/current" 2>/dev/null || true)\ncase "$target" in *rel2) exit 1;; *) exit 0;; esac');
+      await writeFake(bin, "npm", 'echo "npm $*" >> "$FAKE_STATE/commands.log"\nif [ "$1" = "ci" ]; then exit 0; fi\nif [ "$1" = "run" ] && [ "$2" = "build" ]; then mkdir -p .next; echo build > .next/BUILD_ID; exit 0; fi\nexit 0');
 
       const release1 = path.join(server, "releases", "rel1");
       const release2 = path.join(server, "releases", "rel2");
@@ -138,12 +138,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
         HEALTH_RETRIES: "1",
         KEEP_RELEASES: "2",
         NPM_BIN: path.join(bin, "npm"),
+        FAKE_STATE: state,
         RELEASE_ID: "rel1",
         RELEASE_DIR: release1,
       };
       await writeFile(`/tmp/${appName}_app_env`, envText("one"), { mode: 0o600 });
       const first = await execute(path.join(release1, "deploy/deploy-production.sh"), [], baseEnv);
       console.log("deploy-test: first done", first.status);
+      if (first.status !== 0) {
+        console.log("deploy-test: first trace tail\n", first.stderr.slice(-6000));
+        console.log("deploy-test: commands\n", await readFile(path.join(state, "commands.log"), "utf8").catch(() => "none"));
+      }
       expect(first.status, first.stderr + first.stdout).toBe(0);
       expect(await realpath(path.join(server, "current"))).toBe(await realpath(release1));
       expect(await readFile(path.join(server, ".env"), "utf8")).toContain("DEPLOY_MARKER=one");
