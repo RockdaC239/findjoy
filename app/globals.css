@@ -273,32 +273,33 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
   .account-footer { margin-top:12px; }
   .account-page .topbar a { min-height:44px; display:inline-flex; align-items:center; }
 }
-.plans-main { padding:72px 0 64px; }
-.plans-heading { max-width:820px; margin:0 auto 42px; text-align:center; }
+.plans-main { padding:28px 0 24px; }
+.plans-heading { max-width:820px; margin:0 auto 24px; text-align:center; }
 .plans-heading h1,.checkout-title h1 { font-family:inherit; font-size:clamp(30px,4.6vw,58px); font-weight:500; line-height:1.35; letter-spacing:-.04em; }
+.plans-heading h1 { font-family:'DM Serif Display', Georgia, serif; font-weight:400; letter-spacing:0; text-wrap:balance; }
+.plans-heading .account-lead { margin:14px 0 18px; }
 .credit-pill { display:inline-flex; align-items:center; gap:10px; padding:9px 20px; border:1px solid var(--line); border-radius:50px; color:var(--muted); font-size:12px; }
 .credit-pill strong { font-size:21px; font-weight:500; color:var(--ink); }
 .catalog-notice { max-width:1000px; margin:0 auto 28px; background:var(--soft); border-radius:12px; padding:14px 20px; color:var(--muted); font-size:12px; line-height:1.8; }
 .catalog-notice span { color:var(--ink); font-weight:600; margin-right:12px; }
 .plan-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:22px; max-width:1100px; margin:0 auto; }
-.plan-card { display:flex; flex-direction:column; padding:30px; border:1px solid var(--line); border-radius:20px; background:#fffdf9; }
+.plan-card { display:flex; flex-direction:column; padding:22px; border:1px solid var(--line); border-radius:20px; background:#fffdf9; }
 .plan-card-featured { border-color:var(--orange); background:#fff9f3; }
-.plan-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.plan-card-top { min-height:24px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .plan-tag { background:#ffe4d7; padding:4px 10px; border-radius:30px; color:#9d3814; font-size:10px; }
-.plan-card h2 { font-size:26px; font-weight:500; margin:28px 0 10px; }
-.plan-card>p { font-size:12px; color:var(--muted); min-height:40px; }
-.plan-price { display:flex; align-items:baseline; gap:5px; font-size:48px; line-height:1.2; font-weight:500; margin-top:18px; letter-spacing:-.05em; }
+.plan-card h2 { font-size:26px; font-weight:500; margin:16px 0 8px; }
+.plan-card>p { font-size:12px; color:var(--muted); min-height:38px; margin:0; }
+.plan-price { display:flex; align-items:baseline; gap:5px; font-size:48px; line-height:1.2; font-weight:500; margin-top:16px; letter-spacing:-.05em; }
 .plan-price small { font-size:20px; }
 .plan-price span { font-size:10px; color:var(--muted); letter-spacing:0; margin-left:8px; }
-.plan-credits { font-size:12px; color:var(--muted); margin-top:14px; padding-bottom:24px; border-bottom:1px solid var(--line); }
+.plan-credits { font-size:12px; color:var(--muted); margin:10px 0 20px; }
 .plan-credits strong { font-size:17px; color:var(--ink); font-weight:500; }
-.plan-card ul { padding:24px 0; margin:0; list-style:none; font-size:12px; color:var(--muted); display:grid; gap:12px; flex:1; }
-.plan-card li::before { content:'↗'; margin-right:10px; color:var(--orange); }
 .plan-button { display:flex; align-items:center; justify-content:space-between; gap:20px; width:100%; min-height:48px; border:1px solid var(--line); border-radius:12px; background:transparent; color:var(--ink); padding:12px 20px; text-decoration:none; font-size:13px; }
 .plan-button:hover { border-color:var(--ink); }
 .plan-button:disabled { opacity:.5; cursor:wait; }
-.purchase-notes { max-width:1100px; margin:64px auto 0; display:grid; grid-template-columns:1fr 1fr 1fr; gap:35px; border-top:1px solid var(--line); padding-top:32px; }
-.purchase-notes h2 { font-size:20px; font-weight:500; line-height:1.6; }
+.purchase-notes { max-width:1100px; margin:24px auto 0; display:grid; grid-template-columns:auto 1fr; gap:28px; border-top:1px solid var(--line); padding-top:18px; }
+.purchase-notes h2 { margin:0; font-size:14px; font-weight:500; line-height:1.9; }
+.purchase-notes ul { margin:0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.9; }
 .purchase-notes p,.account-muted { color:var(--muted); font-size:13px; line-height:1.9; }
 .order-history { max-width:1100px; margin:48px auto 0; }
 .order-history h2 { font-size:20px; font-weight:500; }

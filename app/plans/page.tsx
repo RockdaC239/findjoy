@@ -10,7 +10,6 @@ export default async function PlansPage() {
   const user=await currentUser();
   commerceStore.expireOperations();
   const balance=user?commerceStore.balance(user.id):null;
-  const orders=user?commerceStore.listOrders(user.id):[];
   const catalog=products();
   const demo=catalog.every(product=>product.demo);
   return <AccountShell>
@@ -24,11 +23,9 @@ export default async function PlansPage() {
         <h2>{product.name}</h2><p>{["给一个未曾做过的选择，一次机会。","不急着下结论，再看看几种生活。","带着好奇心，走过更多人生的岔路。 "][index]??"继续探索属于你的可能。"}</p>
         <div className="plan-price"><small>¥</small>{formatPrice(product.amountFen)}{demo&&<span>演示价</span>}</div>
         <div className="plan-credits"><strong>{product.credits}</strong> 积分 · 普通模式 {product.credits / NORMAL_LIFE_POINTS} 局</div>
-        <ul><li>普通模式每局 20 积分</li><li>一局内继续与恢复不重复扣积分</li><li>开局失败，积分退回</li></ul>
         <Link className={index===1?"primary-button account-primary":"plan-button"} href={user?`/checkout?product=${product.id}`:`/login?returnTo=${encodeURIComponent(`/findjoy/checkout?product=${product.id}`)}`}>{demo?"体验购买流程":"充值这份积分"}<span aria-hidden="true">↗</span></Link>
       </article>)}</section>
-      <section className="purchase-notes"><div><span className="account-kicker">A LITTLE REASSURANCE</span><h2>放心，把选择交给自己。</h2></div><p>新用户赠送 100 积分，可开启 5 局普通模式。普通模式每局 20 积分，首幕成功保存后消费；继续故事、恢复存档和查看已保存的回顾不重复扣积分。</p><p>积分用于 FindJoy 内的人生体验，不设有效期。其他模式开放后将单独标明积分价格。</p></section>
-      {user&&<section id="orders" className="order-history"><h2>我的订单 <span>最近 100 笔</span></h2>{orders.length===0?<p className="account-muted">还没有订单。每一段新故事，都可以慢慢开始。</p>:<div className="order-list">{orders.map(order=><Link key={order.id} href={`/checkout/${order.id}`}><div><strong>{order.name}</strong><span>{order.demo?"演示订单":"人生体验"} · {new Date(order.createdAt).toLocaleDateString("zh-CN")}</span></div><div><strong>¥{formatPrice(order.amountFen)}</strong><span>{order.status==="SUCCEEDED"?"已到账":order.status==="DEMO_COMPLETE"?"演示完成":"查看订单 ↗"}</span></div></Link>)}</div>}</section>}
+      <section className="purchase-notes" aria-labelledby="purchase-notes-title"><h2 id="purchase-notes-title">积分使用说明</h2><ul><li>普通模式每局 {NORMAL_LIFE_POINTS} 积分，首幕成功保存后扣除；开局失败，积分退回。</li><li>同一局继续、恢复与查看已保存的回顾，不重复扣积分。</li><li>积分仅用于 FindJoy，不设有效期；其他模式开放后将单独标价。</li></ul></section>
     </main>
   </AccountShell>;
 }

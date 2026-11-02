@@ -1,3 +1,4 @@
+import { formatPrice } from "../../lib/products";
 import { NORMAL_LIFE_POINTS } from "../../lib/points";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -11,6 +12,7 @@ export default async function AccountPage() {
   const user = await currentUser();
   if (!user) redirect("/login?returnTo=%2Ffindjoy%2Faccount");
   commerceStore.expireOperations();
+  const orders = commerceStore.listOrders(user.id);
   const balance = commerceStore.balance(user.id);
   const ledger = commerceStore.ledger(user.id).slice(-10).reverse();
   const labels: Record<string, string> = { trial: "新用户积分赠送", purchase: "充值积分到账", life: "开启一段人生" };
@@ -29,8 +31,9 @@ export default async function AccountPage() {
         <section className="profile-records" aria-labelledby="records-title"><h2 id="records-title">最近积分记录 <span>最近 10 笔</span></h2>
           {ledger.length === 0 ? <p className="account-muted">还没有积分变动记录。</p> : <ul className="profile-ledger">{ledger.map((entry, index) => <li key={`${entry.reason}-${entry.reference}-${index}`}><div><strong>{labels[entry.reason] ?? "积分调整"}</strong><time dateTime={new Date(entry.createdAt).toISOString()}>{new Date(entry.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time></div><span className={entry.delta > 0 ? "credit-added" : ""}>{entry.delta > 0 ? "+" : ""}{entry.delta} 积分</span></li>)}</ul>}
         </section>
-        <section className="profile-info" aria-labelledby="info-title"><h2 id="info-title">我的账户</h2><dl><div><dt>昵称</dt><dd>{user.displayName}</dd></div><div><dt>账户编号</dt><dd className="profile-user-id">{user.id}</dd></div></dl><Link className="plan-button" href="/plans#orders">查看我的订单 <span aria-hidden="true">↗</span></Link><p className="account-muted">积分仅用于 FindJoy 觅乐。</p></section>
+        <section className="profile-info" aria-labelledby="info-title"><h2 id="info-title">我的账户</h2><dl><div><dt>昵称</dt><dd>{user.displayName}</dd></div><div><dt>账户编号</dt><dd className="profile-user-id">{user.id}</dd></div></dl><Link className="plan-button" href="#orders">查看我的订单 <span aria-hidden="true">↗</span></Link><p className="account-muted">积分仅用于 FindJoy 觅乐。</p></section>
       </div>
+      <section id="orders" className="order-history"><h2>我的订单 <span>最近 100 笔</span></h2>{orders.length===0?<p className="account-muted">还没有订单。每一段新故事，都可以慢慢开始。</p>:<div className="order-list">{orders.map(order=><Link key={order.id} href={`/checkout/${order.id}`}><div><strong>{order.name}</strong><span>{order.demo?"演示订单":"人生体验"} · {new Date(order.createdAt).toLocaleDateString("zh-CN")}</span></div><div><strong>¥{formatPrice(order.amountFen)}</strong><span>{order.status==="SUCCEEDED"?"已到账":order.status==="DEMO_COMPLETE"?"演示完成":"查看订单 ↗"}</span></div></Link>)}</div>}</section>
     </main>
   </AccountShell>;
 }

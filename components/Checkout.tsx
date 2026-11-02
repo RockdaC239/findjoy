@@ -82,7 +82,7 @@ export function Checkout({product,initialOrder}:{product?:Product;initialOrder?:
           <p className="login-note">{item.demo?"演示仅用于体验页面与流程。真实支付上线后，才会按已确认价格收款。":"支付由小豆支付收银台处理。到账以服务端核验为准，关闭页面不会丢失订单。"}</p>
         </>}
         {error&&<p className="account-error" role="alert">{error}</p>}
-        <Link className="account-back" href="/plans">查看积分与订单 ↗</Link>
+        <Link className="account-back" href="/account#orders">查看积分与订单 ↗</Link>
       </section>
     </div>
   </main>;
