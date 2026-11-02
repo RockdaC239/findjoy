@@ -94,150 +94,17 @@ NGINX_CONF="/etc/nginx/conf.d/${APP_NAME}.conf"
 
 # 转发 location 在 HTTP / HTTPS 两个 server 块中复用，避免重复维护。
 # location 用无尾斜杠前缀 /findjoy（Next basePath 下 /findjoy 直接 200；/findjoy/ 会 308 一次到 /findjoy）
-LOCATIONS=$(cat <<'NGEOF'
-    location /findjoy {
-        proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # SSE 流式响应：关闭缓冲，避免聊天流卡住
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    # 根路径：findfire 主产品暂未部署，先给占位响应
-    location / {
-        return 200 'findfire.club - 主产品部署中';
-        add_header Content-Type text/plain;
-    }
-
-    # 预留：acme.sh / certbot 续签用的 HTTP 校验路径
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-NGEOF
-)
-
-if [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then
-  TLS_ENABLED=1
-  log "检测到证书 ${SSL_CERT}，本次将启用 HTTPS 并统一跳转到 https://${SERVER_NAME}"
-  HTTP_SERVER=$(cat <<'NGEOF'
-server {
-    listen HTTP_LISTEN_PLACEHOLDER;
-    server_name SERVER_NAME_PLACEHOLDER SERVER_ALIAS_PLACEHOLDER;
-
-    # 证书就绪后 HTTP 全站 301 到 HTTPS，并统一到唯一入口主域名，
-    # 这样 www / IP / 其它 Host 都不会因为证书域名不匹配而报警告。
-    # 保留 acme 校验路径，方便以后换 acme.sh 自动续签。
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    location / {
-        return 301 https://SERVER_NAME_PLACEHOLDER$request_uri;
-    }
-}
-NGEOF
-)
-  HTTPS_SERVER=$(cat <<'NGEOF'
-server {
-    listen HTTPS_LISTEN_PLACEHOLDER ssl;
-    server_name SERVER_NAME_PLACEHOLDER;
-
-    ssl_certificate SSL_CERT_PLACEHOLDER;
-    ssl_certificate_key SSL_KEY_PLACEHOLDER;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-
-    client_max_body_size 10m;
-
-LOCATIONS_PLACEHOLDER
-}
-NGEOF
-)
-  HTTPS_SERVER="${HTTPS_SERVER/LOCATIONS_PLACEHOLDER/$LOCATIONS}"
-  # 只有证书确实覆盖了别名域名时才在 443 上给别名加跳转块，避免证书不匹配
-  ALIAS_HTTPS=0
-  if command -v openssl >/dev/null 2>&1 && openssl x509 -in "$SSL_CERT" -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:${SERVER_ALIAS}"; then
-    ALIAS_HTTPS=1
-  fi
-  if [ "$ALIAS_HTTPS" = 1 ]; then
-    log "证书包含 ${SERVER_ALIAS}，HTTPS 上同样 301 到 https://${SERVER_NAME}"
-    HTTPS_ALIAS_SERVER=$(cat <<'NGEOF'
-
-# 别名域名（www）在 HTTPS 上也 301 到唯一入口主域名
-server {
-    listen HTTPS_LISTEN_PLACEHOLDER ssl;
-    server_name SERVER_ALIAS_PLACEHOLDER;
-
-    ssl_certificate SSL_CERT_PLACEHOLDER;
-    ssl_certificate_key SSL_KEY_PLACEHOLDER;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    return 301 https://SERVER_NAME_PLACEHOLDER$request_uri;
-}
-NGEOF
-)
-  else
-    log "证书未覆盖 ${SERVER_ALIAS}，不加别名 HTTPS 跳转块"
-    HTTPS_ALIAS_SERVER=""
-  fi
-  NGINX_BODY="${HTTP_SERVER}
-${HTTPS_SERVER}${HTTPS_ALIAS_SERVER}"
-else
-  TLS_ENABLED=0
-  log "未找到证书（${SSL_CERT} / ${SSL_KEY}），保持纯 HTTP；放好证书后重新部署即自动开启 HTTPS"
-  # 主域名 server 放在前面，作为 80 端口默认 server：IP / 未知 Host 仍可直接访问
-  NGINX_BODY=$(cat <<'NGEOF'
-server {
-    listen HTTP_LISTEN_PLACEHOLDER;
-    server_name SERVER_NAME_PLACEHOLDER;
-
-    client_max_body_size 10m;
-
-LOCATIONS_PLACEHOLDER
-}
-
-# 别名（www）在 HTTP 上 301 跳到主域名；此时还没有证书，先不跳 HTTPS
-server {
-    listen HTTP_LISTEN_PLACEHOLDER;
-    server_name SERVER_ALIAS_PLACEHOLDER;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    location / {
-        return 301 http://SERVER_NAME_PLACEHOLDER$request_uri;
-    }
-}
-NGEOF
-)
-  NGINX_BODY="${NGINX_BODY/LOCATIONS_PLACEHOLDER/$LOCATIONS}"
+if [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then TLS_ENABLED=1; else TLS_ENABLED=0; fi
+NGINX_CANDIDATE=$(mktemp)
+if ! bash "$SRC_DIR/deploy/render-nginx.sh" "$APP_PORT" "$SERVER_NAME" "$LISTEN_PORT" "$SSL_LISTEN_PORT" "$SSL_CERT" "$SSL_KEY" "$SERVER_ALIAS" > "$NGINX_CANDIDATE"; then
+  rm -f "$NGINX_CANDIDATE"
+  die "nginx 配置生成失败"
 fi
-
-NGINX_BODY=$(printf '%s\n' "$NGINX_BODY" | sed \
-  -e "s/HTTP_LISTEN_PLACEHOLDER/${LISTEN_PORT}/" \
-  -e "s/HTTPS_LISTEN_PLACEHOLDER/${SSL_LISTEN_PORT}/" \
-  -e "s/SERVER_NAME_PLACEHOLDER/${SERVER_NAME}/" \
-  -e "s/SERVER_ALIAS_PLACEHOLDER/${SERVER_ALIAS}/" \
-  -e "s|SSL_CERT_PLACEHOLDER|${SSL_CERT}|" \
-  -e "s|SSL_KEY_PLACEHOLDER|${SSL_KEY}|" \
-  -e "s/APP_PORT_PLACEHOLDER/${APP_PORT}/")
-  if ! diff -q <(echo "$NGINX_BODY") <(sudo cat "$NGINX_CONF" 2>/dev/null) >/dev/null 2>&1; then
-    echo "$NGINX_BODY" | sudo tee "$NGINX_CONF" >/dev/null
-    sudo nginx -t || die "nginx 配置校验失败"
-    sudo systemctl reload nginx
-    log "nginx 配置已更新（${SERVER_NAME}${PUBLIC_BASE} -> 127.0.0.1:${APP_PORT}）"
-  else
-    log "nginx 配置无变化，跳过"
-  fi
+if ! bash "$SRC_DIR/deploy/apply-nginx.sh" "$NGINX_CANDIDATE" "$NGINX_CONF"; then
+  rm -f "$NGINX_CANDIDATE"
+  die "nginx 配置应用失败，已尝试恢复原配置"
+fi
+rm -f "$NGINX_CANDIDATE"
 
 log "5/5 重启服务并健康检查"
 sudo systemctl restart "${APP_NAME}"

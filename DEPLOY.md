@@ -1,5 +1,7 @@
 # findjoy 部署指南（腾讯云 + GitHub Actions）
 
+生产发布须由 Owner 确认范围，再通过 main push 触发 GitHub Actions；以下初始化说明不授权手动发布应用。当前 PostgreSQL 上线加固仍在开发，执行前核对[进度与待验收事项](docs/development/2026-11-02-backend-hardening-progress.md)。
+
 本文按**三层部署模型**（编排层 / 部署登记表 / 执行层）落地：
 
 | 层 | 落地点 | 文件 |
@@ -102,7 +104,7 @@ curl -s https://findfire.club/findjoy/api/models | head
 sudo systemctl status findjoy          # 服务状态
 sudo journalctl -u findjoy -f          # 实时日志
 sudo systemctl restart findjoy         # 手动重启
-curl -s http://127.0.0.1:3001/findjoy   # 内网健康检查（next start 只监听 127.0.0.1:3001）
+curl -s http://127.0.0.1:3001/findjoy/api/health   # 数据库就绪检查（next start 只监听 127.0.0.1:3001）
 ```
 
 ## 第 6 步：绑定域名 + HTTPS（腾讯云免费证书）
@@ -110,7 +112,7 @@ curl -s http://127.0.0.1:3001/findjoy   # 内网健康检查（next start 只监
 域名 `findfire.club` 的 A 记录已指向 `124.221.235.9`。免费证书签发后，剩下的就是把证书放到服务器上。
 
 部署脚本已内置 HTTPS：**`SERVER_PATH/certs/` 下存在证书时，自动生成 443 server 块并把 80 全站 301 跳转到 HTTPS；没有证书则保持纯 HTTP，不影响部署。**
-因此不要手工改服务器上的 `/etc/nginx/conf.d/findjoy.conf`——每次部署都会按模板重写它；要改配置就改 `deploy/deploy-production.sh`。
+因此不要手工改服务器上的 `/etc/nginx/conf.d/findjoy.conf`——每次部署都会按模板重写它；共享路由的唯一模板入口是 `deploy/render-nginx.sh`，由 `deploy/deploy-production.sh` 调用 `deploy/apply-nginx.sh` 校验并应用；修改后必须同时验证 FindFire 的 `/` 与 `/api/v1/`。
 
 ### 6.1 下载证书（腾讯云控制台）
 

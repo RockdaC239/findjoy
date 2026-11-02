@@ -51,6 +51,14 @@ jobs:
           fi
           echo "FINDJOY_PG_BIN=/usr/lib/postgresql/15/bin" >> "$GITHUB_ENV"
 
+      - name: 准备 nginx 配置验证工具
+        run: |
+          if [ ! -x /usr/sbin/nginx ]; then
+            sudo apt-get update
+            sudo apt-get install --yes nginx
+          fi
+          echo "NGINX_BIN=/usr/sbin/nginx" >> "$GITHUB_ENV"
+
       - name: 类型检查 / 测试 / Lint
         run: |
           npm run typecheck

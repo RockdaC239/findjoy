@@ -213,3 +213,12 @@ FindJoy 当前代码仍使用 SQLite；PostgreSQL 迁移和服务器部署均尚
 FindJoy 主仓库的 `docs/development/backend-database-launch-checklist.md` 记录上线前数据库迁移、生成并发限制、支付验收、备份恢复、压测及发布回滚要求。该清单不是已实现能力或生产发布授权；后续执行仍遵循各仓库发布约束。FindFire 接入统一身份、旧 ID 迁移与正式持久化禁止静默回退内存，仍需单独实施验收。
 
 登录行为补充：FindJoy 主动发起 OIDC 登录时携带 `prompt=login`，要求认证中心重新验证身份，避免退出本站后再次点击登录直接复用 Authing 会话。退出仍撤销当前 FindJoy 会话，不扩大为全用户池或其他产品的全局登出。参数依据：[Authing OIDC 授权码模式](https://docs.authing.cn/federation/oidc/authorization-code/)。
+
+
+## 2026-11-02 共享 nginx 配置维护入口
+
+已只读核实服务器共享域名配置：`/findjoy` → FindJoy 3001，`/api/v1/` → FindFire API 8003，`/` → FindFire Web 3003。FindJoy 仓库旧模板的根路径占位响应与实际部署不一致，开发分支已对齐并保留两个 FindFire 入口。
+
+共享路由唯一模板为 FindJoy 的 `deploy/render-nginx.sh`，由该仓库现有 GitHub Actions 发布流程调用；`deploy/apply-nginx.sh` 在语法校验或重载失败时恢复之前的配置文件。FindFire 发布不得另行重写同一域名的 server 块；未来新增共享路由先修改此模板并验证两产品，不以服务器手工改动替代源码更新。
+
+本次只修改开发代码并执行独立 nginx 语法/故障测试，没有替换线上配置或重载线上服务。数据库迁移预检、应用版本切换和回退流程仍待继续加固。FindJoy 开发分支已统一 PostgreSQL，但线上仍为旧 SQLite 部署，不能把开发状态当作已上线能力。
