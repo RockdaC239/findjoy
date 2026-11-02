@@ -61,7 +61,7 @@ async function checkBackup() {
     }
     const manifestPath = path.join(directory, names.at(-1));
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    const archive = path.join(directory, manifestPath.slice(0, -".json".length));
+    const archive = manifestPath.slice(0, -".json".length);
     let archiveBytes = 0;
     try { archiveBytes = (await stat(archive)).size; } catch { archiveBytes = -1; }
     let checksumMatches = false;

@@ -2,7 +2,6 @@
 // 仅用于本地浏览器验收的 OIDC 替身：监听 127.0.0.1、自签名证书、自动批准。
 // 不得用于生产，也不代表真实 Authing 的手机号验证或安全策略。
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { createServer } from "node:https";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

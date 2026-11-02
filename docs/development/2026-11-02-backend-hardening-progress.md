@@ -156,7 +156,7 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 
 - 使用 Homebrew `postgresql@15`（15.19，与服务器版本一致）在 `.data/pg15-test` 启动独立实例；`findjoy_test` 用于全套测试，`findjoy_dev` 用于本地运行。
 - 首次用默认 PATH 的 PostgreSQL 14 `pg_dump` 跑备份测试时，在 dump 阶段失败；设置 `FINDJOY_PG_BIN=/opt/homebrew/opt/postgresql@15/bin` 后通过。这验证了备份工具必须与数据库大版本匹配，不能依赖服务器默认 PATH。
-- 配置 `TEST_DATABASE_URL` 和 `FINDJOY_PG_BIN` 后：47 个测试文件、281 项测试通过，`typecheck`、`lint`、`build` 通过。覆盖迁移、账号并发登录、订单/积分、SQLite 导入、备份恢复、生成准入、退款复核、API 边界、部署脚本和本地压测脚本。
+- 配置 `TEST_DATABASE_URL` 和 `FINDJOY_PG_BIN` 后：48 个测试文件、282 项测试通过，`typecheck`、`lint`、`build` 通过。覆盖迁移、账号并发登录、订单/积分、SQLite 导入、备份恢复、生成准入、退款复核、API 边界、部署脚本和本地压测脚本。
 - 本地复验不等于 CI 或生产复验；GitHub Actions 的 PostgreSQL 15.19 服务尚未实际运行并保存结果。
 
 ## API 请求边界与数据库故障反馈
@@ -172,6 +172,7 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 - 生产部署脚本改为：`npm ci` → 预检 → 构建 → 更新 systemd/nginx → 原子切换 `current` → 重启健康检查。预检/构建/nginx 失败不切换版本；健康检查失败自动切回上一个 release、恢复上一份 `.env` 并重启，新版本保留供排查。
 - 每次发布写入 `releases/<commit>`，默认保留最近 3 个；CI 从 `src` 改为同步到 release 目录。nginx 配置仍先校验后应用，失败恢复原文件，并保留 FindFire 的 `/` 与 `/api/v1/` 路由。
 - 提交：`0283f92 feat:增加部署前预检与不可变发布失败回退`。
+- 新增部署脚本集成测试：临时数据库 + 受限运行角色 + 真实备份/异机副本 + 假 systemd/nginx/健康检查，验证首次切换、环境文件更新、第二次发布健康失败后自动切回旧 release 并恢复旧 `.env`。测试发现并修复了预检把绝对 manifest 路径再次拼到备份目录、导致误报备份缺失的 bug。
 - 尚未在真实服务器执行；首次切换到 release 目录、systemd `WorkingDirectory=current` 和真实回退仍需要一次受控演练。
 
 ## 备份保留、异机副本、告警与对账定时任务

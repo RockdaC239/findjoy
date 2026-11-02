@@ -25,6 +25,8 @@ SSL_LISTEN_PORT="${SSL_LISTEN_PORT:-443}"
 SSL_CERT="${SSL_CERT:-${CERT_DIR}/${SERVER_NAME}.crt}"
 SSL_KEY="${SSL_KEY:-${CERT_DIR}/${SERVER_NAME}.key}"
 SERVER_ALIAS="${SERVER_ALIAS:-www.${SERVER_NAME}}"
+UNIT_DIR="${UNIT_DIR:-/etc/systemd/system}"
+NGINX_CONF="${NGINX_CONF:-/etc/nginx/conf.d/${APP_NAME}.conf}"
 ENV_FILE="${SERVER_PATH}/.env"
 ENV_NEXT="${SERVER_PATH}/.env.next"
 ENV_PREVIOUS="${SERVER_PATH}/.env.previous"
@@ -99,7 +101,8 @@ fi
 [ "$IMMUTABLE" = 0 ] && rm -rf .next.bak
 
 log "4/7 创建/更新 systemd 服务（幂等）"
-UNIT="/etc/systemd/system/${APP_NAME}.service"
+mkdir -p "$UNIT_DIR"
+UNIT="${UNIT_DIR}/${APP_NAME}.service"
 if [ "$IMMUTABLE" = 1 ] || [ -e "$CURRENT_DIR" ]; then UNIT_WORKDIR="$CURRENT_DIR"; else UNIT_WORKDIR="$RELEASE_DIR"; fi
 UNIT_BODY=$(cat <<UNITEOF
 [Unit]
@@ -130,7 +133,6 @@ else
 fi
 
 log "5/7 创建/更新 nginx 反向代理（幂等，内容变化才更新）"
-NGINX_CONF="/etc/nginx/conf.d/${APP_NAME}.conf"
 if [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then TLS_ENABLED=1; else TLS_ENABLED=0; fi
 NGINX_CANDIDATE=$(mktemp)
 if ! bash "$RELEASE_DIR/deploy/render-nginx.sh" "$APP_PORT" "$SERVER_NAME" "$LISTEN_PORT" "$SSL_LISTEN_PORT" "$SSL_CERT" "$SSL_KEY" "$SERVER_ALIAS" > "$NGINX_CANDIDATE"; then
