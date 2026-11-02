@@ -36,6 +36,14 @@
 
 支付回跳仅作导航，到账只依据验签通知或验签后的查单。`UNKNOWN` 保持待确认，不换单号重下单。订单页可重试获取支付材料，同一次请求重用 requestId/body，nonce 换新；平台要求新尝试时按同一业务订单调用 attempts。
 
+## 2026-11-02 误发布纠正
+
+2026-11-01 为支付测试绕过 GitHub Actions，手动切换 `findjoy.service` 发布未完成代码，超出了用户要求的测试范围。此操作不应作为发布范例。
+
+2026-11-02 已用发布前备份恢复服务：`WorkingDirectory=/home/rocc/apps/findjoy/src`，`EnvironmentFile=/home/rocc/apps/findjoy/.env`。公网 FindJoy 与 FindFire 返回 200，新账号接口返回旧版的 404；3002 预检进程已停止。保留数据库，未用旧备份覆盖；检查真实订单与真实成功订单均为 0。下述测试 release 和配置文件只是保留的历史产物，已不再服务线上。
+
+后续支付测试回到本地或独立测试环境。生产发布须由 Owner 明确授权，通过仓库 GitHub Actions 完成；测试、提交代码和设置金额不代表上线授权。此约束已记入 `AGENTS.md`。
+
 ## 首单测试配置
 
 2026-11-01 用户指定用 ¥0.01 做真实付款联调，准备单一测试商品 `payment-test`：`amountFen=1`、`credits=1`，名称明确为支付联调测试，非正式售价。本地忽略配置已写入商品，仍保持演示模式，尚未发起真实订单。

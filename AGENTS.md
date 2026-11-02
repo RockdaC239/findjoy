@@ -8,6 +8,13 @@ Owner 当前单人创业，时间优先投入营销和产品迭代。技术选�
 
 主文档在 FindJoy 仓库，同路径在 FindFire 保留同步副本；修改跨产品契约时按文档同步两边，只有一个仓库可用时明确标记未同步。保留各产品自己的技术栈与业务规则，不擅自替换或合并。
 
+## 生产发布约束
+
+- 开发、提交代码、测试支付或配置测试金额，不代表获得生产发布授权。未开发完成的功能不得为联调而发布到生产。
+- 生产发布必须由 Owner 明确指定发布范围，并通过 GitHub push 触发仓库现有 GitHub Actions 流程；不得用 SSH 手动同步源码、切换服务目录或环境文件、重启服务来绕过发布流程。
+- 测试默认在本地进行；需要公网回调时先准备本地穿透或独立测试环境，不得擅自替换生产版本。涉及共享域名与 nginx 时，同时保护 FindFire 路由。
+- 如需紧急回滚或其他线上修复，明确说明范围与原因；不得把一次纠正误发布的回滚当成今后可手动部署的授权。
+
 ## Project Structure & Module Organization
 
 Treat [`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-v0.1.md) as the core product source of truth, and [`docs/product/game-modes-v0.1.md`](./docs/product/game-modes-v0.1.md) as the source of truth for the four gameplay modes. The app is a Next.js App Router project: UI and API routes live in `app/`, game/state logic and the model adapter live in `lib/`, mode catalogs/scenario/start logic live in `lib/modes/`, and behavior tests live beside the domain code (for example, `lib/life.test.ts`). The four user-facing phases are start, birth/early life, the life-event loop, and death/life review. Static assets belong in `public/`; product specs, technical specs, design notes, and sample runs belong in `docs/`.
