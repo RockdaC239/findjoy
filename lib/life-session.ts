@@ -32,11 +32,16 @@ export function readPendingStart(): PendingStart | null {
 }
 
 export function writePendingStart(value: PendingStart): void {
+  if (readPendingStart()) return;
   try { sessionStorage.setItem(PENDING_START_KEY, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 
 export function clearPendingStart(): void {
   try { sessionStorage.removeItem(PENDING_START_KEY); } catch { /* storage unavailable */ }
+}
+
+export function discardPendingStartOnError(code?: string): void {
+  if (code === "START_FAILED" || code === "IDEMPOTENCY_CONFLICT" || code === "MODE_UNAVAILABLE") clearPendingStart();
 }
 
 export function readActiveLifeId(): string | null {

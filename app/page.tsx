@@ -15,7 +15,7 @@ import { musicSceneFor } from "../lib/music-scene";
 import { setMusicEnabledPreference, useMusicEnabledPreference } from "../lib/music-preference";
 import { getLifeScenario, getScenarioLabel } from "../lib/modes/scenario";
 import type { StartSelection } from "../lib/modes/types";
-import { API_BASE, readActiveLifeId, forgetActiveLife, writePendingStart } from "../lib/life-session";
+import { API_BASE, readPendingStart, readActiveLifeId, forgetActiveLife, writePendingStart } from "../lib/life-session";
 
 type ModelConfig = {
   providerId: string;
@@ -118,6 +118,7 @@ export default function StartPage() {
       goToLogin();
       return;
     }
+    if (readPendingStart()) { router.push("/play"); return; }
     setPendingStart(selection);
     setShowGenderDialog(true);
   }

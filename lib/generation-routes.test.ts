@@ -1,8 +1,9 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks=vi.hoisted(()=>({currentUser:vi.fn(),stream:vi.fn(),ending:vi.fn()}));
 vi.mock("./auth",()=>({currentUser:mocks.currentUser,appOrigin:()=>"https://findfire.club"}));
 vi.mock("./model-adapter",async(importOriginal)=>({...await importOriginal<typeof import("./model-adapter")>(),streamNextEvent:mocks.stream,generateEnding:mocks.ending}));
 import { setupTestPostgres } from "./test-postgres";
+import * as capacity from "./generation-capacity";
 import { acquireGeneration, releaseGeneration } from "./generation-capacity";
 import { commerceStore } from "./commerce-store";
 import { lifeStore } from "./life-store";
@@ -13,6 +14,7 @@ import { POST as next } from "../app/api/life/[id]/next/route";
 import { POST as ending } from "../app/api/life/[id]/ending/route";
 import { query } from "./database";
 setupTestPostgres();
+afterEach(()=>vi.restoreAllMocks());
 beforeEach(()=>{mocks.currentUser.mockResolvedValue({id:"alice"});mocks.stream.mockReset();mocks.ending.mockReset();vi.stubEnv("FINDJOY_GENERATION_MAX_CONCURRENT","1");vi.stubEnv("FINDJOY_GENERATION_ENABLED","true");});
 const request=(body:unknown={},key="start")=>new Request("https://findfire.club/findjoy/api/life/start",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":key},body:JSON.stringify(body)});
 it("rejects overloaded start, next and ending before model work and credit reservation",async()=>{
@@ -42,4 +44,25 @@ it("releases admission and refunds the opening when generation fails",async()=>{
  const response=await start(request());expect(await response.text()).toContain("START_FAILED");
  expect(await commerceStore.balance("alice")).toEqual({available:100,held:0});
  expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:0}]);
+});
+
+it("recovers a committed opening when confirmation fails instead of telling the client to discard its key",async()=>{
+ mocks.stream.mockImplementation(async function*(state){yield {text:"story"};return buildFallbackEvent(state);});
+ const commit=capacity.commitGeneration;
+ vi.spyOn(capacity,"commitGeneration").mockImplementationOnce(async (token,work,now)=>{
+   await commit(token,work,now);throw new Error("commit reply lost");
+ });
+ const response=await start(request());const text=await response.text();
+ expect(text).toContain("event: complete");expect(text).not.toContain("START_FAILED");
+ expect(await commerceStore.balance("alice")).toEqual({available:80,held:0});
+ const replay=await start(request());expect(replay.status).toBe(200);expect(mocks.stream).toHaveBeenCalledTimes(1);
+});
+
+it("preserves an uncertain opening key when the database cannot confirm recovery",async()=>{
+ mocks.stream.mockImplementation(async function*(){yield {text:"partial"};throw new Error("upstream");});
+ vi.spyOn(commerceStore,"failLife").mockRejectedValueOnce(new Error("database unavailable"));
+ vi.spyOn(commerceStore,"getOperation").mockRejectedValueOnce(new Error("database unavailable"));
+ const response=await start(request());const text=await response.text();
+ expect(text).toContain("START_UNCONFIRMED");expect(text).not.toContain("START_FAILED");
+ expect(await commerceStore.balance("alice")).toEqual({available:80,held:20});
 });

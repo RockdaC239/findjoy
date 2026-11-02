@@ -18,6 +18,7 @@ import { previewStart } from "../../lib/modes/start";
 import {
   API_BASE,
   clearPendingStart,
+  discardPendingStartOnError,
   forgetActiveLife,
   readActiveLifeId,
   readPendingStart,
@@ -122,7 +123,7 @@ export default function PlayPage() {
             if (result.status === "failed") { clearPendingStart(); break; }
           }
         }
-        if (payload?.code === "START_FAILED" || payload?.code === "IDEMPOTENCY_CONFLICT") clearPendingStart();
+        discardPendingStartOnError(payload?.code);
         throw new Error(payload?.error || "人生服务暂时不可用，请稍后重试。");
       }
       if (response.headers.get("content-type")?.includes("application/json")) return (await response.json()) as unknown;
@@ -153,7 +154,7 @@ export default function PlayPage() {
             return JSON.parse(message.data) as unknown;
           } else if (message.event === "error") {
             const payload = JSON.parse(message.data) as { error?: string; code?: string };
-            if (payload.code === "START_FAILED") clearPendingStart();
+            discardPendingStartOnError(payload.code);
             throw new Error(payload.error ?? "Life service unavailable");
           }
         }
@@ -161,7 +162,7 @@ export default function PlayPage() {
       throw new Error("Life stream ended before completion");
     } catch (error) {
       if (error instanceof DOMException && error.name === "TimeoutError") {
-        lastError.current = "模型响应超时（超过 90 秒），请稍后重试或更换模型。";
+        lastError.current = "本次等待超时，故事可能仍在生成，请重试恢复进度。";
       } else {
         lastError.current = error instanceof Error && error.message ? error.message : "人生服务暂时不可用，请检查模型设置后重试。";
       }
@@ -183,14 +184,13 @@ export default function PlayPage() {
         return;
       }
       if (!response.ok) {
-        forgetActiveLife();
-        setBootError("这局人生不存在，或你没有访问权限。");
+        if (response.status === 404 || response.status === 403) forgetActiveLife();
+        setBootError(response.status === 404 || response.status === 403 ? "这局人生不存在，或你没有访问权限。" : "服务暂时不可用，请重试恢复原进度。");
         return;
       }
       const payload = (await response.json()) as { state?: LifeState };
       if (!payload.state) {
-        forgetActiveLife();
-        setBootError("这局人生没有读到存档，请回到开始页重新选择。");
+        setBootError("暂未读到完整存档，请重试恢复原进度。");
         return;
       }
       if (payload.state.dead === true) {
@@ -200,7 +200,6 @@ export default function PlayPage() {
       }
       setLife(buildLifeView(payload.state));
       rememberActiveLife(payload.state.lifeId);
-      clearPendingStart();
       startMusicIfEnabled();
     } catch {
       setBootError("恢复这局人生失败，请回到开始页重试。");
@@ -229,16 +228,14 @@ export default function PlayPage() {
     const payload = await requestLife(`${API_BASE}/api/life/start`, { gender: pending.gender, ...pending.selection }, pending.key, config);
     if (!payload) {
       if (redirecting.current) return;
-      clearPendingStart();
       setLife(null);
       setBootError(lastError.current || "开局没有完成，请回到开始页重新选择。");
       return;
     }
     const state = stateFromPayload(payload);
     if (!state) {
-      clearPendingStart();
       setLife(null);
-      setBootError("开局结果不完整，请回到开始页重新选择。");
+      setBootError("开局结果暂未确认，请重试恢复原进度。");
       return;
     }
     const next = buildLifeView(state);
@@ -319,6 +316,7 @@ export default function PlayPage() {
           <p className="eyebrow">{bootError ? "LIFE UNAVAILABLE" : "RETURNING TO YOUR LIFE"}</p>
           <p className="life-booting-title">{bootError ? "这一局没有接上。" : isBooting ? "正在回到这一局人生…" : "正在准备这一局人生…"}</p>
           <p className="life-booting-copy">{bootError || "如果加载时间过长，可以回到开始页，从「继续」重新进入。"}</p>
+          {bootError && (readPendingStart() || readActiveLifeId()) ? <button className="settings-button" type="button" onClick={() => window.location.reload()}>重试恢复进度</button> : null}
           <Link className="settings-button" href="/">回到开始页</Link>
         </div>
       </main>

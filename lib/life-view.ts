@@ -3,7 +3,7 @@ import { getLifeScenario, NORMAL_SCENARIO } from "./modes/scenario";
 import type { LifeScenario } from "./modes/types";
 
 // 前端「断点恢复」：从已持久化的 LifeState 重建当前要展示的事件节点。
-// 服务器每步都把整局状态存入 SQLite，玩家刷新/关页后再进来，
+// 服务器每步都把整局状态存入 PostgreSQL，玩家刷新/关页后再进来，
 // 用最后一条 history 节点（待定决策或童年叙事）恢复出 story/title/choices。
 export interface LifeView {
   lifeId: string;

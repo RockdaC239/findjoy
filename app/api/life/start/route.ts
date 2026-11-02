@@ -90,12 +90,20 @@ export async function POST(request: Request) {
       send("complete", { state: openedState, event: item.value });
     } catch {
       if (completed) return;
-      if (!completed) {
-        try { await commerceStore.failLife(operation.id,user.id); }
-        catch { console.error("[generation] opening recovery deferred to reconciliation"); }
-      }
-      const message = "开局暂未完成，未消费积分。请稍后重试。";
-      send("error", { error: message, code: "START_FAILED" });
+      try { await commerceStore.failLife(operation.id,user.id); }
+      catch { console.error("[generation] opening recovery deferred to reconciliation"); }
+      try {
+        const recovered=await commerceStore.getOperation(operation.id,user.id);
+        if (recovered?.status === "complete") {
+          const saved=await lifeStore.get(recovered.lifeId,user.id);
+          if (saved) { send("complete",{state:saved}); return; }
+        }
+        if (recovered?.status === "failed") {
+          send("error",{error:"开局未完成，积分已退回，请重新开始。",code:"START_FAILED"});
+          return;
+        }
+      } catch { /* 状态未确认时保留原请求键，不能把一次网络错误当作未扣费证明。 */ }
+      send("error",{error:"开局状态暂未确认，请稍后恢复原进度，勿重复开局。",code:"START_UNCONFIRMED",operationId:operation.id});
     } finally {
       await releaseGeneration(admission!);
     }

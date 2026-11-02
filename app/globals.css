@@ -69,6 +69,7 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
 .life-exit-card p { margin:0 0 28px; color:var(--muted); font-size:14px; line-height:1.8; }
 .exit-actions { display:flex; align-items:center; justify-content:center; gap:22px; flex-wrap:wrap; }
 .life-booting { min-height:calc(100svh - 120px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; }
+.life-booting .settings-button { display:inline-flex; align-items:center; min-height:44px; font-size:14px; }
 .life-booting-title { margin:0; font-family:'DM Serif Display', Georgia, serif; font-size:clamp(28px, 4vw, 44px); line-height:1.2; }
 .life-booting-copy { max-width:420px; margin:0; color:var(--muted); font-size:14px; line-height:1.8; }
 .history-modal { position:fixed; inset:0; z-index:6; display:flex; align-items:center; justify-content:center; padding:22px; background:rgba(17,17,15,.5); }
