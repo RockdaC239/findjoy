@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
@@ -8,47 +8,14 @@ import { BrandLogo } from "../components/BrandLogo";
 import { AccountNav } from "../components/AccountNav";
 import { ModeLauncher } from "../components/ModeLauncher";
 import { MusicToggle } from "../components/MusicToggle";
-import { parseSseMessages } from "../lib/sse";
-import { readStreamedEvent, type StreamedEvent } from "../lib/stream-event";
 import { buildLifeView, type LifeView } from "../lib/life-view";
-import type { EventType, Gender } from "../lib/life";
+import type { Gender, LifeState } from "../lib/life";
 import { useAmbientMusic } from "../lib/use-ambient-music";
 import { musicSceneFor } from "../lib/music-scene";
 import { setMusicEnabledPreference, useMusicEnabledPreference } from "../lib/music-preference";
-import { getLifeScenario, getScenarioLabel, getScenarioReviewQuestion, NORMAL_SCENARIO, normalizeLifeScenario } from "../lib/modes/scenario";
-import { previewStart } from "../lib/modes/start";
-import type { LifeScenario, StartSelection } from "../lib/modes/types";
-
-type Phase = "start" | "birth" | "event" | "review";
-
-type Choice = { id: string; text: string };
-
-type LifeData = {
-  eventId?: string;
-  lifeId: string;
-  age: number;
-  city: string;
-  occupation: string;
-  family: string;
-  finance: string;
-  health: string;
-  eventTitle: string;
-  story: string;
-  choices: Choice[];
-  scenario: LifeScenario;
-  eventType?: EventType;
-};
-
-type Review = {
-  age: number;
-  death: string;
-  facts: string[];
-  moments: string[];
-  observation: string;
-  question: string;
-  modeLabel: string;
-  modeDetail: string;
-};
+import { getLifeScenario, getScenarioLabel } from "../lib/modes/scenario";
+import type { StartSelection } from "../lib/modes/types";
+import { API_BASE, readActiveLifeId, forgetActiveLife, writePendingStart } from "../lib/life-session";
 
 type ModelConfig = {
   providerId: string;
@@ -59,14 +26,6 @@ type ModelConfigStatus = {
   mode: "local" | "environment";
   config: { providerId?: string; model?: string; hasApiKey: boolean; apiKeyHint?: string };
 };
-
-const LIFE_REQUEST_TIMEOUT_MS = 90_000;
-const CHILDHOOD_BOUNDARY = 15;
-// 断点恢复：本地记住最近一局的 lifeId，刷新/重开页面后回到起点时提供"继续"入口
-const ACTIVE_LIFE_KEY = "findjoy:active-life";
-
-// 部署在 findfire.club/findjoy 子路径下；客户端 fetch 不会自动带 basePath，需手动加前缀
-const API_BASE = "/findjoy";
 
 type LifeSummary = {
   lifeId: string;
@@ -85,144 +44,8 @@ const defaultModelConfig: ModelConfig = {
   model: "deepseek-chat",
 };
 
-const demoLife: LifeData = {
-  lifeId: "demo-life",
-  age: 0,
-  city: "深圳",
-  occupation: "婴儿",
-  family: "与家人共同生活",
-  finance: "由家庭照料",
-  health: "正在成长",
-  eventTitle: "你的童年开始了",
-  story: "你第一次睁开眼，看见家人为你忙碌。世界还很大，而你正慢慢学会用自己的方式认识它。",
-  choices: [
-    { id: "A", text: "顺着眼前的变化慢慢适应" },
-    { id: "B", text: "在熟悉的节奏里再停留一会儿" },
-    { id: "C", text: "试着用自己的方式回应" },
-  ],
-  scenario: NORMAL_SCENARIO,
-  eventType: "family",
-};
-
-const demoReview: Review = {
-  age: 82,
-  death: "在很深的年纪平静离世",
-  facts: ["经历过不同的工作与生活阶段", "拥有过重要的关系与告别", "在几座城市留下自己的日常"],
-  moments: [
-    "你第一次意识到，选择本身也会改变你。",
-    "你在一个艰难的阶段重新安排了生活的重心。",
-    "你经历挫折后，没有立刻给自己新的答案。",
-    "你在一次告别中，看见了关系留下的重量。",
-  ],
-  observation:
-    "从你的选择来看，你常常会在真正重要的时刻为关系停下来。年轻时，你也许很在意证明自己；后来，你似乎越来越愿意把时间留给那些无法替代的人和事。",
-  question: "如果这是你真实的一生，你愿意这样活吗？",
-  modeLabel: "普通模式",
-  modeDetail: "随机出身 · 从 0 岁开始",
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function getString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.trim() ? value : fallback;
-}
-
-const EVENT_TYPES: EventType[] = ["career", "relationship", "health", "finance", "random", "family"];
-
-function getEventType(value: unknown): EventType | undefined {
-  return typeof value === "string" && (EVENT_TYPES as string[]).includes(value) ? value as EventType : undefined;
-}
-
-function getChoices(value: unknown): Choice[] {
-  // 真实事件里拿到多少选项就展示多少，绝不用 demo 文案顶替——
-  // 否则会出现“本该是模型给的选项，却突然变成演示选项”的卡片跳变。
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item, index) => {
-    if (!isRecord(item) || typeof item.text !== "string") return [];
-    return [{ id: getString(item.id, String.fromCharCode(65 + index)), text: item.text }];
-  });
-}
-
-function parseLife(payload: unknown): LifeData {
-  if (!isRecord(payload)) return demoLife;
-  const state = isRecord(payload.state) ? payload.state : payload;
-  const basic = isRecord(state.basic) ? state.basic : {};
-  const career = isRecord(state.career) ? state.career : {};
-  const finance = isRecord(state.finance) ? state.finance : {};
-  const health = isRecord(state.health) ? state.health : {};
-  const relationships = isRecord(state.relationships) ? state.relationships : {};
-  const partner = isRecord(relationships.partner) ? relationships.partner : {};
-  const latest = Array.isArray(state.history) ? state.history.at(-1) : undefined;
-  const nextEvent = isRecord(payload.event) ? payload.event : isRecord(latest) ? latest : {};
-  const event = isRecord(nextEvent.event) ? nextEvent.event : nextEvent;
-  return {
-    ...demoLife,
-    lifeId: getString(state.lifeId, demoLife.lifeId),
-    eventId: isRecord(latest) && typeof latest.id === "string" ? latest.id : undefined,
-    age: typeof basic.age === "number" ? basic.age : demoLife.age,
-    city: getString(basic.city, demoLife.city),
-    occupation: getString(career.occupation, demoLife.occupation),
-    family: getString(partner.status, demoLife.family),
-    finance: getString(finance.housing, demoLife.finance),
-    health: getString(health.lifestyle, demoLife.health),
-    eventTitle: getString(event.title, demoLife.eventTitle),
-    story: getString(nextEvent.story, demoLife.story),
-    choices: getChoices(nextEvent.choices),
-    scenario: normalizeLifeScenario(state.scenario),
-    eventType: getEventType(event.type),
-  };
-}
-
-function parseReview(payload: unknown, current: LifeData): Review {
-  if (!isRecord(payload) || !isRecord(payload.ending)) {
-    const meta = getScenarioLabel(current.scenario);
-    return {
-      ...demoReview,
-      age: current.age,
-      facts: [current.occupation, `在${current.city}生活过`, "回顾暂时没有生成"],
-      moments: [],
-      observation: "这一生的回顾暂时没有生成，但你做过的选择已经留在这段人生里。",
-      question: getScenarioReviewQuestion(current.scenario),
-      modeLabel: meta.label,
-      modeDetail: meta.detail,
-    };
-  }
-  const ending = payload.ending;
-  const facts = isRecord(ending.facts) ? ending.facts : {};
-  const highlights = Array.isArray(ending.highlights) ? ending.highlights : [];
-  const patterns = Array.isArray(ending.patterns) ? ending.patterns : [];
-  const moments = highlights.flatMap((item) => {
-    if (!isRecord(item)) return [];
-    const age = typeof item.age === "number" ? `${item.age} 岁，` : "";
-    const title = getString(item.title, "一次重要的选择");
-    return [`${age}${title}。`];
-  });
-  const eventCount = typeof facts.events === "number" ? `经历 ${facts.events} 个重要人生事件` : "经历许多重要的选择";
-  return {
-    age: typeof ending.age === "number" ? ending.age : demoReview.age,
-    death: getString(ending.death, demoReview.death),
-    facts: [getString(facts.occupation, current.occupation), `在${getString(facts.city, current.city)}生活过`, eventCount],
-    moments: moments.length ? moments : demoReview.moments,
-    observation: patterns.filter((item): item is string => typeof item === "string").join(" ") || demoReview.observation,
-    question: getScenarioReviewQuestion(current.scenario),
-    modeLabel: getScenarioLabel(current.scenario).label,
-    modeDetail: getScenarioLabel(current.scenario).detail,
-  };
-}
-
-export default function Home() {
+export default function StartPage() {
   const router = useRouter();
-  const pendingStartKey = useRef("");
-  function clearPendingStart() {
-    pendingStartKey.current = "";
-    try { sessionStorage.removeItem("findjoy:pending-start"); } catch { /* 内存幂等键仍可用。 */ }
-  }
-  const [phase, setPhase] = useState<Phase>("start");
-  const [life, setLife] = useState<LifeData>(demoLife);
-  const [review, setReview] = useState<Review>(demoReview);
-  const [isLoading, setIsLoading] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(defaultModelConfig);
   const [modelConfigMode, setModelConfigMode] = useState<ModelConfigStatus["mode"]>("local");
   const [settingsApiKey, setSettingsApiKey] = useState("");
@@ -232,13 +55,12 @@ export default function Home() {
   const [showGenderDialog, setShowGenderDialog] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLives, setHistoryLives] = useState<LifeSummary[] | null>(null);
-  const [historyDetail, setHistoryDetail] = useState<import("../lib/life").LifeState | null>(null);
-  const [requestError, setRequestError] = useState("");
+  const [historyDetail, setHistoryDetail] = useState<LifeState | null>(null);
   const [resumableLife, setResumableLife] = useState<LifeView | null>(null);
-  const [isResuming, setIsResuming] = useState(false);
-  const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
   const [pendingStart, setPendingStart] = useState<StartSelection>({ mode: "normal" });
+  const [isStarting, setIsStarting] = useState(false);
   const musicEnabled = useMusicEnabledPreference();
+  const music = useAmbientMusic(musicSceneFor({ phase: "start" }));
 
   useEffect(() => {
     let cancelled = false;
@@ -255,15 +77,29 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // timePassed 是流式 JSON 的第一个字段：一旦到达，顶栏年龄立即显示落地年龄（旧年龄 + timePassed），
-  // 不必等整段 story/choices 流完；落地年龄与 life.ts 的 applyNextEvent 保持一致（上限 110 岁）。
-  const displayAge = isLoading && typeof streamingEvent.timePassed === "number"
-    ? Math.min(110, life.age + streamingEvent.timePassed)
-    : life.age;
-
-  const musicPhase = phase === "birth" ? "start" : phase;
-  const musicScene = musicSceneFor({ phase: musicPhase, scenario: life.scenario, eventType: life.eventType });
-  const music = useAmbientMusic(musicScene);
+  // 断点恢复：本地记住最近一局，若仍在世就在开始页提供"继续"入口。
+  useEffect(() => {
+    let cancelled = false;
+    const lifeId = readActiveLifeId();
+    if (!lifeId) return;
+    async function loadResumable() {
+      try {
+        const response = await fetch(`${API_BASE}/api/life/${lifeId}`);
+        if (!response.ok) {
+          forgetActiveLife();
+          return;
+        }
+        const payload = (await response.json()) as { state?: LifeState };
+        if (!payload.state || payload.state.dead === true) {
+          forgetActiveLife();
+          return;
+        }
+        if (!cancelled) setResumableLife(buildLifeView(payload.state));
+      } catch { /* 网络失败不打扰，下次再来 */ }
+    }
+    loadResumable();
+    return () => { cancelled = true; };
+  }, []);
 
   function toggleMusic() {
     const next = !musicEnabled;
@@ -272,218 +108,24 @@ export default function Home() {
     else music.stop();
   }
 
-  function startMusicIfEnabled() {
-    if (musicEnabled) music.start();
+  function handleStart(selection: StartSelection) {
+    setPendingStart(selection);
+    setShowGenderDialog(true);
   }
 
-  async function requestLife(url: string, body?: Record<string, unknown>, idempotencyKey?: string) {
-    setIsLoading(true);
-    setRequestError("");
-    setStreamingEvent({ story: "", title: "", choices: [] });
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
-        signal: AbortSignal.timeout(LIFE_REQUEST_TIMEOUT_MS),
-        body: JSON.stringify({ ...(body ?? {}), modelConfig }),
-      });
-      if (response.status === 401) {
-        router.push("/login");
-        return null;
-      }
-      if (response.status === 402) {
-        router.push("/plans");
-        return null;
-      }
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string; code?: string; operationId?: string } | null;
-        if (payload?.code === "START_PENDING" && payload.operationId) {
-          for (let attempt = 0; attempt < 30; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const statusResponse = await fetch(`${API_BASE}/api/life/operations/${encodeURIComponent(payload.operationId)}`);
-            if (!statusResponse.ok) break;
-            const result = await statusResponse.json() as {status:string;state?:unknown};
-            if (result.status === "complete" && result.state) return {state:result.state};
-            if (result.status === "failed") { clearPendingStart(); break; }
-          }
-        }
-        if (payload?.code === "START_FAILED" || payload?.code === "IDEMPOTENCY_CONFLICT") clearPendingStart();
-        throw new Error(payload?.error || "人生服务暂时不可用，请稍后重试。");
-      }
-      if (response.headers.get("content-type")?.includes("application/json")) return (await response.json()) as unknown;
-      if (!response.body) throw new Error("Life stream unavailable");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let generated = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parsed = parseSseMessages(buffer);
-        buffer = parsed.remainder;
-        for (const message of parsed.messages) {
-          if (message.event === "status") {
-            // status 仅作服务端流式开始信号；不再下发背景/城市预览，直接进入事件页
-          } else if (message.event === "token") {
-            const token = JSON.parse(message.data) as { text?: string };
-            if (typeof token.text === "string") {
-              generated += token.text;
-              setStreamingEvent(readStreamedEvent(generated));
-            }
-          } else if (message.event === "retry") {
-            generated = "";
-            setStreamingEvent({ story: "", title: "", choices: [] });
-          } else if (message.event === "complete") {
-            return JSON.parse(message.data) as unknown;
-          } else if (message.event === "error") {
-            const payload = JSON.parse(message.data) as { error?: string; code?: string };
-            if (payload.code === "START_FAILED") clearPendingStart();
-            throw new Error(payload.error ?? "Life service unavailable");
-          }
-        }
-      }
-      throw new Error("Life stream ended before completion");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "TimeoutError") {
-        setRequestError("模型响应超时（超过 90 秒），请稍后重试或更换模型。");
-      } else {
-        setRequestError(error instanceof Error && error.message ? error.message : "人生服务暂时不可用，请检查模型设置后重试。");
-      }
-      return null;
-    } finally {
-      setIsLoading(false);
-      setStreamingEvent({ story: "", title: "", choices: [] });
-    }
+  function startLife(gender: Gender) {
+    if (isStarting) return;
+    setIsStarting(true);
+    writePendingStart({ gender, selection: pendingStart, key: crypto.randomUUID() });
+    router.push("/play");
   }
 
-  async function startLife(gender: Gender) {
-    setShowGenderDialog(false);
-    const preview = previewStart(pendingStart);
-    setLife({
-      ...demoLife,
-      scenario: preview.scenario,
-      age: preview.age,
-      city: preview.city ?? demoLife.city,
-      eventTitle: "",
-      story: "",
-      choices: [],
-    });
-    setPhase("event");
-    startMusicIfEnabled();
-    let startKey = pendingStartKey.current;
-    try { startKey ||= sessionStorage.getItem("findjoy:pending-start") ?? ""; } catch { /* storage unavailable */ }
-    startKey ||= crypto.randomUUID();
-    pendingStartKey.current = startKey;
-    try { sessionStorage.setItem("findjoy:pending-start", startKey); } catch { /* 内存键保持本次重试幂等。 */ }
-    const payload = await requestLife(`${API_BASE}/api/life/start`, { gender, ...pendingStart }, startKey);
-    if (!payload) {
-      setPhase("start");
-      music.stop();
-      return;
-    }
-    clearPendingStart();
-    const next = parseLife(payload);
-    setLife(next);
-    setResumableLife(null);
-    setHistoryLives(null);
-    try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* storage unavailable */ }
-  }
-
-  async function choose(choiceId: string) {
-    const choice = life.choices.find((item) => item.id === choiceId);
-    startMusicIfEnabled();
-    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { choice, expectedEventId: life.eventId });
-    if (isRecord(payload) && payload.ended === true) {
-      const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
-      setReview(parseReview(ending, life));
-      setPhase("review");
-      try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
-    } else if (payload) {
-      const next = parseLife(payload);
-      setLife(next);
-      setHistoryLives(null);
-      try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* ignore */ }
-    }
-  }
-
-  async function continueLife() {
-    startMusicIfEnabled();
-    const payload = await requestLife(`${API_BASE}/api/life/${life.lifeId}/next`, { expectedEventId: life.eventId });
-    if (isRecord(payload) && payload.ended === true) {
-      const ending = await requestLife(`${API_BASE}/api/life/${life.lifeId}/ending`);
-      setReview(parseReview(ending, life));
-      setPhase("review");
-      try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
-    } else if (payload) {
-      const next = parseLife(payload);
-      setLife(next);
-      setHistoryLives(null);
-      try { window.localStorage.setItem(ACTIVE_LIFE_KEY, next.lifeId); } catch { /* ignore */ }
-    }
-  }
-
-  function restart() {
-    clearPendingStart();
-    setLife(demoLife);
-    setReview(demoReview);
-    setPendingStart({ mode: "normal" });
-    setRequestError("");
-    setHistoryLives(null);
-    setPhase("start");
-  }
-
-  // 断点恢复：页面加载时读 localStorage 记住的最近一局，若该局仍在世则提供"继续"入口。
-  useEffect(() => {
-    let cancelled = false;
-    async function loadResumable() {
-      let lifeId: string | null = null;
-      try {
-        lifeId = window.localStorage.getItem(ACTIVE_LIFE_KEY);
-      } catch { /* storage unavailable */ }
-      if (!lifeId) return;
-      try {
-        const response = await fetch(`${API_BASE}/api/life/${lifeId}`);
-        const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
-        if (!cancelled && payload.state && payload.state.dead !== true) {
-          setResumableLife(buildLifeView(payload.state));
-        } else if (!cancelled) {
-          // 该局已结束或不存在：清除记忆，避免每次都提示
-          try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
-        }
-      } catch { /* 网络失败不打扰，下次再来 */ }
-    }
-    loadResumable();
-    return () => { cancelled = true; };
-  }, []);
-
-  // 恢复指定的一局人生：拉取状态并进入事件页。失败或已结束时留在原处并给出提示。
-  async function resumeLife(lifeId?: string) {
-    const targetId = lifeId ?? resumableLife?.lifeId;
-    if (!targetId || isResuming) return;
-    setIsResuming(true);
-    startMusicIfEnabled();
-    setRequestError("");
+  function resumeLife(lifeId?: string) {
+    const target = lifeId ?? resumableLife?.lifeId;
+    if (!target) return;
     setShowHistory(false);
-    setPhase("event");
-    try {
-      const response = await fetch(`${API_BASE}/api/life/${targetId}`);
-      const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
-      if (!payload.state || payload.state.dead === true) {
-        setRequestError("这一局人生已经结束，无法继续。");
-        setPhase("start");
-        setResumableLife(null);
-        try { window.localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* ignore */ }
-        return;
-      }
-      setLife(buildLifeView(payload.state));
-      try { window.localStorage.setItem(ACTIVE_LIFE_KEY, targetId); } catch { /* ignore */ }
-    } catch {
-      setRequestError("恢复这一局人生失败，请重试。");
-      setPhase("start");
-    } finally {
-      setIsResuming(false);
-    }
+    setHistoryDetail(null);
+    router.push(`/play?life=${encodeURIComponent(target)}`);
   }
 
   async function openHistory() {
@@ -502,7 +144,7 @@ export default function Home() {
   async function loadLifeDetail(lifeId: string) {
     try {
       const response = await fetch(`${API_BASE}/api/life/${lifeId}`);
-      const payload = (await response.json()) as { state?: import("../lib/life").LifeState };
+      const payload = (await response.json()) as { state?: LifeState };
       if (payload.state) setHistoryDetail(payload.state);
     } catch { /* keep list visible */ }
   }
@@ -527,34 +169,18 @@ export default function Home() {
     }
   }
 
-  const modeMeta = getScenarioLabel(life.scenario);
   const historyMeta = historyDetail ? getScenarioLabel(getLifeScenario(historyDetail)) : null;
 
   return (
-    <main className={`page page--${phase}`}>
-      <header className={`topbar${phase === "event" ? " topbar--event" : ""}`} aria-label="Primary navigation">
-        {phase === "event" ? (
-          <>
-            <div className="event-mode">
-              <span className="mode-chip">{modeMeta.label}</span>
-              <span className="event-mode-detail">{modeMeta.detail}{life.city ? ` · ${life.city}` : ""}</span>
-            </div>
-            <p className="current-age">{displayAge} 岁</p>
-            <div className="topbar-actions"><AccountNav>
-              <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />
-            </AccountNav></div>
-          </>
-        ) : (
-          <>
-            <BrandLogo href="/showcase" className="wordmark" />
-            <div className="topbar-actions"><AccountNav>
-              <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
-              <button className="settings-button" onClick={openHistory}>过往人生</button>
-              <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>
-              <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} />
-            </AccountNav></div>
-          </>
-        )}
+    <main className="page page--start">
+      <header className="topbar" aria-label="Primary navigation">
+        <BrandLogo href="/showcase" className="wordmark" />
+        <div className="topbar-actions"><AccountNav>
+          <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
+          <button className="settings-button" onClick={openHistory}>过往人生</button>
+          <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>
+          <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} />
+        </AccountNav></div>
       </header>
 
       {showSettings && (
@@ -573,8 +199,6 @@ export default function Home() {
         </section>
         </>
       )}
-
-      {requestError && <p className="request-error" role="alert">{requestError}</p>}
 
       {showHistory && (
         <div className="history-modal" role="dialog" aria-modal="true" aria-label="过往人生" onClick={(event) => { if (event.target === event.currentTarget) { setHistoryDetail(null); setShowHistory(false); } }}>
@@ -631,11 +255,9 @@ export default function Home() {
                           <span className="history-item-text"><span className="history-item-mode">{item.modeLabel || "普通模式"}</span>{item.city} · {item.age} 岁 · {item.events} 个节点</span>
                           <span className={`history-item-status ${item.dead ? "is-dead" : ""}`}>{item.dead ? "已故" : "在世"}</span>
                         </button>
-                        {!item.dead && (
-                          <button className="history-item-resume" onClick={() => resumeLife(item.lifeId)} disabled={isResuming}>
-                            {isResuming ? "恢复中…" : "继续"}
-                          </button>
-                        )}
+                        {item.dead
+                          ? <Link className="history-item-resume" href={`/review/${item.lifeId}`}>回顾</Link>
+                          : <button className="history-item-resume" onClick={() => resumeLife(item.lifeId)}>继续</button>}
                       </div>
                     ))}
               </div>
@@ -650,13 +272,13 @@ export default function Home() {
           <div className="gender-modal-card">
             <h2 id="gender-title">选择你的性别</h2>
             <div className="gender-options">
-              <button className="gender-option" type="button" onClick={() => startLife("female")} aria-label="选择女性">
+              <button className="gender-option" type="button" onClick={() => startLife("female")} aria-label="选择女性" disabled={isStarting}>
                 <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
                   <circle cx="12" cy="7" r="4.2" />
                   <path d="M12 11.2V21M8.6 16.8h6.8" />
                 </svg>
               </button>
-              <button className="gender-option" type="button" onClick={() => startLife("male")} aria-label="选择男性">
+              <button className="gender-option" type="button" onClick={() => startLife("male")} aria-label="选择男性" disabled={isStarting}>
                 <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="9.6" cy="14.4" r="4.4" />
                   <path d="M12.8 11.2 21 3M16.5 3H21v4.5" />
@@ -668,86 +290,18 @@ export default function Home() {
         </div>
       )}
 
-      {phase === "start" && (
-        <section className="intro intro--modes" aria-labelledby="intro-title">
-          <p className="eyebrow">FIND YOUR WAY TO JOY</p>
-          <h1 id="intro-title">人生没有答案，只有选择</h1>
-          <p className="intro-copy"><span>这一生会从这里开始，而幸福不在别处，就在你的每一次选择里。</span><span className="intro-copy-line--nowrap">阿德勒说，决定我们的不是经历，而是我们赋予经历的意义——没有统一标准，你怎样定义，就有怎样的幸福。</span><span>直到终点回望时，你看见它如何一点点，变成了你自己。</span></p>
-          <ModeLauncher
-            disabled={isLoading || isResuming}
-            resumableLife={resumableLife}
-            isResuming={isResuming}
-            onStart={(selection) => {
-              setPendingStart(selection);
-              setShowGenderDialog(true);
-            }}
-            onResume={() => resumeLife()}
-          />
-        </section>
-      )}
-
-      {phase === "event" && (
-        <section className="life-event" aria-labelledby="event-title" aria-busy={isLoading}>
-          <div className="event-story">
-            <div className="event-body" aria-live="polite">
-              {(isLoading ? streamingEvent.story : life.story).split("\n\n").filter(Boolean).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-              {isLoading && !streamingEvent.story && <span className="story-cursor" aria-label="正在生成" />}
-            </div>
-            <p className="event-tagline" id="event-title">
-              {(() => {
-                const title = isLoading ? streamingEvent.title : life.eventTitle;
-                return title ? `“${title}”` : "";
-              })()}
-            </p>
-          </div>
-          <div className="decision-area" aria-label="人生决策">
-            {life.age < CHILDHOOD_BOUNDARY ? (
-              <>
-                <p className="decision-label">命运在继续。</p>
-                <div className="choice-cards">
-                  {[0, 1, 2].map((index) => (
-                    <div className="choice-card choice-card--placeholder" key={index} aria-hidden="true">
-                      <span className="choice-card-back">?</span>
-                    </div>
-                  ))}
-                </div>
-                <button className="continue-button" onClick={continueLife} disabled={isLoading}>
-                  {isLoading ? "命运正在展开…" : "继续"}
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="decision-label">做出你的选择。</p>
-                <div className="choice-cards">
-                  {["A", "B", "C"].map((id, index) => {
-                    const choice = isLoading ? streamingEvent.choices[index] : life.choices[index];
-                    return (
-                      <button className={`choice-card ${choice ? "choice-card--revealed" : ""}`} key={id} disabled={!choice || isLoading} onClick={() => choice && choose(choice.id)}>
-                        <span className="choice-card-back" aria-hidden="true">?</span>
-                        <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{`“${choice?.text ?? ""}”`}</strong><b aria-hidden="true">↗</b></span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-            <button className="rebirth-button" onClick={restart} type="button">重生</button>
-          </div>
-        </section>
-      )}
-
-      {phase === "review" && (
-        <section className="review" aria-labelledby="review-title">
-          <p className="eyebrow">A LIFE REMEMBERED</p>
-          <p className="review-mode">{review.modeLabel} · {review.modeDetail}</p>
-          <h1 id="review-title">你的<br />一生。</h1>
-          <p className="lived">享年 <strong>{review.age}</strong> 岁<span className="death-cause">，{review.death}</span></p>
-          <div className="review-section facts"><p className="section-label">这一生</p>{review.facts.map((fact) => <p key={fact}>{fact}</p>)}</div>
-          <div className="review-section"><p className="section-label">改变方向的时刻</p>{review.moments.map((moment) => <p className="moment" key={moment}>{moment}</p>)}</div>
-          <div className="reflection"><p className="section-label">回望</p><p>{review.observation}</p></div>
-          <div className="final-question"><p>{review.question}</p><div><button className="text-button" onClick={restart}>我愿意。</button><button className="primary-button" onClick={restart}>我想再活一次 <span aria-hidden="true">↗</span></button></div></div>
-        </section>
-      )}
+      <section className="intro intro--modes" aria-labelledby="intro-title">
+        <p className="eyebrow">FIND YOUR WAY TO JOY</p>
+        <h1 id="intro-title">人生没有答案，只有选择</h1>
+        <p className="intro-copy"><span>这一生会从这里开始，而幸福不在别处，就在你的每一次选择里。</span><span className="intro-copy-line--nowrap">阿德勒说，决定我们的不是经历，而是我们赋予经历的意义——没有统一标准，你怎样定义，就有怎样的幸福。</span><span>直到终点回望时，你看见它如何一点点，变成了你自己。</span></p>
+        <ModeLauncher
+          disabled={isStarting}
+          resumableLife={resumableLife}
+          isResuming={false}
+          onStart={handleStart}
+          onResume={() => resumeLife()}
+        />
+      </section>
     </main>
   );
 }
