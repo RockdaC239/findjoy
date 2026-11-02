@@ -28,7 +28,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgreSQL schema migration com
       expect((await pool.query("SELECT to_regclass('schema_migrations') AS name")).rows).toEqual([{ name: null }]);
       await pool.query("DROP TABLE joy_accounts");
       await Promise.all([migrate(), migrate()]);
-      expect((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows).toEqual([{ version: "001_initial.sql" }, { version: "002_generation_admissions.sql" }]);
+      expect((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows).toEqual([{ version: "001_initial.sql" }, { version: "002_generation_admissions.sql" }, { version: "003_payment_review.sql" }]);
       await pool.query("INSERT INTO joy_accounts(user_id,available) VALUES ('owner',100)");
       await migrate();
       expect((await pool.query("SELECT available FROM joy_accounts")).rows).toEqual([{ available: 100 }]);

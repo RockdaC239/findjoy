@@ -90,6 +90,10 @@ export const commerceStore = {
     if (!["CREATED","PAYING","UNKNOWN","CLOSED","FAILED"].includes(status)) return;
     await query("UPDATE joy_orders SET status=$1 WHERE id=$2 AND status!='SUCCEEDED'", [status,id]);
   },
+  async queuePaymentReviewEvent(eventId: string,eventType: string,orderId: string|null,payload: string,now=Date.now()): Promise<boolean> {
+    if (!eventId || eventId.length > 200 || !eventType || eventType.length > 80 || payload.length > 65536) throw new Error("支付复核事件参数无效");
+    return (await query("INSERT INTO joy_payment_review_events(event_id,event_type,order_id,payload,status,created_at) VALUES ($1,$2,$3,$4,'pending',$5) ON CONFLICT(event_id) DO NOTHING", [eventId,eventType,orderId,payload,now])).rowCount===1;
+  },
   async confirmDemo(id: string,userId: string): Promise<void> {
     await query("UPDATE joy_orders SET status='DEMO_COMPLETE' WHERE id=$1 AND user_id=$2 AND demo=1", [id,userId]);
   },

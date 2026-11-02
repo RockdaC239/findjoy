@@ -7,7 +7,7 @@ import path from "node:path";
 const tables = ["identity_users","identity_links","identity_sessions","identity_login_transactions",
   "lives","transcripts","joy_accounts","joy_ledger","joy_orders","joy_order_checks",
   "joy_payment_attempts","joy_payment_events","joy_life_operations","joy_generation_locks",
-  "joy_endings","joy_rate_limits","joy_generation_admissions","joy_migrations"];
+  "joy_endings","joy_rate_limits","joy_generation_admissions","joy_payment_review_events","joy_migrations"];
 const optionalColumns = new Set(["lives.user_id","identity_users.phone","identity_users.custom_name","joy_life_operations.cost_points"]);
 const quote = value => `"${value.replaceAll('"','""')}"`;
 const normalized = value => value === null ? null : String(value);

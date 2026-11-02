@@ -68,7 +68,7 @@ describe("deployment preflight static configuration", () => {
 });
 
 describe("deployment preflight database metadata", () => {
-  const expected = [{ version: "001_initial.sql", checksum: "a" }, { version: "002_generation_admissions.sql", checksum: "b" }];
+  const expected = [{ version: "001_initial.sql", checksum: "a" }, { version: "002_generation_admissions.sql", checksum: "b" }, { version: "003_payment_review.sql", checksum: "c" }];
   const metadata = {
     serverVersionNum: 150019, serverVersion: "15.19", database: "findjoy", inRecovery: false,
     role: { name: "findjoy_app", superuser: false, createdb: false, createrole: false },

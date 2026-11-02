@@ -78,16 +78,19 @@ export async function processPaymentWebhook(headers:Headers,raw:Uint8Array):Prom
   const event:unknown=JSON.parse(Buffer.from(raw).toString("utf8"));
   if(!event || typeof event!=="object" || Array.isArray(event))throw new Error("支付事件格式错误");
   const data=event as Record<string,unknown>;
-  if(data.eventId!==eventId || data.eventType!==eventType || data.appId!==config.appId || typeof data.outTradeNo!=="string" || !Number.isSafeInteger(data.grossAmountFen))throw new Error("支付事件核对失败");
+  if(data.eventId!==eventId || data.eventType!==eventType || data.appId!==config.appId)throw new Error("支付事件核对失败");
   if(eventType==="PAYMENT_SUCCEEDED"){
-    if(data.status!=="SUCCEEDED" || data.eventAmountFen!==data.grossAmountFen)throw new Error("支付成功金额核对失败");
+    if(typeof data.outTradeNo!=="string" || !Number.isSafeInteger(data.grossAmountFen) || data.status!=="SUCCEEDED" || data.eventAmountFen!==data.grossAmountFen)throw new Error("支付成功金额核对失败");
     await commerceStore.confirmPaid(data.outTradeNo,Number(data.grossAmountFen),`${config.appId}:${data.outTradeNo}`,eventId);
   }else if(eventType==="PAYMENT_CLOSED" || eventType==="PAYMENT_FAILED"){
+    if(typeof data.outTradeNo!=="string" || !data.outTradeNo)throw new Error("支付事件缺少订单号");
     // 查单补偿会确认最终状态，关闭/失败不能覆盖已成功订单。
     await commerceStore.setOrderStatus(data.outTradeNo,eventType==="PAYMENT_CLOSED"?"CLOSED":"FAILED");
   }else{
-    // 退款须先明确权益回收规则；不确认未处理的财务事件，保留平台重试及人工核对。
-    throw new Error("退款事件需人工核对");
+    // 退款/拒付等财务事件先落库等待人工审核，绝不自动回收积分或改订单。
+    // 返回成功可停止平台无效重试，同时保留原始签名校验后的内容供对账复盘。
+    await commerceStore.queuePaymentReviewEvent(eventId,eventType,typeof data.outTradeNo==="string"?data.outTradeNo:null,JSON.stringify(data),Date.now());
+    console.error(`[payments] ${eventType} queued for manual review`);
   }
 }
 

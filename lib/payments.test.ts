@@ -6,6 +6,7 @@ import * as xiaodou from "./xiaodou";
 import { createPayment,payerIp,processPaymentWebhook,validatePayUrl } from "./payments";
 import { identityStore } from "./identity-store";
 import { commerceStore } from "./commerce-store";
+import { query } from "./database";
 import { lifeStore } from "./life-store";
 
 const keys=generateKeyPairSync("rsa",{modulusLength:2048,publicKeyEncoding:{type:"spki",format:"pem"},privateKeyEncoding:{type:"pkcs8",format:"pem"}});
@@ -22,10 +23,10 @@ describe("payment trust boundary",()=>{
     vi.spyOn(xiaodou,"xiaodouConfig").mockReturnValue({base:new URL("https://api.example"),appId:"our-app",keyId:"merchant",privateKey:keys.privateKey,keys:{platform:keys.publicKey}});
     const id=(await identityStore.resolveUser("https://auth.example","alice")).id;
     const order=await commerceStore.createOrder(id,{id:"test",name:"test",credits:3,amountFen:790,demo:false},"once","ALIPAY_H5");
-    function event(overrides:Record<string,unknown>={}){
-      const data={eventId:"event-1",eventType:"PAYMENT_SUCCEEDED",appId:"our-app",outTradeNo:order.id,grossAmountFen:790,eventAmountFen:790,status:"SUCCEEDED",...overrides};
+    function event(overrides:Record<string,unknown>={},eventType="PAYMENT_SUCCEEDED",eventId="event-1"){
+      const data={eventId,eventType,appId:"our-app",outTradeNo:order.id,grossAmountFen:790,eventAmountFen:790,status:"SUCCEEDED",...overrides};
       const raw=Buffer.from(JSON.stringify(data));
-      const headers=new Headers({"X-XD-Webhook-Event-Id":"event-1","X-XD-Webhook-Event-Type":"PAYMENT_SUCCEEDED","X-XD-Webhook-Timestamp":Math.floor(Date.now()/1000).toString(),"X-XD-Webhook-Nonce":"fresh","X-XD-Webhook-Key-Id":"platform"});
+      const headers=new Headers({"X-XD-Webhook-Event-Id":eventId,"X-XD-Webhook-Event-Type":eventType,"X-XD-Webhook-Timestamp":Math.floor(Date.now()/1000).toString(),"X-XD-Webhook-Nonce":"fresh","X-XD-Webhook-Key-Id":"platform"});
       headers.set("X-XD-Webhook-Signature",sign("RSA-SHA256",Buffer.from(xiaodou.webhookSigningString(headers,raw)),keys.privateKey).toString("base64"));
       return {raw,headers};
     }
@@ -35,6 +36,11 @@ describe("payment trust boundary",()=>{
     expect((await commerceStore.balance(id)).available).toBe(0);
     await processPaymentWebhook(input.headers,input.raw);await processPaymentWebhook(input.headers,input.raw);
     expect((await commerceStore.balance(id)).available).toBe(3);
+    const refund=event({outTradeNo:order.id,grossAmountFen:790},"REFUND_SUCCEEDED","refund-1");
+    await processPaymentWebhook(refund.headers,refund.raw);
+    await processPaymentWebhook(refund.headers,refund.raw);
+    expect((await commerceStore.balance(id)).available).toBe(3);
+    expect((await query("SELECT event_type,order_id,status FROM joy_payment_review_events WHERE event_id='refund-1'")).rows).toEqual([{event_type:"REFUND_SUCCEEDED",order_id:order.id,status:"pending"}]);
   });
 });
 

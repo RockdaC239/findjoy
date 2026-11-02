@@ -8,7 +8,7 @@ export const runtime="nodejs";
 const tables=["identity_users","identity_links","identity_sessions","identity_login_transactions",
   "lives","transcripts","joy_accounts","joy_ledger","joy_orders","joy_order_checks","joy_payment_attempts",
   "joy_payment_events","joy_life_operations","joy_generation_locks","joy_endings","joy_rate_limits",
-  "joy_migrations","joy_generation_admissions"];
+  "joy_migrations","joy_generation_admissions","joy_payment_review_events"];
 let expected:Promise<Array<{version:string;checksum:string}>> | undefined;
 function expectedMigrations() {
   return expected ??= (async()=>{
