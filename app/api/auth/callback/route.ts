@@ -9,15 +9,15 @@ import { identityStore } from "../../../../lib/identity-store";
 
 export async function GET(request: Request) {
   const jar = await cookies();
-  const pending = identityStore.consumeLogin(jar.get(LOGIN_COOKIE)?.value ?? "");
   try {
+    const pending = await identityStore.consumeLogin(jar.get(LOGIN_COOKIE)?.value ?? "");
     if (!pending) throw new Error("登录已过期");
     const identity = await authenticateCallback(request, pending);
-    const user = identityStore.resolveUser(identity.issuer, identity.subject, identity.displayName, identity.phone);
+    const user = await identityStore.resolveUser(identity.issuer, identity.subject, identity.displayName, identity.phone);
     commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
     const previous = jar.get(SESSION_COOKIE)?.value;
-    if (previous) identityStore.revokeSession(previous);
-    const session = identityStore.createSession(user.id);
+    if (previous) await identityStore.revokeSession(previous);
+    const session = await identityStore.createSession(user.id);
     const response = NextResponse.redirect(new URL(safeReturnTo(pending.returnTo), appOrigin()));
     response.cookies.set(SESSION_COOKIE, session.token, cookieOptions(30 * 24 * 60 * 60));
     response.cookies.set(LOGIN_COOKIE, "", cookieOptions(0));

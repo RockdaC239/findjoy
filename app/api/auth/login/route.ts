@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if (!takeRateLimit(request.headers.get("x-real-ip") ?? "local", "login", 20, 600000)) return NextResponse.json({error:"登录请求过于频繁，请稍后重试"},{status:429});
   try {
     const { url, pending } = await authorizationRequest(safeReturnTo(new URL(request.url).searchParams.get("returnTo")));
-    const token = identityStore.beginLogin(pending);
+    const token = await identityStore.beginLogin(pending);
     const response = NextResponse.redirect(url);
     response.cookies.set(LOGIN_COOKIE, token, cookieOptions(600));
     response.headers.set("Cache-Control", "no-store");

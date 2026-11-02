@@ -1,3 +1,5 @@
+import { setupTestPostgres } from "./test-postgres";
+setupTestPostgres();
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ currentUser: vi.fn() }));
 vi.mock("./auth", () => ({ currentUser: mocks.currentUser, appOrigin: () => "https://findfire.club" }));
@@ -11,12 +13,12 @@ const request = (body: unknown, origin = "https://findfire.club") => new Request
 
 it("requires login, checks origin, validates nickname and updates only the session owner", async () => {
   expect((await PATCH(request({ displayName: "新昵称" }))).status).toBe(401);
-  const user = identityStore.resolveUser("https://auth.example", "owner");
-  const other = identityStore.resolveUser("https://auth.example", "other");
+  const user = (await identityStore.resolveUser("https://auth.example", "owner"));
+  const other = (await identityStore.resolveUser("https://auth.example", "other"));
   mocks.currentUser.mockResolvedValue(user);
   expect((await PATCH(request({ displayName: "新昵称" }, "https://evil.example"))).status).toBe(403);
   for (const displayName of [null, "", "a".repeat(81), "a\nb"]) expect((await PATCH(request({ displayName }))).status).toBe(400);
   expect((await PATCH(request({ displayName: "新昵称", userId: other.id }))).status).toBe(200);
-  expect(identityStore.getSession(identityStore.createSession(user.id).token)?.displayName).toBe("新昵称");
-  expect(identityStore.getSession(identityStore.createSession(other.id).token)?.displayName).toBe("探索者");
+  expect((await identityStore.getSession((await identityStore.createSession(user.id)).token))?.displayName).toBe("新昵称");
+  expect((await identityStore.getSession((await identityStore.createSession(other.id)).token))?.displayName).toBe("探索者");
 });

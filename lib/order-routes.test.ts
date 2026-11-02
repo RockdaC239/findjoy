@@ -1,3 +1,5 @@
+import { setupTestPostgres } from "./test-postgres";
+setupTestPostgres();
 import {beforeEach,describe,expect,it,vi} from "vitest";
 const mocks=vi.hoisted(()=>({currentUser:vi.fn()}));
 vi.mock("./auth",()=>({currentUser:mocks.currentUser,appOrigin:()=>"https://findfire.club"}));
@@ -17,7 +19,7 @@ describe("order API ownership and authoritative pricing",()=>{
   expect((await createOrder(req)).status).toBe(403);
  });
  it("ignores client prices, replays a purchase once, and isolates demo confirmation",async()=>{
-  const id=identityStore.resolveUser("https://auth.example","alice").id;mocks.currentUser.mockResolvedValue({id});
+  const id=(await identityStore.resolveUser("https://auth.example","alice")).id;mocks.currentUser.mockResolvedValue({id});
   const request=()=>new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":"buy"},body:JSON.stringify({productId:"light",channel:"WECHAT_H5",amountFen:1,credits:999})});
   const first=await(await createOrder(request())).json();
   const second=await(await createOrder(request())).json();
@@ -32,7 +34,7 @@ describe("order API ownership and authoritative pricing",()=>{
 
 
 it("rejects Alipay before creating a new order or retrying an existing payment",async()=>{
- const id=identityStore.resolveUser("https://auth.example","wechat-only").id;mocks.currentUser.mockResolvedValue({id});
+ const id=(await identityStore.resolveUser("https://auth.example","wechat-only")).id;mocks.currentUser.mockResolvedValue({id});
  const request=new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":"alipay-disabled"},body:JSON.stringify({productId:"light",channel:"ALIPAY_H5"})});
  expect((await createOrder(request)).status).toBe(400);expect(commerceStore.listOrders(id)).toHaveLength(0);
  const old=commerceStore.createOrder(id,{id:"old",name:"旧支付宝订单",credits:1,amountFen:1,demo:false},"old-alipay","ALIPAY_H5");

@@ -17,6 +17,6 @@ export async function PATCH(request: Request) {
   let body;
   try { body = await request.json(); } catch { return Response.json({ error: "请求格式无效" }, { status: 400 }); }
   if (!validDisplayName(body?.displayName)) return Response.json({ error: "昵称需为 1–80 个字符，且不能包含换行或控制字符" }, { status: 400 });
-  identityStore.updateDisplayName(user.id, body.displayName);
+  await identityStore.updateDisplayName(user.id, body.displayName);
   return Response.json({ displayName: body.displayName.trim() }, { headers: { "Cache-Control": "no-store" } });
 }

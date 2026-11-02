@@ -1,3 +1,5 @@
+import { setupTestPostgres } from "./test-postgres";
+setupTestPostgres();
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as xiaodou from "./xiaodou";
@@ -16,9 +18,9 @@ describe("payment trust boundary",()=>{
     expect(validatePayUrl("https://cashier.example/pay?token=opaque")).toBe("https://cashier.example/pay?token=opaque");
     for(const url of ["https://evil.test/pay","http://cashier.example/pay","https://user:pass@cashier.example/pay"])expect(()=>validatePayUrl(url)).toThrow();
   });
-  it("rejects forged, wrong-app and wrong-amount notifications and grants valid duplicate events once",()=>{
+  it("rejects forged, wrong-app and wrong-amount notifications and grants valid duplicate events once",async ()=>{
     vi.spyOn(xiaodou,"xiaodouConfig").mockReturnValue({base:new URL("https://api.example"),appId:"our-app",keyId:"merchant",privateKey:keys.privateKey,keys:{platform:keys.publicKey}});
-    const id=identityStore.resolveUser("https://auth.example","alice").id;
+    const id=(await identityStore.resolveUser("https://auth.example","alice")).id;
     const order=commerceStore.createOrder(id,{id:"test",name:"test",credits:3,amountFen:790,demo:false},"once","ALIPAY_H5");
     function event(overrides:Record<string,unknown>={}){
       const data={eventId:"event-1",eventType:"PAYMENT_SUCCEEDED",appId:"our-app",outTradeNo:order.id,grossAmountFen:790,eventAmountFen:790,status:"SUCCEEDED",...overrides};
@@ -38,7 +40,7 @@ describe("payment trust boundary",()=>{
 
 it("recovers the same payment attempt after its successful response was lost",async()=>{
  vi.stubEnv("FINDJOY_APP_ORIGIN","https://findfire.club");vi.stubEnv("XIAODOU_CASHIER_ORIGINS","https://cashier.example");
- const id=identityStore.resolveUser("https://auth.example","alice").id;
+ const id=(await identityStore.resolveUser("https://auth.example","alice")).id;
  const created=commerceStore.createOrder(id,{id:"test",name:"test",credits:1,amountFen:100,demo:false},"attempt-test","ALIPAY_H5");
  commerceStore.saveOrderRequest(created.id,JSON.stringify({outTradeNo:created.id}));
  const order=commerceStore.getOrder(created.id,id)!;
@@ -69,7 +71,7 @@ it("uses an explicit public payer IP only for loopback development",()=>{
 
 it("omits an HTTP local return URL while preserving the signed order and payment checks",async()=>{
  vi.stubEnv("NODE_ENV","development");vi.stubEnv("FINDJOY_APP_ORIGIN","http://localhost:3000");vi.stubEnv("FINDJOY_DEV_PAYER_IP","8.8.8.8");vi.stubEnv("XIAODOU_CASHIER_ORIGINS","https://cashier.example");
- const id=identityStore.resolveUser("https://auth.example","local-test").id;
+ const id=(await identityStore.resolveUser("https://auth.example","local-test")).id;
  const order=commerceStore.createOrder(id,{id:"test",name:"test",credits:1,amountFen:1,demo:false},"local-test","ALIPAY_H5");
  vi.spyOn(xiaodou,"xiaodouRequest").mockImplementation(async(_method,_path,body)=>{
   const payload=JSON.parse(body!);expect(payload).not.toHaveProperty("returnUrl");expect(payload.payerClientIp).toBe("8.8.8.8");expect(payload.amountFen).toBe(1);

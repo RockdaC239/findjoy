@@ -83,6 +83,14 @@ LLM_MODEL=deepseek-chat
 | `npm run typecheck` | 运行 TypeScript 类型检查 |
 | `npm run lint` | 运行 ESLint |
 
+登录和账户集成测试需要独立 PostgreSQL 测试库，通过 `TEST_DATABASE_URL` 显式提供；不要使用生产数据库。测试会在该库内创建并清理随机 schema，不隐式读取生产 `DATABASE_URL`。CI 已配置 PostgreSQL 15 测试服务。本地需先启动测试实例并创建测试库，再设置环境变量，例如：
+
+```bash
+export TEST_DATABASE_URL='postgresql://findjoy_test@127.0.0.1:55439/findjoy_test'
+```
+
+上例适用于已初始化的本机测试实例，数据库账号和端口按实际配置填写。未提供测试连接时，登录相关测试会明确失败，不会静默跳过。
+
 提交改动前，请确保以下命令全部通过：
 
 ```bash

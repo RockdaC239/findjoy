@@ -15,7 +15,7 @@ export default async function AccountPage() {
   const user = await currentUser();
   if (!user) redirect("/login?returnTo=%2Ffindjoy%2Faccount");
   commerceStore.expireOperations();
-  const phone = identityStore.getPhone(user.id);
+  const phone = await identityStore.getPhone(user.id);
   const orders = commerceStore.listOrders(user.id);
   const balance = commerceStore.balance(user.id);
   const ledger = commerceStore.ledger(user.id).slice(-10).reverse();

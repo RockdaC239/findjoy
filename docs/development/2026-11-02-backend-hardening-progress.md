@@ -69,3 +69,12 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 +- 独立测试 schema 中已验证：故意制造表冲突后没有残留半套表；两个命令并发安全；重复运行保留已有余额；负余额约束、身份外键和历史校验和拒绝有效。
 +- 配置 `TEST_DATABASE_URL` 后全套 208 项测试通过，lint、build、typecheck 通过。typecheck 首次与 build 并行时读取到正在重建的 `.next/types` 而失败，build 完成后顺序重跑通过；后续这两个检查顺序执行。
 +- 应用 store 尚未切换，不能仅运行此命令就认为完成迁移。存量数据导入、异步业务调用方、权限分离与 PostgreSQL 15 复验仍需继续。
+
+## 账号与会话存储接入 PostgreSQL
++
++- `identityStore` 已改为异步 PostgreSQL 操作，登录入口/回调/退出、昵称修改和账户资料读取已更新调用方；`currentUser` 的 async 返回自然等待会话查询。
++- 同一 issuer + subject 的首次登录使用事务级身份锁，并发生成同一个 UUID；会话仅存哈希，登录事务通过 DELETE RETURNING 原子消费，数据库异常不回退 SQLite。
++- 清理过期会话和登录事务单次最多 100 条，使用既有索引；请求路径不再建身份表或迁移字段。并发首次登录、一次性回调竞争、昵称保留、会话过期/撤销与手机号隔离均在真实 PostgreSQL 验证。
++- 测试新增每文件随机 schema 隔离；登录/账户相关测试必须显式配置独立 `TEST_DATABASE_URL`，未配置时报错，不使用生产 URL 兜底。README 已说明前置要求，GitHub Actions 新增 PostgreSQL 15.19 临时测试服务；尚未 push 或执行该 CI。
++- 配置测试库后全套 209 项测试、typecheck、lint、build 通过；本地仍为 PostgreSQL 14.23，15.19 的实际执行证据待补。
++- 这是迁移中的开发提交：身份已接 PostgreSQL，游戏与支付仍在 SQLite，禁止将此阶段直接部署到生产。接下来继续迁移业务 store 与调用方、导入存量数据；整体目标保持未完成。
