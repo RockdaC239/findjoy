@@ -40,13 +40,13 @@ Modes are scenario envelopes over one `LifeState` and one event loop, not four i
 
 ## Testing Guidelines
 
-前端开发必须同时适配桌面端和移动端，不能仅以桌面网页效果作为完成标准。新增或调整页面、导航、卡片、弹窗时，需检查手机上的排版、字号、触控目标、换行与间距；不得出现横向溢出、内容重叠、裁切或隐藏必要入口来迁就布局。允许导航换行时，容器高度必须随内容自适应。交付前至少在 375px、390px、768px 和 1440px 宽度验证布局与核心交互，并提供桌面和手机截图。
+前端开发必须同时适配桌面端和移动端，不能仅以桌面网页效果作为完成标准。新增或调整页面、导航、卡片、弹窗时，需注意不同尺寸下的排版、字号、触控目标、换行与间距；不得出现横向溢出、内容重叠、裁切或隐藏必要入口来迁就布局。允许导航换行时，容器高度必须随内容自适应。开发时注意手机、平板和桌面等多种尺寸的适配，不要求每次进行固定宽度的浏览器验收或提供截图；仅在 Owner 明确要求时截图。
 
 Vitest covers state transitions, event outcomes, age progression, score-free end-of-life summaries, mode normalization, zero-time script/ForU openings, theme streaks, and music-scene mapping. Name tests after behavior (for example, `life-state.test.ts`) and add focused component or browser tests when UI behavior changes. For mode changes, verify the start page, event topbar, history labels, resume flow, and mode-specific review question. For music changes, verify default-on behavior, gesture-gated playback, the toggle, and `findjoy:music-enabled` persistence. Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` before submitting.
 
 ## Commit & Pull Request Guidelines
 
-Use `type:中文描述` with no space after the colon: `feat:实现人生事件循环`, `fix:修复年龄推进逻辑`, `docs:更新MVP说明`. Keep commits focused. Pull requests should explain the user-visible or product-spec change, list verification commands and results, link related issues when applicable, and include screenshots or a short recording for UI changes. Call out changes to LLM prompts, persistence, or configuration explicitly.
+Use `type:中文描述` with no space after the colon: `feat:实现人生事件循环`, `fix:修复年龄推进逻辑`, `docs:更新MVP说明`. Keep commits focused. Pull requests should explain the user-visible or product-spec change, list verification commands and results, and link related issues when applicable. Screenshots or recordings for UI changes are required only when explicitly requested by Owner. Call out changes to LLM prompts, persistence, or configuration explicitly.
 
 ## Security & Configuration Tips
 
