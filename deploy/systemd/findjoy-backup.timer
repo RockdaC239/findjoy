@@ -1,0 +1,11 @@
+[Unit]
+Description=Run FindJoy PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=900
+Unit=findjoy-backup.service
+
+[Install]
+WantedBy=timers.target

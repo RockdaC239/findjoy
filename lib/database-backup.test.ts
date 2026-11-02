@@ -30,8 +30,15 @@ it("backs up a consistent database, restores to an empty database and refuses co
  await chmod(dir,0o700);
  await expect(run(process.execPath,["scripts/backup-database.mjs"],{env:{...env,FINDJOY_BACKUP_DIR:dir,FINDJOY_PG_BIN:dir}})).rejects.toThrow();
  expect(await readdir(dir)).toEqual([]);
- const result=await run(process.execPath,["scripts/backup-database.mjs"],{env:{...env,FINDJOY_BACKUP_DIR:dir}});
- const {archive}=JSON.parse(result.stdout);expect((await stat(archive)).mode&0o077).toBe(0);
+ const offsite=await mkdtemp(path.join(tmpdir(),"findjoy-offsite-"));cleanup.push(()=>rm(offsite,{recursive:true,force:true}));
+ const oldName="findjoy-2020-01-01T00-00-00.000Z-00000000-0000-0000-0000-000000000000.dump";
+ await writeFile(path.join(dir,oldName),"old");await writeFile(path.join(dir,oldName+".json"),"{}");
+ const result=await run(process.execPath,["scripts/backup-database.mjs"],{env:{...env,FINDJOY_BACKUP_DIR:dir,FINDJOY_BACKUP_OFFSITE:offsite,FINDJOY_BACKUP_KEEP_DAILY:"1",FINDJOY_BACKUP_KEEP_WEEKLY:"1"}});
+ const {archive,offsite:copied,removed}=JSON.parse(result.stdout);
+ expect((await stat(archive)).mode&0o077).toBe(0);
+ expect(copied).toBe(true);expect(removed).toContain(oldName);
+ expect(await stat(path.join(offsite,path.basename(archive)))).toBeTruthy();
+ expect(await stat(path.join(offsite,path.basename(archive)+".json"))).toBeTruthy();
  expect((await stat(archive+".json")).mode&0o077).toBe(0);
  const original=await readFile(archive);
  const restoreEnv={...env,RESTORE_DATABASE_URL:targetUrl.toString(),FINDJOY_RESTORE_ARCHIVE:archive,FINDJOY_RESTORE_EMPTY_TARGET:"yes"};

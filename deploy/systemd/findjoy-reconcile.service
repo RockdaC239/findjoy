@@ -1,0 +1,14 @@
+[Unit]
+Description=FindJoy payment reconciliation and order check
+After=network.target
+
+[Service]
+Type=oneshot
+User=__DEPLOY_USER__
+Group=__DEPLOY_USER__
+WorkingDirectory=__SERVER_PATH__/current
+EnvironmentFile=__SERVER_PATH__/.env
+Environment=APP_PORT=__APP_PORT__
+ExecStart=__NODE_BIN__ scripts/reconcile-payments.mjs
+Nice=10
+TimeoutStartSec=2min

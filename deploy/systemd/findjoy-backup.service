@@ -1,0 +1,15 @@
+[Unit]
+Description=FindJoy daily PostgreSQL backup, offsite copy and retention
+After=network.target
+
+[Service]
+Type=oneshot
+User=__DEPLOY_USER__
+Group=__DEPLOY_USER__
+WorkingDirectory=__SERVER_PATH__/current
+EnvironmentFile=__SERVER_PATH__/.env
+ExecStart=__NPM_BIN__ run db:backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=15min

@@ -1,6 +1,6 @@
 # PostgreSQL 备份与恢复
 
-适用于当前 FindJoy PostgreSQL 开发版本。工具已通过独立数据库演练，尚未在生产安装定时任务、建立异机副本或验收恢复时间。本文件不授权切换生产服务或覆盖生产库。
+适用于当前 FindJoy PostgreSQL 开发版本。工具已支持异机副本、保留策略和失败告警，并已提供 systemd 定时任务模板；生产安装、真实异机存储与 RPO/RTO 验收仍未执行。本文件不授权切换生产服务或覆盖生产库。
 
 ## 准备
 
@@ -22,6 +22,12 @@ npm run db:backup
 也可用 `node --env-file=/absolute/private/database.env scripts/backup-database.mjs`。脚本不自动读取 Next.js 的环境文件。
 
 备份在只读 REPEATABLE READ 事务中导出快照，pg_dump 和表数据摘要使用同一个快照；支持业务正常读写时备份，迁移 DDL 仍应避开备份窗口。生成压缩 custom archive、SHA-256、大小、时间和逐表行数/内容摘要。摘要以数据库聚合计算，不将所有用户正文加载到 Node 内存。
+
+成功生成 archive 后，脚本按以下顺序处理：
+
+1. 若配置 `FINDJOY_BACKUP_OFFSITE`，先复制 archive 和清单到异机（`rclone:remote:path` 或绝对挂载目录），并校验大小/摘要；失败则保留全部本地副本并以非零退出。
+2. 再清理本地过期备份：每个自然日保留最新一份（默认 7 天），每个 ISO 周保留最新一份（默认 4 周），同时永远保留刚生成的备份；只删除成对的 `findjoy-*.dump` 与 `.dump.json`，并清理超过一天的 `.partial`。
+3. 任一步失败时向 `FINDJOY_ALERT_WEBHOOK` 发送固定字段告警（服务名、失败阶段、时间），不包含连接串、订单或用户数据。
 
 文件先写 `.partial`，pg_dump 和 pg_restore 目录验证无错误/警告后发布 `.dump` 与 `.dump.json`。只有二者齐全且命令成功的备份可进入备份清单；失败残留的孤立文件不能算一次成功备份。命令非零退出必须触发告警，不应继续清理旧备份。
 
@@ -46,13 +52,33 @@ FINDJOY_RESTORE_EMPTY_TARGET=yes npm run db:restore
 - 数据库对象所有权与 ACL 不从源库照搬，避免把旧权限带到新环境。角色、凭据、运行账号授权和默认权限须从部署配置独立重建，尚不能把本工具当作完整的实例级灾备。
 - 校验通过后还需在隔离服务验证登录、普通模式存档恢复与游戏、订单和积分，再记录实际 RPO/RTO。旧备份对应旧 schema 时，先保留原备份，再按已验证流程升级 schema，不能直接连接最新应用碰运气。
 
+## 定时任务、异机副本与告警
+
+服务器完成一次不可变发布后，用一次性脚本安装并启用两个 systemd timer：
+
+```bash
+# 服务器上执行；先确认 .env 已配置备份目录、异机目标、告警 Webhook 和对账令牌
+sudo DEPLOY_USER=rocc SERVER_PATH=/home/rocc/apps/findjoy \
+  bash scripts/install-maintenance-units.sh
+```
+
+- `findjoy-backup.timer`：每日 03:30 运行 `npm run db:backup`，随机延迟最多 15 分钟，失败可在 `journalctl -u findjoy-backup` 查看。
+- `findjoy-reconcile.timer`：开机 2 分钟后、之后每 5 分钟调用本机对账接口；令牌只从环境文件读取，不放在命令行或 URL。
+- 安装脚本在缺少 `FINDJOY_BACKUP_DIR`、`FINDJOY_BACKUP_OFFSITE`、`FINDJOY_ALERT_WEBHOOK` 或 `FINDJOY_RECONCILE_TOKEN` 时拒绝启用，避免“定时任务在但没有真实备份”的假完成。
+
+异机目标二选一：
+
+- `rclone:findjoy-backup:findjoy`：需要先配置好 rclone remote，并确保远端支持服务端加密/访问控制；本地脚本会 `rclone copyto` 后用 `lsjson --stat` 校验大小。
+- 绝对挂载目录：目录必须为 700，复制后重新计算 SHA-256 校验。挂载点断开时备份任务失败并告警，不会静默只留本机副本。
+
+远端保留周期建议在对象存储/备份服务侧单独配置生命周期；本工具的自动清理只作用于本机目录，不删除异机副本。
+
 ## 上线前仍需完成
 
-1. 至少每日自动备份，并按明确业务容忍度增加频率；每日备份意味着最多可能丢失约一天数据，不是零丢失方案。交易增长后需要更小 RPO 时增加频率或启用 WAL 归档/时间点恢复。
-2. 至少一份备份及摘要离开应用服务器，放在受限存储中，使用加密传输。异机副本也执行校验与恢复，不只确认上传成功。
-3. 建立保留策略：建议最近 7 天每日备份、最近 4 周每周备份。先确认新备份和异机副本有效，再清理过期文件；当前工具不自动删除任何已完成备份。
-4. 安装定时任务、失败告警和磁盘监控，核实备份任务没有因脚本异常、版本不匹配或权限不足长期失败。
-5. 用接近真实数据量演练，记录备份时间、异机备份时间、恢复耗时、应用冒烟结果和 Owner 接受的 RPO/RTO。应用与数据库同机的单点故障仍存在。
+1. 在服务器配置真实异机存储和 HTTPS 告警 Webhook，安装 timer，并确认连续多日自动备份、失败告警和磁盘余量正常。
+2. 用接近真实数据量执行一次完整恢复演练，记录备份时间、异机复制时间、恢复耗时、应用冒烟结果和 Owner 接受的 RPO/RTO。每日备份最多可能丢失约一天数据；需要更小 RPO 时再评估 WAL 归档/时间点恢复。
+3. 应用与数据库同机的单点故障仍存在；异机副本只是一份离线恢复材料，不等同于高可用。
+4. 恢复后的数据库角色、密码和运行权限必须独立重建；archive 不包含实例全局角色。
 
 ## 开发验证
 
@@ -62,6 +88,6 @@ FINDJOY_RESTORE_EMPTY_TARGET=yes npm run db:restore
 TEST_DATABASE_URL='postgresql://findjoy_test@127.0.0.1:55439/findjoy_test' npm test -- lib/database-backup.test.ts
 ```
 
-验证文件权限、工具失败清理、损坏备份拒绝、原库拒绝、非空目标拒绝、存档/订单/积分恢复及账本序列继续递增。CI 准备 PostgreSQL 15 客户端与 15.19 服务；本地已执行的演练版本为 14.23，CI 尚未运行，不视为 15 版本已验收。
+验证文件权限、工具失败清理、损坏备份拒绝、原库拒绝、非空目标拒绝、存档/订单/积分恢复及账本序列继续递增；另验证异机目录复制、保留清理和告警目标格式。2026-11-02 已在本地 PostgreSQL 15.19 实例执行全套测试（含备份恢复、导入、账号/订单/积分并发用例）；CI 仍须实际运行并保存结果，不能只以 workflow 配置代替验收。
 
 依据：[pg_dump 官方说明](https://www.postgresql.org/docs/15/app-pgdump.html)、[pg_restore 官方说明](https://www.postgresql.org/docs/15/app-pgrestore.html)。

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { checksum, runPostgresTool, sourceFingerprint, tableSummaries } from "./postgres-backup-tools.mjs";
+import { copyOffsite, pruneBackups, sendAlert } from "./backup-maintenance.mjs";
 let pool,client,partial,manifestPartial;
 const started=Date.now();let stage="configuration";
 try {
@@ -34,10 +35,19 @@ try {
   await writeFile(manifestPartial,JSON.stringify(manifest,null,2)+"\n",{flag:"wx",mode:0o600});
   await rename(partial,archive);partial=undefined;
   await rename(manifestPartial,archive+".json");manifestPartial=undefined;
-  console.log(JSON.stringify({archive,manifest:archive+".json",bytes,durationMs:Date.now()-started}));
+  // 先复制到异机，再清理本地旧备份；异机失败时保留全部本地副本。
+  stage="offsite";
+  const offsite=await copyOffsite(archive,archive+".json",process.env);
+  stage="retention";
+  const removed=await pruneBackups(dir,{
+    keepDaily:Number(process.env.FINDJOY_BACKUP_KEEP_DAILY??7),
+    keepWeekly:Number(process.env.FINDJOY_BACKUP_KEEP_WEEKLY??4),
+  });
+  console.log(JSON.stringify({archive,manifest:archive+".json",bytes,durationMs:Date.now()-started,offsite:offsite.configured,removed}));
 } catch {
   if(client)await client.query("ROLLBACK").catch(()=>{});
   console.error(`Database backup failed at ${stage}; no credentials or database contents logged`);
+  await sendAlert(process.env,{kind:"backup",stage});
   process.exitCode=1;
 } finally {
   if(partial)await rm(partial,{force:true}).catch(()=>{});
