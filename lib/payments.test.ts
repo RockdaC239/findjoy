@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as xiaodou from "./xiaodou";
-import { createPayment,processPaymentWebhook,validatePayUrl } from "./payments";
+import { createPayment,payerIp,processPaymentWebhook,validatePayUrl } from "./payments";
 import { identityStore } from "./identity-store";
 import { commerceStore } from "./commerce-store";
 import { lifeStore } from "./life-store";
@@ -55,4 +55,24 @@ it("recovers the same payment attempt after its successful response was lost",as
  await expect(createPayment(order,new Request("https://findfire.club",{headers:{"x-real-ip":"8.8.8.8"}}))).rejects.toThrow("response lost");
  const recovered=await createPayment(order,new Request("https://findfire.club",{headers:{"x-real-ip":"8.8.8.8"}}));
  expect(recovered.payUrl).toBe("https://cashier.example/new-attempt");expect(requestIds).toHaveLength(2);expect(requestIds[0]).toBe(requestIds[1]);
+});
+
+
+it("uses an explicit public payer IP only for loopback development",()=>{
+ vi.stubEnv("NODE_ENV","development");vi.stubEnv("FINDJOY_APP_ORIGIN","http://localhost:3000");vi.stubEnv("FINDJOY_DEV_PAYER_IP","8.8.8.8");
+ expect(payerIp(new Request("http://localhost:3000"))).toBe("8.8.8.8");
+ vi.stubEnv("FINDJOY_DEV_PAYER_IP","127.0.0.1");expect(()=>payerIp(new Request("http://localhost:3000"))).toThrow();
+ vi.stubEnv("FINDJOY_DEV_PAYER_IP","8.8.8.8");vi.stubEnv("NODE_ENV","production");expect(()=>payerIp(new Request("http://localhost:3000"))).toThrow();
+ vi.stubEnv("NODE_ENV","development");vi.stubEnv("FINDJOY_APP_ORIGIN","https://findfire.club");expect(()=>payerIp(new Request("https://findfire.club"))).toThrow();
+});
+
+it("omits an HTTP local return URL while preserving the signed order and payment checks",async()=>{
+ vi.stubEnv("NODE_ENV","development");vi.stubEnv("FINDJOY_APP_ORIGIN","http://localhost:3000");vi.stubEnv("FINDJOY_DEV_PAYER_IP","8.8.8.8");vi.stubEnv("XIAODOU_CASHIER_ORIGINS","https://cashier.example");
+ const id=identityStore.resolveUser("https://auth.example","local-test").id;
+ const order=commerceStore.createOrder(id,{id:"test",name:"test",credits:1,amountFen:1,demo:false},"local-test","ALIPAY_H5");
+ vi.spyOn(xiaodou,"xiaodouRequest").mockImplementation(async(_method,_path,body)=>{
+  const payload=JSON.parse(body!);expect(payload).not.toHaveProperty("returnUrl");expect(payload.payerClientIp).toBe("8.8.8.8");expect(payload.amountFen).toBe(1);
+  return {outTradeNo:order.id,amountFen:1,currency:"CNY",channel:"ALIPAY_H5",status:"PAYING",expireAt:new Date(Date.now()+600000).toISOString(),payUrl:"https://cashier.example/pay"};
+ });
+ expect((await createPayment(order,new Request("http://localhost:3000"))).payUrl).toBe("https://cashier.example/pay");
 });

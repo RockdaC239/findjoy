@@ -12,8 +12,9 @@ export function validatePayUrl(value: unknown): string {
 }
 
 export function payerIp(request: Request): string {
-  // nginx 必须覆盖 X-Real-IP；直连开发请求不满足真实支付风控条件。
-  const ip=request.headers.get("x-real-ip") ?? "";
+  // 线上由 nginx 覆盖 X-Real-IP；仅本地开发可显式配置本人公网 IP。
+  const local = process.env.NODE_ENV === "development" && ["localhost", "127.0.0.1"].includes(new URL(appOrigin()).hostname);
+  const ip=(local ? process.env.FINDJOY_DEV_PAYER_IP : undefined) ?? request.headers.get("x-real-ip") ?? "";
   if(!isIP(ip) || ip==="::1" || ip.startsWith("127.") || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("169.254.") || /^172\.(1[6-9]|2\d|3[01])\./.test(ip))throw new Error("真实支付需要可信网关提供买家公网 IP");
   return ip;
 }
@@ -30,7 +31,8 @@ export async function createPayment(order: JoyOrder, request: Request): Promise<
   const body=commerceStore.saveOrderRequest(order.id,JSON.stringify({
     outTradeNo:order.id,channel:order.channel,tradeScope:"CARD_VIRTUAL",amountFen:order.amountFen,
     currency:"CNY",feeBearer:"SELLER",subject:`FindJoy ${order.name}`,payerClientIp:payerIp(request),
-    returnUrl:`${appOrigin()}/findjoy/checkout/${order.id}`,
+    // 本地 HTTP 不符合平台返回地址要求；不传时，付款后回原标签页查单。
+    ...(appOrigin().startsWith("https://") ? {returnUrl:`${appOrigin()}/findjoy/checkout/${order.id}`} : {}),
   }));
   let snapshot:Record<string,unknown>|undefined;
   let attempt=false;
