@@ -27,6 +27,7 @@ if (explicitEnvFile) {
     process.exit(1);
   }
 }
+const trace = (stage) => { if (process.env.PREFLIGHT_TRACE === "1") console.error(`[preflight] ${stage}`); };
 const local = option("profile", "production") === "local";
 const requireBackup = args.has("--require-backup") || (!local && option("require-backup", "true") === "true");
 const requireOffsite = args.has("--require-offsite") || (!local && option("require-offsite", "true") === "true");
@@ -37,6 +38,7 @@ const allowPrivilegedRole = local || args.has("--allow-privileged-role");
 const skipDb = args.has("--skip-db");
 const json = args.has("--json");
 const root = fileURLToPath(new URL("../", import.meta.url));
+trace("static");
 const checks = [...staticChecks(process.env, {
   allowHttp: local, allowLocalModelConfig: local, allowPrivilegedRole, requireBackup, requireOffsite, requireAlert,
 })];
@@ -49,6 +51,7 @@ async function checkDisk(target, label) {
     checks.push({ name: "disk.free", status: "fail", detail: `${label}不可读，无法确认磁盘余量` });
   }
 }
+trace("disk");
 await checkDisk(process.env.SERVER_PATH || process.cwd(), "应用目录");
 if (process.env.FINDJOY_BACKUP_DIR) await checkDisk(process.env.FINDJOY_BACKUP_DIR, "备份目录");
 
@@ -89,9 +92,11 @@ async function checkBackup() {
     checks.push({ name: "backup.latest", status: "fail", detail: "备份清单无法读取或格式无效" });
   }
 }
+trace("backup");
 await checkBackup();
 
 if (!skipDb && process.env.DATABASE_URL) {
+  trace("database");
   let pool;
   try {
     pool = new Pool({
@@ -108,6 +113,7 @@ if (!skipDb && process.env.DATABASE_URL) {
       CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS needed(privilege)`, [REQUIRED_TABLES])).rows[0];
     const sequence = (await pool.query("SELECT has_sequence_privilege(pg_get_serial_sequence('joy_ledger','id'),'USAGE') AS ready")).rows[0];
     const connections = (await pool.query("SELECT count(*) FILTER (WHERE datname=current_database())::int AS used, current_setting('max_connections')::int AS max FROM pg_stat_activity")).rows[0];
+    trace("database-connected");
     checks.push(...databaseChecks({
       serverVersionNum: version.num, serverVersion: version.text, database: version.database,
       inRecovery: version.recovery, role, history,
@@ -123,6 +129,7 @@ if (!skipDb && process.env.DATABASE_URL) {
   checks.push({ name: "database.connect", status: "fail", detail: "DATABASE_URL 未配置，跳过数据库检查" });
 }
 
+trace("output");
 const result = summarize(checks);
 if (json) {
   console.log(JSON.stringify({ ...result, checks }, null, 2));

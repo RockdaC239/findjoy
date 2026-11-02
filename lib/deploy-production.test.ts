@@ -139,6 +139,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
         KEEP_RELEASES: "2",
         NPM_BIN: path.join(bin, "npm"),
         FAKE_STATE: state,
+        PREFLIGHT_TRACE: "1",
         RELEASE_ID: "rel1",
         RELEASE_DIR: release1,
       };
