@@ -107,8 +107,11 @@ LLM_MODEL=deepseek-chat
 | `npm test` | 运行 Vitest 领域测试 |
 | `npm run typecheck` | 运行 TypeScript 类型检查 |
 | `npm run lint` | 运行 ESLint |
-| `npm run db:backup` | 生成 PostgreSQL 备份及校验摘要 |
+| `npm run db:backup` | 生成 PostgreSQL 备份、异机副本、保留清理及校验摘要 |
 | `npm run db:restore` | 向显式指定的独立空库恢复并校验 |
+| `npm run db:preflight` | 部署前检查配置、数据库迁移/权限、备份、磁盘和支付模式 |
+| `npm run points:adjust` | 通过账本做可审计积分调整，默认 dry-run |
+| `npm run load:seed` / `npm run load:test` | 生成合成压测用户并运行只读/开局负载 |
 
 存储、登录、游戏和支付集成测试需要独立 PostgreSQL 测试库，通过 `TEST_DATABASE_URL` 显式提供；不要使用生产数据库。测试账号需有独立测试实例的建库/删库、创建临时测试角色及建 schema 权限；测试会创建并清理随机 schema 和备份演练数据库，不隐式读取生产 `DATABASE_URL`。CI 已配置 PostgreSQL 15 测试服务。本地需先启动测试实例并创建测试库，再设置环境变量，例如：
 

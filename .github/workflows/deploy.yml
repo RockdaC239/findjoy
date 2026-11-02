@@ -59,6 +59,9 @@ jobs:
           fi
           echo "NGINX_BIN=/usr/sbin/nginx" >> "$GITHUB_ENV"
 
+      - name: 生产依赖安全审计
+        run: npm audit --omit=dev --audit-level=high
+
       - name: 类型检查 / 测试 / Lint
         run: |
           npm run typecheck

@@ -33,7 +33,11 @@
     "db:migrate": "node scripts/migrate-database.mjs",
     "db:import-sqlite": "node scripts/import-sqlite.mjs",
     "db:backup": "node scripts/backup-database.mjs",
-    "db:restore": "node scripts/restore-database.mjs"
+    "db:restore": "node scripts/restore-database.mjs",
+    "db:preflight": "node scripts/preflight-deploy.mjs",
+    "points:adjust": "node scripts/adjust-points.mjs",
+    "load:seed": "node scripts/load-test-seed.mjs",
+    "load:test": "node scripts/load-test.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
