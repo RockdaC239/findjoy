@@ -14,6 +14,7 @@ RELEASES_DIR="${RELEASES_DIR:-${SERVER_PATH}/releases}"
 CURRENT_DIR="${CURRENT_DIR:-${SERVER_PATH}/current}"
 RELEASE_ID="${RELEASE_ID:-}"
 KEEP_RELEASES="${KEEP_RELEASES:-3}"
+NPM_BIN="${NPM_BIN:-npm}"
 APP_PORT="${APP_PORT:-3001}"
 PUBLIC_BASE="${PUBLIC_BASE:-/findjoy}"
 SERVER_NAME="${SERVER_NAME:-findfire.club}"
@@ -79,7 +80,7 @@ else
 fi
 
 if [ "$IMMUTABLE" = 0 ] && [ -d .next ]; then cp -a .next .next.bak; fi
-if ! npm ci --no-audit --no-fund; then
+if ! "$NPM_BIN" ci --no-audit --no-fund; then
   [ "$IMMUTABLE" = 0 ] && [ -d .next.bak ] && { rm -rf .next; mv .next.bak .next; }
   cleanup_failed_release
   die "npm ci 失败"
@@ -93,7 +94,7 @@ if ! SERVER_PATH="$SERVER_PATH" RELEASE_ID="$RELEASE_ID" \
 fi
 
 log "3/7 构建（旧版本继续运行）"
-if ! npm run build; then
+if ! "$NPM_BIN" run build; then
   [ "$IMMUTABLE" = 0 ] && [ -d .next.bak ] && { rm -rf .next; mv .next.bak .next; }
   cleanup_failed_release
   die "npm run build 失败"

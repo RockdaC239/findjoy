@@ -77,12 +77,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
       await databasePool.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO ${role}`);
       await databasePool.query(`GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role}`);
       const appUrl = `postgresql://${role}@${adminUrl.hostname}:${adminUrl.port}/${database}`;
+      console.log("deploy-test: database ready");
 
       const backupResult = await run(process.execPath, ["scripts/backup-database.mjs"], {
         env: { ...process.env, DATABASE_URL: databaseUrl.toString(), FINDJOY_BACKUP_DIR: backup, FINDJOY_BACKUP_OFFSITE: offsite },
         maxBuffer: 10 * 1024 * 1024,
       });
       expect(backupResult.stdout).toContain('"offsite":true');
+      console.log("deploy-test: backup ready");
 
       const envText = (marker: string) => [
         "FINDJOY_APP_ORIGIN=https://findfire.club",
@@ -108,6 +110,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
         "",
       ].join("\n");
       await writeFile(path.join(server, ".env"), envText("one"), { mode: 0o600 });
+      console.log("deploy-test: env ready");
 
       await writeFake(bin, "sudo", 'exec "$@"');
       await writeFake(bin, "systemctl", `echo "$*" >> "${state}/systemctl.log"`);
@@ -122,6 +125,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
       const release2 = path.join(server, "releases", "rel2");
       await prepareRelease(root, release1);
       await prepareRelease(root, release2);
+      console.log("deploy-test: releases ready");
       const baseEnv = {
         ...process.env,
         PATH: `${bin}:${process.env.PATH}`,
@@ -133,11 +137,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
         NGINX_CONF: path.join(server, "nginx.conf"),
         HEALTH_RETRIES: "1",
         KEEP_RELEASES: "2",
+        NPM_BIN: path.join(bin, "npm"),
         RELEASE_ID: "rel1",
         RELEASE_DIR: release1,
       };
       await writeFile(`/tmp/${appName}_app_env`, envText("one"), { mode: 0o600 });
       const first = await execute(path.join(release1, "deploy/deploy-production.sh"), [], baseEnv);
+      console.log("deploy-test: first done", first.status);
       expect(first.status, first.stderr + first.stdout).toBe(0);
       expect(await realpath(path.join(server, "current"))).toBe(await realpath(release1));
       expect(await readFile(path.join(server, ".env"), "utf8")).toContain("DEPLOY_MARKER=one");
@@ -146,6 +152,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
 
       await writeFile(`/tmp/${appName}_app_env`, envText("two"), { mode: 0o600 });
       const second = await execute(path.join(release2, "deploy/deploy-production.sh"), [], { ...baseEnv, RELEASE_ID: "rel2", RELEASE_DIR: release2 });
+      console.log("deploy-test: second done", second.status);
       expect(second.status).toBe(1);
       expect(second.stderr).toContain("健康检查失败");
       expect(await realpath(path.join(server, "current"))).toBe(await realpath(release1));
