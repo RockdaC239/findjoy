@@ -60,3 +60,12 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 - 此提交只建立迁移所需基础，应用 store 仍使用 SQLite；尚未切换生产或宣称 PostgreSQL 迁移完成。
 - 独立复验命令：`TEST_DATABASE_URL=<独立测试库连接串> npm test -- lib/database.test.ts`。不设置时数据库集成用例明确跳过，配置校验用例仍运行；不得把跳过视为集成验收。
 - 安装驱动时 npm 报告现有依赖树存在安全公告；尚未完成公告逐项归因和修复，列入上线前依赖核查，不使用未经验证的 `npm audit fix --force` 批量升级。
+
+## PostgreSQL 表结构与版本化迁移
++
++- 新增 `migrations/001_initial.sql`，覆盖人生、transcript、身份、会话、订单、积分账本、预占操作、生成租约、结局缓存、限流与旧迁移标记。保留 epoch 毫秒时间和原始 JSON 文本，避免改变存档内容。
++- 新增 `npm run db:migrate`：显式读取服务端 `DATABASE_URL`，单连接事务与 advisory lock 串行执行；持久化文件版本和 SHA-256，历史脚本改写或缺失时失败停止。所有文件在同一事务内执行，不在 HTTP 请求中建表。
++- 此命令只建 PostgreSQL 结构，不导入 SQLite、不执行积分换算、不创建数据库角色、不自动修改生产；迁移命令应使用受限范围内有 DDL 权限的部署身份，运行应用另用业务读写身份。
++- 独立测试 schema 中已验证：故意制造表冲突后没有残留半套表；两个命令并发安全；重复运行保留已有余额；负余额约束、身份外键和历史校验和拒绝有效。
++- 配置 `TEST_DATABASE_URL` 后全套 208 项测试通过，lint、build、typecheck 通过。typecheck 首次与 build 并行时读取到正在重建的 `.next/types` 而失败，build 完成后顺序重跑通过；后续这两个检查顺序执行。
++- 应用 store 尚未切换，不能仅运行此命令就认为完成迁移。存量数据导入、异步业务调用方、权限分离与 PostgreSQL 15 复验仍需继续。

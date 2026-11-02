@@ -29,7 +29,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node scripts/migrate-database.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
