@@ -137,4 +137,5 @@ if (json) {
   console.log(formatChecks(checks));
   console.log(`\n${result.ok ? "预检通过" : "预检未通过"}：${result.passes} 通过，${result.warnings} 警告，${result.fails} 失败`);
 }
-process.exitCode = result.ok ? 0 : 1;
+// 显式退出，避免 Node 22 上 pg/定时器句柄让 CLI 在输出后挂起。
+process.exit(result.ok ? 0 : 1);

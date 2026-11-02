@@ -147,6 +147,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("production deploy script integr
       const first = await execute(path.join(release1, "deploy/deploy-production.sh"), [], baseEnv);
       console.log("deploy-test: first done", first.status);
       if (first.status !== 0) {
+        console.log("deploy-test: first stdout tail\n", first.stdout.slice(-6000));
         console.log("deploy-test: first trace tail\n", first.stderr.slice(-6000));
         console.log("deploy-test: commands\n", await readFile(path.join(state, "commands.log"), "utf8").catch(() => "none"));
       }
