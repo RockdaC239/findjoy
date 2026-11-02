@@ -1,4 +1,5 @@
 "use client";
+import { NORMAL_LIFE_POINTS } from "../lib/points";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect,useRef,useState } from "react";
@@ -67,21 +68,21 @@ export function Checkout({product,initialOrder}:{product?:Product;initialOrder?:
   }
   if(!item)return null;
   return <main className="checkout-main">
-    <Link className="account-back" href="/plans">← 返回人生体验</Link>
+    <Link className="account-back" href="/plans">← 返回积分充值</Link>
     <div className="checkout-title"><p className="eyebrow">A NEW CHAPTER AWAITS</p><h1>{done?"下一段故事，等你开启。":"准备好，再出发一次。"}</h1><p className="account-lead">{item.demo?"这是购买流程预览，不会产生真实扣款。":"安全完成支付，继续探索人生的可能。"}</p></div>
     <div className="checkout-grid">
-      <section className="checkout-summary"><span className="account-kicker">YOUR SELECTION</span><h2>{item.name}</h2><p className="checkout-count"><strong>{item.credits}</strong> 次人生体验</p><p className="account-muted">一局新的故事，一种不同的生活。<br />同一局内继续与恢复，不重复扣次。</p><div className="checkout-total"><span>{item.demo?"演示金额":"应付金额"}</span><strong>¥{formatPrice(item.amountFen)}</strong></div>{order&&<p className="order-number">订单编号<br />{order.id}</p>}</section>
+      <section className="checkout-summary"><span className="account-kicker">YOUR SELECTION</span><h2>{item.name}</h2><p className="checkout-count"><strong>{item.credits}</strong> 积分</p><p className="account-muted">可开启 {Math.floor(item.credits / NORMAL_LIFE_POINTS)} 局普通模式。<br />普通模式每局 {NORMAL_LIFE_POINTS} 积分，同一局继续不重复扣积分。</p><div className="checkout-total"><span>{item.demo?"演示金额":"应付金额"}</span><strong>¥{formatPrice(item.amountFen)}</strong></div>{order&&<p className="order-number">订单编号<br />{order.id}</p>}</section>
       <section className="checkout-payment" aria-label="付款与订单状态">
-        {done?<><div className="payment-check" aria-hidden="true">✓</div><h2>{order?.demo?"购买流程演示完成":"支付成功，次数已到账"}</h2><p className="account-muted">{order?.demo?"没有发生真实扣款，也未增加真实体验次数。正式套餐价格确定后，这里会连接真实支付。":"你可以回到觅乐，开始下一段人生。"}</p><Link className="primary-button account-primary" href="/">回到觅乐 <span>↗</span></Link></>:<>
+        {done?<><div className="payment-check" aria-hidden="true">✓</div><h2>{order?.demo?"购买流程演示完成":"支付成功，积分已到账"}</h2><p className="account-muted">{order?.demo?"没有发生真实扣款，也未增加积分。正式套餐价格确定后，这里会连接真实支付。":"你可以回到觅乐，开始下一段人生。"}</p><Link className="primary-button account-primary" href="/">回到觅乐 <span>↗</span></Link></>:<>
           <span className="account-kicker">{order?"PAYMENT STATUS":"PAY YOUR WAY"}</span><h2>{order?"你的订单已准备好":"选择支付方式"}</h2>
           {!order?<><fieldset className="payment-methods"><legend className="sr-only">支付方式</legend><label className="selected"><input type="radio" name="channel" value="WECHAT_H5" checked readOnly /><span className="payment-icon wechat" aria-hidden="true"><Image src="/findjoy/icons/wechat-pay.svg" width={26} height={26} alt="" /></span><span>微信支付</span><span className="radio-dot" aria-hidden="true" /></label></fieldset><button className="primary-button account-primary" onClick={create} disabled={busy}>{busy?"正在准备订单…":item.demo?"创建演示订单":"确认订单"}<span>↗</span></button></>:<>
-            <p className="payment-status" role="status">{alipayPaused?"支付宝已暂停，请返回人生体验，使用微信支付创建新订单。":order.status==="UNKNOWN"?"支付结果待确认，请勿重复付款。":order.status==="CLOSED"?"支付窗口已关闭，可查询最终结果。":order.status==="FAILED"?"支付尚未完成，请查询最终结果。":order.demo?"演示订单已创建，可模拟支付结果。":"等待支付，完成后将自动确认到账。"}</p>
+            <p className="payment-status" role="status">{alipayPaused?"支付宝已暂停，请返回积分充值，使用微信支付创建新订单。":order.status==="UNKNOWN"?"支付结果待确认，请勿重复付款。":order.status==="CLOSED"?"支付窗口已关闭，可查询最终结果。":order.status==="FAILED"?"支付尚未完成，请查询最终结果。":order.demo?"演示订单已创建，可模拟支付结果。":"等待支付，完成后将自动确认到账。"}</p>
             {order.demo?<button className="primary-button account-primary" onClick={()=>refresh(true)} disabled={busy}>{busy?"正在确认…":"模拟支付完成"}<span>↗</span></button>:<>{!alipayPaused&&order.payUrl&&<a href={order.payUrl} className="primary-button account-primary" target="_blank" rel="noopener noreferrer">前往安全收银台 <span>↗</span></a>}{!alipayPaused && !order.payUrl && order.status!=="UNKNOWN" && <button className="primary-button account-primary" onClick={retry} disabled={busy}>重新获取支付链接 <span>↗</span></button>}<button className="plan-button" onClick={()=>refresh()} disabled={busy}>{busy?"正在查询…":"我已支付，查询结果"}</button></>}
           </>}
           <p className="login-note">{item.demo?"演示仅用于体验页面与流程。真实支付上线后，才会按已确认价格收款。":"支付由小豆支付收银台处理。到账以服务端核验为准，关闭页面不会丢失订单。"}</p>
         </>}
         {error&&<p className="account-error" role="alert">{error}</p>}
-        <Link className="account-back" href="/plans">查看我的体验与订单 ↗</Link>
+        <Link className="account-back" href="/plans">查看积分与订单 ↗</Link>
       </section>
     </div>
   </main>;

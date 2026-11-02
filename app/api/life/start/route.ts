@@ -1,3 +1,4 @@
+import { SIGNUP_POINTS } from "../../../../lib/points";
 import { createHash } from "node:crypto";
 import { commerceStore, CommerceError } from "../../../../lib/commerce-store";
 import { currentUser, appOrigin } from "../../../../lib/auth";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
   const state = createStartLife(plan, parsed.gender, { recentStorylines });
   let operation;
   try {
-    commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? 1));
+    commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
     operation = commerceStore.beginLife(user.id, key, createHash("sha256").update(JSON.stringify({gender: parsed.gender, selection})).digest("hex"), state);
   } catch (error) {
     if (error instanceof CommerceError) return NextResponse.json({error:error.message,code:error.code}, {status:error.status});
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
       } catch {
         if (completed) return;
         if (!completed) commerceStore.failLife(operation.id,user.id);
-        const message = "开局暂未完成，未消费体验次数。请稍后重试。";
+        const message = "开局暂未完成，未消费积分。请稍后重试。";
         controller.enqueue(encoder.encode(encodeSseMessage("error", { error: message, code: "START_FAILED" })));
       } finally {
         try { controller.close(); } catch { /* 浏览器断开不改变已提交的消费结果。 */ }

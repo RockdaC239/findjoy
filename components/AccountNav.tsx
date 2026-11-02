@@ -26,7 +26,7 @@ export function AccountNav({ children }: { children?: ReactNode }) {
   }, [open]);
 
   return <>
-    <Link className="settings-button" href="/plans">{user ? "我的体验" : "人生体验"}</Link>
+    <Link className="settings-button" href="/plans">积分充值</Link>
     {children}
     {user ? <div ref={menu} className="account-menu"
       onMouseEnter={() => { if (window.matchMedia("(hover: hover)").matches) setOpen(true); }}

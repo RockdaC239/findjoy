@@ -2,9 +2,10 @@ import type { Product } from "./commerce-store";
 
 export function products(): Product[] {
   if (process.env.FINDJOY_PAYMENTS_MODE !== "live") return [
-    {id:"one-life", name:"一次出走", credits:1, amountFen:990, demo:true},
-    {id:"possibilities", name:"几种可能", credits:5, amountFen:2990, demo:true},
-    {id:"wanderer", name:"人生漫游", credits:15, amountFen:6990, demo:true},
+    {id:"light",name:"轻量包",credits:100,amountFen:990,demo:true},
+    {id:"standard",name:"标准包",credits:220,amountFen:1990,demo:true},
+    {id:"explore",name:"探索包",credits:360,amountFen:2990,demo:true},
+    {id:"deep",name:"深度包",credits:800,amountFen:5990,demo:true},
   ];
   const value: unknown = JSON.parse(process.env.FINDJOY_PRODUCTS_JSON ?? "[]");
   if (!Array.isArray(value) || value.length < 1 || value.length > 10) throw new Error("尚未配置正式商品");

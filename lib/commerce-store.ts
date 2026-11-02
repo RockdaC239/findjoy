@@ -3,6 +3,8 @@ import { getDb, lifeStore } from "./life-store";
 import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 
+import { NORMAL_LIFE_POINTS } from "./points";
+
 export interface Product { id: string; name: string; credits: number; amountFen: number; demo: boolean }
 export type PayChannel = "ALIPAY_H5" | "WECHAT_H5";
 export interface JoyOrder {
@@ -10,7 +12,7 @@ export interface JoyOrder {
   demo: number; channel: PayChannel; status: string; requestId: string; requestBody: string | null;
   payUrl: string | null; expiresAt: string | null; createdAt: number; platformId: string | null;
 }
-export interface LifeOperation { id: string; userId: string; lifeId: string; requestHash: string; status: "pending" | "complete" | "failed"; expiresAt: number }
+export interface LifeOperation { id: string; userId: string; lifeId: string; requestHash: string; status: "pending" | "complete" | "failed"; expiresAt: number; cost: number }
 
 function database() {
   const db = getDb();
@@ -34,13 +36,23 @@ function database() {
       expires_at INTEGER NOT NULL, UNIQUE(user_id,idempotency_key)
     );
   `);
+  const columns = db.prepare("PRAGMA table_info(joy_life_operations)").all() as Array<{name:string}>;
+  if (!columns.some(column=>column.name==="cost_points")) db.exec("ALTER TABLE joy_life_operations ADD COLUMN cost_points INTEGER NOT NULL DEFAULT 20");
+  db.exec("CREATE TABLE IF NOT EXISTS joy_migrations (name TEXT PRIMARY KEY)");
+  db.transaction(()=>{
+    const applied=db.prepare("INSERT OR IGNORE INTO joy_migrations VALUES ('points-v1')").run();
+    if(applied.changes){
+      // 旧权益一局折算 20 积分；订单金额和支付请求保持原样。
+      db.exec("UPDATE joy_accounts SET available=available*20,held=held*20; UPDATE joy_ledger SET delta=delta*20; UPDATE joy_orders SET credits=credits*20;");
+    }
+  }).immediate();
   return db;
 }
 
 const ORDER_SELECT = `SELECT id, user_id AS userId, product_id AS productId, name, credits, amount_fen AS amountFen,
  demo, channel, status, request_id AS requestId, request_body AS requestBody, pay_url AS payUrl,
  expires_at AS expiresAt, created_at AS createdAt, platform_id AS platformId FROM joy_orders`;
-const OP_SELECT = `SELECT id,user_id AS userId,life_id AS lifeId,request_hash AS requestHash,status,expires_at AS expiresAt FROM joy_life_operations`;
+const OP_SELECT = `SELECT id,user_id AS userId,life_id AS lifeId,request_hash AS requestHash,status,expires_at AS expiresAt,cost_points AS cost FROM joy_life_operations`;
 
 export class CommerceError extends Error {
   constructor(public code: string, message: string, public status = 409) { super(message); }
@@ -54,7 +66,7 @@ export const commerceStore = {
     return database().prepare("SELECT delta,reason,reference,created_at AS createdAt FROM joy_ledger WHERE user_id=? ORDER BY id").all(userId) as Array<{delta:number;reason:string;reference:string;createdAt:number}>;
   },
   grantTrial(userId: string, credits: number): void {
-    if (!Number.isSafeInteger(credits) || credits < 0 || credits > 100) throw new Error("试玩次数配置无效");
+    if (!Number.isSafeInteger(credits) || credits < 0 || credits > 100) throw new Error("赠送积分配置无效");
     const db=database();
     db.transaction(()=>{
       db.prepare("INSERT OR IGNORE INTO joy_accounts(user_id) VALUES (?)").run(userId);
@@ -139,12 +151,12 @@ export const commerceStore = {
       commerceStore.expireOperations(now);
       const previous=db.prepare(`${OP_SELECT} WHERE user_id=? AND idempotency_key=?`).get(userId,key) as LifeOperation|undefined;
       if(previous){if(previous.requestHash!==requestHash)throw new CommerceError("IDEMPOTENCY_CONFLICT","重复请求参数不一致");return previous;}
-      const debit=db.prepare("UPDATE joy_accounts SET available=available-1,held=held+1 WHERE user_id=? AND available>=1").run(userId);
-      if(!debit.changes)throw new CommerceError("INSUFFICIENT_CREDITS","体验次数不足，请先选择体验套餐",402);
+      const debit=db.prepare("UPDATE joy_accounts SET available=available-?,held=held+? WHERE user_id=? AND available>=?").run(NORMAL_LIFE_POINTS,NORMAL_LIFE_POINTS,userId,NORMAL_LIFE_POINTS);
+      if(!debit.changes)throw new CommerceError("INSUFFICIENT_CREDITS","积分不足，请先充值积分",402);
       const id=randomUUID();const expiresAt=now+10*60*1000;
       lifeStore.set(life,userId);
-      db.prepare("INSERT INTO joy_life_operations VALUES (?,?,?,?,?,'pending',?)").run(id,userId,life.lifeId,key,requestHash,expiresAt);
-      return {id,userId,lifeId:life.lifeId,requestHash,status:"pending" as const,expiresAt};
+      db.prepare("INSERT INTO joy_life_operations(id,user_id,life_id,idempotency_key,request_hash,status,expires_at,cost_points) VALUES (?,?,?,?,?,'pending',?,?)").run(id,userId,life.lifeId,key,requestHash,expiresAt,NORMAL_LIFE_POINTS);
+      return {id,userId,lifeId:life.lifeId,requestHash,status:"pending" as const,expiresAt,cost:NORMAL_LIFE_POINTS};
     }).immediate();
   },
   getOperation(id: string,userId: string): LifeOperation|null {
@@ -156,8 +168,8 @@ export const commerceStore = {
       const op=commerceStore.getOperation(id,userId);
       if(!op || op.status!=="pending" || op.expiresAt<=now || op.lifeId!==life.lifeId)throw new CommerceError("OPERATION_EXPIRED","开局已过期，请重新开始");
       lifeStore.set(life,userId);lifeStore.setTranscript(life.lifeId,transcript);
-      db.prepare("UPDATE joy_accounts SET held=held-1 WHERE user_id=?").run(userId);
-      db.prepare("INSERT INTO joy_ledger(user_id,delta,reason,reference,created_at) VALUES (?,-1,'life',?,?)").run(userId,id,now);
+      db.prepare("UPDATE joy_accounts SET held=held-? WHERE user_id=?").run(op.cost,userId);
+      db.prepare("INSERT INTO joy_ledger(user_id,delta,reason,reference,created_at) VALUES (?,?,'life',?,?)").run(userId,-op.cost,id,now);
       db.prepare("UPDATE joy_life_operations SET status='complete' WHERE id=?").run(id);
     }).immediate();
   },
@@ -166,7 +178,7 @@ export const commerceStore = {
     db.transaction(()=>{
       const op=commerceStore.getOperation(id,userId);
       if(!op || op.status!=="pending")return;
-      db.prepare("UPDATE joy_accounts SET available=available+1,held=held-1 WHERE user_id=?").run(userId);
+      db.prepare("UPDATE joy_accounts SET available=available+?,held=held-? WHERE user_id=?").run(op.cost,op.cost,userId);
       db.prepare("UPDATE joy_life_operations SET status='failed' WHERE id=?").run(id);
       lifeStore.delete(op.lifeId);
     }).immediate();
