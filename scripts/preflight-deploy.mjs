@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import { readFile, readdir, stat, statfs } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 import { Pool } from "pg";
 import {
   backupChecks, databaseChecks, diskChecks, formatChecks, REQUIRED_TABLES,
@@ -16,6 +17,16 @@ const option = (name, fallback) => {
   const found = process.argv.slice(2).find((item) => item.startsWith(prefix));
   return found ? found.slice(prefix.length) : fallback;
 };
+// 部署环境文件是权威来源；显式覆盖 SSH/CI 进程中可能残留的同名变量。
+const explicitEnvFile = option("env-file", "");
+if (explicitEnvFile) {
+  try {
+    Object.assign(process.env, parseEnv(await readFile(explicitEnvFile, "utf8")));
+  } catch {
+    console.error("预检失败：无法读取部署环境文件");
+    process.exit(1);
+  }
+}
 const local = option("profile", "production") === "local";
 const requireBackup = args.has("--require-backup") || (!local && option("require-backup", "true") === "true");
 const requireOffsite = args.has("--require-offsite") || (!local && option("require-offsite", "true") === "true");

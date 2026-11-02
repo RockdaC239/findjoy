@@ -173,6 +173,7 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 - 每次发布写入 `releases/<commit>`，默认保留最近 3 个；CI 从 `src` 改为同步到 release 目录。nginx 配置仍先校验后应用，失败恢复原文件，并保留 FindFire 的 `/` 与 `/api/v1/` 路由。
 - 提交：`0283f92 feat:增加部署前预检与不可变发布失败回退`。
 - 新增部署脚本集成测试：临时数据库 + 受限运行角色 + 真实备份/异机副本 + 假 systemd/nginx/健康检查，验证首次切换、环境文件更新、第二次发布健康失败后自动切回旧 release 并恢复旧 `.env`。测试发现并修复了预检把绝对 manifest 路径再次拼到备份目录、导致误报备份缺失的 bug。
+- 预检改为显式读取 `--env-file` 并覆盖 SSH/CI 进程里的同名变量，避免残留 `DATABASE_URL`/`FINDJOY_APP_ORIGIN` 让预检检查到错误环境；部署脚本仍把待审核 `.env` 作为权威配置。
 - 尚未在真实服务器执行；首次切换到 release 目录、systemd `WorkingDirectory=current` 和真实回退仍需要一次受控演练。
 
 ## 备份保留、异机副本、告警与对账定时任务

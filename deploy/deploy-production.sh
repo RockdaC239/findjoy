@@ -87,7 +87,7 @@ fi
 
 log "2/7 部署前预检（配置、迁移、权限、备份、磁盘）"
 if ! SERVER_PATH="$SERVER_PATH" RELEASE_ID="$RELEASE_ID" \
-  node --env-file="$PREFLIGHT_ENV" scripts/preflight-deploy.mjs --require-backup --require-offsite --require-alert; then
+  node scripts/preflight-deploy.mjs --env-file="$PREFLIGHT_ENV" --require-backup --require-offsite --require-alert; then
   cleanup_failed_release
   die "部署前预检失败，未构建、未切换、未重启服务"
 fi
