@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect,useRef,useState } from "react";
 import type { PayChannel,Product } from "../lib/commerce-store";
 import { formatPrice } from "../lib/products";
@@ -8,11 +9,11 @@ export interface PublicOrder {id:string;name:string;credits:number;amountFen:num
 
 export function Checkout({product,initialOrder}:{product?:Product;initialOrder?:PublicOrder}) {
   const [order,setOrder]=useState(initialOrder);
-  const [channel,setChannel]=useState<PayChannel>(initialOrder?.channel??"ALIPAY_H5");
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   const key=useRef<string>("");
   const item=order??product;
   const done=order?.status==="SUCCEEDED"||order?.status==="DEMO_COMPLETE";
+  const alipayPaused=order?.channel==="ALIPAY_H5";
 
   const orderId=order?.id;
   const isDemo=order?.demo;
@@ -37,7 +38,7 @@ export function Checkout({product,initialOrder}:{product?:Product;initialOrder?:
     setBusy(true);setError("");
     if(!key.current)key.current=crypto.randomUUID();
     try{
-      const response=await fetch("/findjoy/api/orders",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":key.current},body:JSON.stringify({productId:product.id,channel})});
+      const response=await fetch("/findjoy/api/orders",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":key.current},body:JSON.stringify({productId:product.id,channel:"WECHAT_H5"})});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error??"暂时无法创建订单");
       setOrder(result.order);if(result.warning)setError(result.warning);
@@ -73,9 +74,9 @@ export function Checkout({product,initialOrder}:{product?:Product;initialOrder?:
       <section className="checkout-payment" aria-label="付款与订单状态">
         {done?<><div className="payment-check" aria-hidden="true">✓</div><h2>{order?.demo?"购买流程演示完成":"支付成功，次数已到账"}</h2><p className="account-muted">{order?.demo?"没有发生真实扣款，也未增加真实体验次数。正式套餐价格确定后，这里会连接真实支付。":"你可以回到觅乐，开始下一段人生。"}</p><Link className="primary-button account-primary" href="/">回到觅乐 <span>↗</span></Link></>:<>
           <span className="account-kicker">{order?"PAYMENT STATUS":"PAY YOUR WAY"}</span><h2>{order?"你的订单已准备好":"选择支付方式"}</h2>
-          {!order?<><fieldset className="payment-methods"><legend className="sr-only">支付方式</legend>{([['ALIPAY_H5','支付宝','支'],['WECHAT_H5','微信支付','微']] as const).map(([value,label,icon])=><label key={value} className={channel===value?"selected":""}><input type="radio" name="channel" value={value} checked={channel===value} onChange={()=>setChannel(value)} /><span className={`payment-icon ${value==='WECHAT_H5'?'wechat':''}`}>{icon}</span><span>{label}</span><span className="radio-dot" aria-hidden="true" /></label>)}</fieldset><button className="primary-button account-primary" onClick={create} disabled={busy}>{busy?"正在准备订单…":item.demo?"创建演示订单":"确认订单"}<span>↗</span></button></>:<>
-            <p className="payment-status" role="status">{order.status==="UNKNOWN"?"支付结果待确认，请勿重复付款。":order.status==="CLOSED"?"支付窗口已关闭，可查询最终结果。":order.status==="FAILED"?"支付尚未完成，请查询最终结果。":order.demo?"演示订单已创建，可模拟支付结果。":"等待支付，完成后将自动确认到账。"}</p>
-            {order.demo?<button className="primary-button account-primary" onClick={()=>refresh(true)} disabled={busy}>{busy?"正在确认…":"模拟支付完成"}<span>↗</span></button>:<>{order.payUrl&&<a href={order.payUrl} className="primary-button account-primary" target="_blank" rel="noopener noreferrer">前往安全收银台 <span>↗</span></a>}{!order.payUrl && order.status!=="UNKNOWN" && <button className="primary-button account-primary" onClick={retry} disabled={busy}>重新获取支付链接 <span>↗</span></button>}<button className="plan-button" onClick={()=>refresh()} disabled={busy}>{busy?"正在查询…":"我已支付，查询结果"}</button></>}
+          {!order?<><fieldset className="payment-methods"><legend className="sr-only">支付方式</legend><label className="selected"><input type="radio" name="channel" value="WECHAT_H5" checked readOnly /><span className="payment-icon wechat" aria-hidden="true"><Image src="/findjoy/icons/wechat-pay.svg" width={26} height={26} alt="" /></span><span>微信支付</span><span className="radio-dot" aria-hidden="true" /></label></fieldset><button className="primary-button account-primary" onClick={create} disabled={busy}>{busy?"正在准备订单…":item.demo?"创建演示订单":"确认订单"}<span>↗</span></button></>:<>
+            <p className="payment-status" role="status">{alipayPaused?"支付宝已暂停，请返回人生体验，使用微信支付创建新订单。":order.status==="UNKNOWN"?"支付结果待确认，请勿重复付款。":order.status==="CLOSED"?"支付窗口已关闭，可查询最终结果。":order.status==="FAILED"?"支付尚未完成，请查询最终结果。":order.demo?"演示订单已创建，可模拟支付结果。":"等待支付，完成后将自动确认到账。"}</p>
+            {order.demo?<button className="primary-button account-primary" onClick={()=>refresh(true)} disabled={busy}>{busy?"正在确认…":"模拟支付完成"}<span>↗</span></button>:<>{!alipayPaused&&order.payUrl&&<a href={order.payUrl} className="primary-button account-primary" target="_blank" rel="noopener noreferrer">前往安全收银台 <span>↗</span></a>}{!alipayPaused && !order.payUrl && order.status!=="UNKNOWN" && <button className="primary-button account-primary" onClick={retry} disabled={busy}>重新获取支付链接 <span>↗</span></button>}<button className="plan-button" onClick={()=>refresh()} disabled={busy}>{busy?"正在查询…":"我已支付，查询结果"}</button></>}
           </>}
           <p className="login-note">{item.demo?"演示仅用于体验页面与流程。真实支付上线后，才会按已确认价格收款。":"支付由小豆支付收银台处理。到账以服务端核验为准，关闭页面不会丢失订单。"}</p>
         </>}

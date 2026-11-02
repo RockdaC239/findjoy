@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign } from "node:crypto";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as xiaodou from "./xiaodou";
 import { createPayment,payerIp,processPaymentWebhook,validatePayUrl } from "./payments";
 import { identityStore } from "./identity-store";
@@ -7,6 +7,7 @@ import { commerceStore } from "./commerce-store";
 import { lifeStore } from "./life-store";
 
 const keys=generateKeyPairSync("rsa",{modulusLength:2048,publicKeyEncoding:{type:"spki",format:"pem"},privateKeyEncoding:{type:"pkcs8",format:"pem"}});
+beforeEach(()=>{lifeStore.close();vi.stubEnv("LIFE_DB_PATH",":memory:");});
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();lifeStore.close();});
 
 describe("payment trust boundary",()=>{

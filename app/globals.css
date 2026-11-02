@@ -329,8 +329,9 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
 .payment-methods label.selected { border-color:var(--orange); background:#fff8f2; }
 .payment-methods input { position:absolute; opacity:0; width:1px; height:1px; }
 .payment-methods label:focus-within { outline:2px solid var(--orange); outline-offset:3px; }
-.payment-icon { background:#e4f2ff; color:#1677bc; font-weight:600; border-radius:8px; width:34px; height:34px; display:grid; place-items:center; }
-.payment-icon.wechat { background:#e3f5e8; color:#188843; }
+.payment-icon { flex:none; border-radius:8px; width:34px; height:34px; display:grid; place-items:center; }
+.payment-icon.wechat { background:#e3f5e8; color:#07c160; }
+.payment-icon img { display:block; }
 .radio-dot { width:17px; height:17px; border:1px solid var(--line); border-radius:50%; margin-left:auto; }
 .selected .radio-dot { border:5px solid var(--orange); }
 .checkout-payment .login-note { color:var(--muted); font-size:11px; line-height:1.9; margin:22px 0 0; }
