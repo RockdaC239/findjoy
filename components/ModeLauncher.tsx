@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import type { LifeView } from "../lib/life-view";
-import { LIFE_MODES, SCRIPT_ERAS, THEMES, scriptsForEra } from "../lib/modes/catalog";
+import { isLaunchModeAvailable, LIFE_MODES, SCRIPT_ERAS, THEMES, scriptsForEra } from "../lib/modes/catalog";
 import { getScenarioLabel, validateForuBrief } from "../lib/modes/scenario";
 import type { ForuBrief, LifeMode, StartSelection, ThemeId } from "../lib/modes/types";
 
@@ -137,7 +137,7 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
 
       <div className="mode-grid" role="group" aria-label="玩法模式">
         {LIFE_MODES.map((definition) => {
-          const comingSoon = definition.id === "theme" || definition.id === "foru";
+          const comingSoon = !isLaunchModeAvailable(definition.id);
           return (
             <button
               key={definition.id}

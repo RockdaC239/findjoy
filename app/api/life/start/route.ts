@@ -1,3 +1,4 @@
+import { isLaunchModeAvailable } from "../../../../lib/modes/catalog";
 import { SIGNUP_POINTS } from "../../../../lib/points";
 import { createHash } from "node:crypto";
 import { commerceStore, CommerceError } from "../../../../lib/commerce-store";
@@ -17,6 +18,9 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
   const input = await request.json().catch(() => ({}));
+  if (!isLaunchModeAvailable(input?.mode ?? "normal")) {
+    return NextResponse.json({ error: "当前仅开放普通模式，其他玩法敬请期待", code: "MODE_UNAVAILABLE" }, { status: 403 });
+  }
   const parsed = parseStartLifeRequest(input);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 

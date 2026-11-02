@@ -6,6 +6,10 @@ import type {
   ThemeId,
 } from "./types";
 
+export function isLaunchModeAvailable(mode: unknown): boolean {
+  return mode === "normal";
+}
+
 export const LIFE_MODES: ModeDefinition[] = [
   {
     id: "normal",
