@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/RockdaC239/findjoy/actions/workflows/ci.yml"><img src="https://github.com/RockdaC239/findjoy/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/RockdaC239/findjoy/actions/workflows/deploy.yml"><img src="https://github.com/RockdaC239/findjoy/actions/workflows/deploy.yml/badge.svg" alt="Deploy" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/RockdaC239/findjoy" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D22-417e38" alt="Node.js >= 22" />
 </p>

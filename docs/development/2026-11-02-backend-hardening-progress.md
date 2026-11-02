@@ -6,6 +6,8 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 
 数据库方向保留自部署 PostgreSQL，不以“先优化 SQLite”代替已确认迁移。FindFire 正式身份接入暂不纳入此次上线功能。
 
+按 Owner 约定，`test` 分支只用于本地开发验证，不配置独立 CI 工作流；只有 `main` push 触发仓库现有部署流水线。本轮未 push main，也没有生产发布动作。
+
 ## 2026-11-02 服务器只读核验
 
 核验通过 SSH 只读命令、Docker 运行状态、PostgreSQL 元数据及 SQLite 只读查询完成。未读取密码、模型配置或用户正文；未重启容器、修改权限或迁移生产数据。
