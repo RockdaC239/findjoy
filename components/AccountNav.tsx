@@ -10,6 +10,10 @@ export function AccountUserProvider({ user, children }: { user: { displayName: s
   return <AccountUserContext.Provider value={user}>{children}</AccountUserContext.Provider>;
 }
 
+export function useAccountUser() {
+  return useContext(AccountUserContext);
+}
+
 export function AccountNav({ children }: { children?: ReactNode }) {
   const user = useContext(AccountUserContext);
   const [open, setOpen] = useState(false);

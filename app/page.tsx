@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
 import { BrandLogo } from "../components/BrandLogo";
-import { AccountNav } from "../components/AccountNav";
+import { AccountNav, useAccountUser } from "../components/AccountNav";
 import { ModeLauncher } from "../components/ModeLauncher";
 import { MusicToggle } from "../components/MusicToggle";
 import { buildLifeView, type LifeView } from "../lib/life-view";
@@ -46,6 +46,7 @@ const defaultModelConfig: ModelConfig = {
 
 export default function StartPage() {
   const router = useRouter();
+  const account = useAccountUser();
   const [modelConfig, setModelConfig] = useState<ModelConfig>(defaultModelConfig);
   const [modelConfigMode, setModelConfigMode] = useState<ModelConfigStatus["mode"]>("local");
   const [settingsApiKey, setSettingsApiKey] = useState("");
@@ -108,19 +109,35 @@ export default function StartPage() {
     else music.stop();
   }
 
+  function goToLogin() {
+    router.push(`/login?returnTo=${encodeURIComponent("/findjoy")}`);
+  }
+
   function handleStart(selection: StartSelection) {
+    if (!account) {
+      goToLogin();
+      return;
+    }
     setPendingStart(selection);
     setShowGenderDialog(true);
   }
 
   function startLife(gender: Gender) {
     if (isStarting) return;
+    if (!account) {
+      goToLogin();
+      return;
+    }
     setIsStarting(true);
     writePendingStart({ gender, selection: pendingStart, key: crypto.randomUUID() });
     router.push("/play");
   }
 
   function resumeLife(lifeId?: string) {
+    if (!account) {
+      goToLogin();
+      return;
+    }
     const target = lifeId ?? resumableLife?.lifeId;
     if (!target) return;
     setShowHistory(false);
