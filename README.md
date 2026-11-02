@@ -106,6 +106,8 @@ npm run build
 
 备份与恢复还需匹配版本的 PostgreSQL 客户端，使用方式及尚待配置的异机副本、定时任务见[备份恢复说明](docs/development/postgres-backup-restore.md)。
 
+运行就绪探测使用 `/findjoy/api/health`：校验数据库、迁移和运行权限，失败返回 503，不以首页 200 代替；它不验证模型、认证或支付上游可用性。
+
 ## 项目结构
 
 ```text

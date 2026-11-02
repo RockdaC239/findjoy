@@ -15,7 +15,7 @@ APP_PORT="${APP_PORT:-3001}"
 PUBLIC_BASE="${PUBLIC_BASE:-/findjoy}"
 SERVER_NAME="${SERVER_NAME:-findfire.club}"
 LISTEN_PORT="${LISTEN_PORT:-80}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}${PUBLIC_BASE}}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}${PUBLIC_BASE}/api/health}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
 # HTTPS：证书存在即自动启用 443 并强制跳转，不存在则保持纯 HTTP
 # 证书默认放 SERVER_PATH/certs（部署不会覆盖，私钥可保持 600），也可用 SSL_CERT/SSL_KEY 覆盖
@@ -243,7 +243,7 @@ log "5/5 重启服务并健康检查"
 sudo systemctl restart "${APP_NAME}"
 healthy=0
 for _ in $(seq 1 "$HEALTH_RETRIES"); do
-  if curl -sf --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then healthy=1; break; fi
+  if curl -sf --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then healthy=1; break; fi
   sleep 1
 done
 if [ "$healthy" != 1 ]; then

@@ -5,7 +5,7 @@
 # ============================================================
 project:
   name: findjoy
-  type: nextjs            # Node.js 应用（Next.js + API 路由 + SQLite）
+  type: nextjs            # Node.js 应用（Next.js + API 路由 + PostgreSQL）
 
 runtime:
   node: ">=22"            # better-sqlite3@13 要求 Node >= 22；服务器与 CI 均装 Node 22
@@ -25,7 +25,7 @@ ports:
 # 对外访问：findfire.club/findjoy（nginx 完整转发前缀，Next.js basePath 处理）
 public_base: /findjoy
 health:
-  url: http://127.0.0.1:3001/findjoy
+  url: http://127.0.0.1:3001/findjoy/api/health
   retries: 30
 
 nginx:
