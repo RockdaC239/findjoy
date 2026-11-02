@@ -142,13 +142,13 @@ describe("scenario prompt directives", () => {
 
 describe("scenario labels, review and fallbacks", () => {
   it("labels all four modes", () => {
-    expect(getScenarioLabel({ mode: "normal" })).toMatchObject({ label: "普通人生" });
+    expect(getScenarioLabel({ mode: "normal" })).toMatchObject({ label: "普通模式" });
     expect(getScenarioLabel({ mode: "theme", theme: "career" })).toMatchObject({ label: "事业人生" });
     expect(getScenarioLabel(scriptToScenario(SCRIPTS[0]))).toMatchObject({
       label: "顶替",
       detail: "八十年代 · 18 岁开场",
     });
-    expect(getScenarioLabel({ mode: "foru", brief: foruBrief })).toMatchObject({ label: "ForU 人生" });
+    expect(getScenarioLabel({ mode: "foru", brief: foruBrief })).toMatchObject({ label: "ForU 模式" });
   });
 
   it("asks a mode-specific review question", () => {

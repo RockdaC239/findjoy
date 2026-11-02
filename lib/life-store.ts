@@ -114,7 +114,7 @@ export const lifeStore = {
       try {
         state = JSON.parse(row.state) as LifeState;
       } catch {
-        return { lifeId: row.life_id, age: 0, city: "", events: 0, dead: false, updatedAt: row.updated_at, mode: "normal", modeLabel: "普通人生", modeShort: "普通" };
+        return { lifeId: row.life_id, age: 0, city: "", events: 0, dead: false, updatedAt: row.updated_at, mode: "normal", modeLabel: "普通模式", modeShort: "普通" };
       }
       const scenario = getLifeScenario(state);
       const meta = getScenarioLabel(scenario);

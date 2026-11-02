@@ -280,6 +280,6 @@ export function startSelectionLabel(selection: StartSelection): string {
   if (selection.mode === "theme") return getTheme(selection.theme)?.label ?? "主题";
   if (selection.mode === "script") return getScript(selection.scriptId)?.title ?? "剧本";
   if (selection.mode === "foru") return "ForU";
-  return "普通人生";
+  return "普通模式";
 }
 

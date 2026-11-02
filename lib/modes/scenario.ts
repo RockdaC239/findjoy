@@ -192,7 +192,7 @@ function normalizeScriptScenario(value: Record<string, unknown>): LifeScenario {
   const premise = cleanText(value.premise, 1200);
   const hook = cleanText(value.hook, 800);
   // 存档快照完整时优先保留，保证旧人生在目录改版后仍按开局设定继续；
-  // 快照缺字段则用目录补齐，目录已下线时才回退普通人生。
+  // 快照缺字段则用目录补齐，目录已下线时才回退普通模式。
   if (!start || !title || !premise || !hook) {
     return catalogScript ? scriptToScenario(catalogScript) : NORMAL_SCENARIO;
   }
@@ -237,7 +237,7 @@ function normalizeScriptScenario(value: Record<string, unknown>): LifeScenario {
   };
 }
 
-/** 旧存档没有 scenario 字段；损坏或未知模式一律回退普通人生，保证可继续。 */
+/** 旧存档没有 scenario 字段；损坏或未知模式一律回退普通模式，保证可继续。 */
 export function normalizeLifeScenario(value: unknown): LifeScenario {
   if (!isRecord(value)) return NORMAL_SCENARIO;
   if (value.mode === "theme" && isThemeId(value.theme)) {
@@ -381,12 +381,12 @@ export function getScenarioLabel(scenario: LifeScenario): {
   }
   if (scenario.mode === "foru") {
     return {
-      label: "ForU 人生",
+      label: "ForU 模式",
       detail: `${scenario.brief.age} 岁出发`,
       eyebrow: "FOR YOU",
     };
   }
-  return { label: "普通人生", detail: "随机出身 · 从 0 岁开始", eyebrow: "CLASSIC" };
+  return { label: "普通模式", detail: "随机出身 · 从 0 岁开始", eyebrow: "CLASSIC" };
 }
 
 export function getScenarioShortLabel(scenario: LifeScenario): string {

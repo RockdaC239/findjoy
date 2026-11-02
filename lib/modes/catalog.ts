@@ -9,7 +9,7 @@ import type {
 export const LIFE_MODES: ModeDefinition[] = [
   {
     id: "normal",
-    label: "普通人生",
+    label: "普通模式",
     eyebrow: "CLASSIC",
     tagline: "随机出身 · 从 0 岁开始",
     description: "没有预设主线。家庭、时代与选择共同决定你会成为谁。",
@@ -17,7 +17,7 @@ export const LIFE_MODES: ModeDefinition[] = [
   },
   {
     id: "script",
-    label: "剧本人生",
+    label: "剧本模式",
     eyebrow: "SCRIPT",
     tagline: "年代短剧 · 脑洞开局",
     description: "进入一个别人的人生，在时代与命运里做自己的选择。",
@@ -25,7 +25,7 @@ export const LIFE_MODES: ModeDefinition[] = [
   },
   {
     id: "theme",
-    label: "主题人生",
+    label: "主题模式",
     eyebrow: "THEME",
     tagline: "爱情 · 亲情 · 事业",
     description: "给一生加一条主线，看看它会把你带到哪里。",
@@ -33,7 +33,7 @@ export const LIFE_MODES: ModeDefinition[] = [
   },
   {
     id: "foru",
-    label: "ForU 人生",
+    label: "ForU 模式",
     eyebrow: "FOR YOU",
     tagline: "以你现在的人生为起点",
     description: "把你此刻的处境交给 AI，推演接下来可能发生的人生。",

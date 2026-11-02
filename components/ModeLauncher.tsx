@@ -113,12 +113,12 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
   }
 
   const cta = mode === "normal"
-    ? "开始普通人生"
+    ? "开始普通模式"
     : mode === "theme"
       ? `开始${selectedTheme.label}人生`
       : mode === "script"
         ? "进入这个剧本"
-        : "生成我的 ForU 人生";
+        : "生成我的 ForU 模式";
 
   const note = mode === "normal"
     ? "从 0 岁开始，出身随机。"
@@ -180,7 +180,6 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
             <p className="mode-panel-eyebrow">{currentMode.eyebrow}</p>
             <h2>{currentMode.label}</h2>
           </div>
-          <p className="mode-panel-description">{currentMode.description}</p>
         </div>
 
         {mode === "normal" ? (

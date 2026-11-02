@@ -117,7 +117,7 @@ const demoReview: Review = {
   observation:
     "从你的选择来看，你常常会在真正重要的时刻为关系停下来。年轻时，你也许很在意证明自己；后来，你似乎越来越愿意把时间留给那些无法替代的人和事。",
   question: "如果这是你真实的一生，你愿意这样活吗？",
-  modeLabel: "普通人生",
+  modeLabel: "普通模式",
   modeDetail: "随机出身 · 从 0 岁开始",
 };
 
@@ -628,7 +628,7 @@ export default function Home() {
                       <div className="history-item" key={item.lifeId}>
                         <button className="history-item-main" onClick={() => loadLifeDetail(item.lifeId)}>
                           <span className="history-item-time">{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                          <span className="history-item-text"><span className="history-item-mode">{item.modeLabel || "普通人生"}</span>{item.city} · {item.age} 岁 · {item.events} 个节点</span>
+                          <span className="history-item-text"><span className="history-item-mode">{item.modeLabel || "普通模式"}</span>{item.city} · {item.age} 岁 · {item.events} 个节点</span>
                           <span className={`history-item-status ${item.dead ? "is-dead" : ""}`}>{item.dead ? "已故" : "在世"}</span>
                         </button>
                         {!item.dead && (

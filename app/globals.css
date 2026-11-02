@@ -142,7 +142,6 @@ h1 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-weight:400; 
 .mode-panel-head { display:grid; grid-template-columns:minmax(0, .9fr) minmax(0, 1.2fr); gap:26px; align-items:start; }
 .mode-panel-eyebrow { margin:0 0 5px; color:var(--orange); font-size:9px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
 .mode-panel-head h2 { margin:0; font-family:'DM Serif Display', Georgia, serif; font-size:clamp(28px, 3vw, 38px); font-weight:400; line-height:1.05; }
-.mode-panel-description { margin:0; color:var(--muted); font-size:13px; line-height:1.7; }
 .mode-note { margin-top:20px; border-left:2px solid var(--orange); padding-left:16px; }
 .mode-note p { margin:0; color:var(--muted); font-size:13px; line-height:1.7; }
 .mode-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
