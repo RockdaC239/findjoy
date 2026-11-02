@@ -1,3 +1,4 @@
+import { acquireGeneration, releaseGeneration, commitGeneration } from "../../../../../lib/generation-capacity";
 import { lifeGeneration } from "../../../../../lib/life-generation";
 import { CommerceError } from "../../../../../lib/commerce-store";
 import { currentUser, appOrigin } from "../../../../../lib/auth";
@@ -16,16 +17,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!state.dead) return NextResponse.json({error:"人生尚未结束"},{status:409});
   const cached=await lifeGeneration.getEnding(id,user.id);
   if(cached)return NextResponse.json({ending:cached});
-  let lease;
-  try{lease=(await lifeGeneration.begin(id,user.id));}catch(error){if(error instanceof CommerceError)return NextResponse.json({error:error.message},{status:error.status});throw error;}
   const body = await request.json().catch(() => ({}));
+  let lease;
+  let admission: string | undefined;
+  try { admission=await acquireGeneration(user.id); lease=await lifeGeneration.begin(id,user.id); }
+  catch(error) {
+    if(admission)await releaseGeneration(admission);
+    if(error instanceof CommerceError)return NextResponse.json({error:error.message,code:error.code},{status:error.status,headers:{"Retry-After":"5"}});
+    return NextResponse.json({error:"服务暂时不可用，请稍后重试"},{status:503});
+  }
   try {
-    const ending = await generateEnding(state, sanitizeModelConfig(body.modelConfig));
-    await lifeGeneration.saveEnding(lease,ending);
+    const ending = await generateEnding(state, sanitizeModelConfig(body?.modelConfig));
+    await commitGeneration(admission!, () => lifeGeneration.saveEnding(lease,ending));
     return NextResponse.json({ ending });
   } catch {
-    await lifeGeneration.release(lease);
     const message = "人生回顾暂未生成，请稍后重试";
     return NextResponse.json({ error: message }, { status: 502 });
+  } finally {
+    try { await lifeGeneration.release(lease); }
+    catch { console.error("[generation] ending lease release deferred to expiry"); }
+    await releaseGeneration(admission!);
   }
 }

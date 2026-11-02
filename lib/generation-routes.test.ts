@@ -1,0 +1,45 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const mocks=vi.hoisted(()=>({currentUser:vi.fn(),stream:vi.fn(),ending:vi.fn()}));
+vi.mock("./auth",()=>({currentUser:mocks.currentUser,appOrigin:()=>"https://findfire.club"}));
+vi.mock("./model-adapter",async(importOriginal)=>({...await importOriginal<typeof import("./model-adapter")>(),streamNextEvent:mocks.stream,generateEnding:mocks.ending}));
+import { setupTestPostgres } from "./test-postgres";
+import { acquireGeneration, releaseGeneration } from "./generation-capacity";
+import { commerceStore } from "./commerce-store";
+import { lifeStore } from "./life-store";
+import { createStarterLife } from "./life";
+import { buildFallbackEvent } from "./model-adapter";
+import { POST as start } from "../app/api/life/start/route";
+import { POST as next } from "../app/api/life/[id]/next/route";
+import { POST as ending } from "../app/api/life/[id]/ending/route";
+import { query } from "./database";
+setupTestPostgres();
+beforeEach(()=>{mocks.currentUser.mockResolvedValue({id:"alice"});mocks.stream.mockReset();mocks.ending.mockReset();vi.stubEnv("FINDJOY_GENERATION_MAX_CONCURRENT","1");vi.stubEnv("FINDJOY_GENERATION_ENABLED","true");});
+const request=(body:unknown={},key="start")=>new Request("https://findfire.club/findjoy/api/life/start",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":key},body:JSON.stringify(body)});
+it("rejects overloaded start, next and ending before model work and credit reservation",async()=>{
+ const slot=await acquireGeneration("other");
+ const opening=await start(request());expect(opening.status).toBe(503);expect(opening.headers.get("retry-after")).toBe("5");
+ expect(await commerceStore.balance("alice")).toEqual({available:0,held:0});
+ const life=createStarterLife();life.history=[{id:"current",age:0,type:"family",title:"start",story:"start",importance:0.5}];await lifeStore.set(life,"alice");
+ const params={params:Promise.resolve({id:life.lifeId})};
+ expect((await next(request({expectedEventId:"current"}),params)).status).toBe(503);
+ life.dead=true;await lifeStore.set(life,"alice");expect((await ending(request(),params)).status).toBe(503);
+ expect(mocks.stream).not.toHaveBeenCalled();expect(mocks.ending).not.toHaveBeenCalled();
+ await releaseGeneration(slot);
+});
+it("continues an admitted opening after cancellation, saves it once and replays it while paused",async()=>{
+ let finish!:()=>void;const gate=new Promise<void>(resolve=>{finish=resolve;});
+ mocks.stream.mockImplementation(async function*(state){await gate;yield {text:"story"};return buildFallbackEvent(state);});
+ const response=await start(request());const reader=response.body!.getReader();await reader.read();await reader.cancel();
+ expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:1}]);
+ finish();
+ await vi.waitFor(async()=>{expect(await commerceStore.balance("alice")).toEqual({available:80,held:0});expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:0}]);});
+ vi.stubEnv("FINDJOY_GENERATION_ENABLED","false");
+ const replay=await start(request());expect(replay.status).toBe(200);expect((await replay.json()).state.lifeId).toBeTypeOf("string");
+ expect(mocks.stream).toHaveBeenCalledTimes(1);
+});
+it("releases admission and refunds the opening when generation fails",async()=>{
+ mocks.stream.mockImplementation(async function*(){yield {text:"partial"};throw new Error("upstream");});
+ const response=await start(request());expect(await response.text()).toContain("START_FAILED");
+ expect(await commerceStore.balance("alice")).toEqual({available:100,held:0});
+ expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:0}]);
+});

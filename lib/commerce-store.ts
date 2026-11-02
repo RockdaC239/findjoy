@@ -127,6 +127,11 @@ export const commerceStore = {
       return {id,userId,lifeId:life.lifeId,requestHash,status:"pending" as const,expiresAt,cost:NORMAL_LIFE_POINTS};
     });
   },
+  async findOperation(userId: string,key: string,requestHash: string): Promise<LifeOperation|null> {
+    const op=(await query<LifeOperation>(`${OP_SELECT} WHERE user_id=$1 AND idempotency_key=$2`, [userId,key])).rows[0];
+    if (op && op.requestHash!==requestHash) throw new CommerceError("IDEMPOTENCY_CONFLICT","重复请求参数不一致");
+    return op ?? null;
+  },
   async getOperation(id: string,userId: string): Promise<LifeOperation|null> {
     return (await query<LifeOperation>(`${OP_SELECT} WHERE id=$1 AND user_id=$2`, [id,userId])).rows[0] ?? null;
   },
