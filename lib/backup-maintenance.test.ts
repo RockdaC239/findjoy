@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -69,7 +69,6 @@ describe("offsite backup and alerts", () => {
 
   it("rejects a non-private or invalid offsite target", async () => {
     const source = await temp();
-    const target = await temp();
     const archive = path.join(source, "findjoy-test.dump");
     const manifest = `${archive}.json`;
     await writeFile(archive, "archive-bytes");
