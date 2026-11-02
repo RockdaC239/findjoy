@@ -1,3 +1,5 @@
+import { setupTestPostgres } from "./test-postgres";
+setupTestPostgres();
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ currentUser: vi.fn() }));
 vi.mock("./auth", () => ({ currentUser: mocks.currentUser, appOrigin: () => "https://findfire.club" }));
@@ -9,7 +11,7 @@ import { POST as ending } from "../app/api/life/[id]/ending/route";
 import { createStarterLife } from "./life";
 import { lifeStore } from "./life-store";
 
-beforeEach(() => { lifeStore.close(); mocks.currentUser.mockResolvedValue(null); });
+beforeEach(async () => { await lifeStore.close(); mocks.currentUser.mockResolvedValue(null); });
 
 describe("life API authorization", () => {
   it("rejects unauthenticated reads and generation before any model work", async () => {
@@ -22,7 +24,7 @@ describe("life API authorization", () => {
   it("returns 404 for another user's or a legacy life, and lists only owned saves", async () => {
     mocks.currentUser.mockResolvedValue({ id: "alice", displayName: "探索者" });
     const alice = createStarterLife(), bob = createStarterLife(), legacy = createStarterLife();
-    lifeStore.set(alice, "alice"); lifeStore.set(bob, "bob"); lifeStore.set(legacy);
+    await lifeStore.set(alice, "alice"); await lifeStore.set(bob, "bob"); await lifeStore.set(legacy);
     const params = { params: Promise.resolve({ id: bob.lifeId }) };
     expect((await getLife(new Request("https://findfire.club"), params)).status).toBe(404);
     const body = await (await listLives()).json();

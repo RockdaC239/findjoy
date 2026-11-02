@@ -8,8 +8,8 @@ export const metadata={title:"积分充值 · FindJoy 觅乐"};
 
 export default async function PlansPage() {
   const user=await currentUser();
-  commerceStore.expireOperations();
-  const balance=user?commerceStore.balance(user.id):null;
+  await commerceStore.expireOperations();
+  const balance=user?await commerceStore.balance(user.id):null;
   const catalog=products();
   const demo=catalog.every(product=>product.demo);
   return <AccountShell>

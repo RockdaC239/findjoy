@@ -22,7 +22,7 @@ FindJoy 是一款由 AI 驱动的人生模拟游戏。你从人生的某个起�
 - **同一个核心循环**：四种模式共享事件、选择、客观变化、死亡与回顾；模式只改变情境和叙事侧重，不改变“不评判人生”的原则。
 - **选择推动故事**：AI 根据你过去的经历和当前处境生成下一段人生事件，而不是套用固定模板。
 - **没有统一评分**：人生回顾只整理关键选择、关系、健康、财务与未竟之事，不给出“成功/失败”结论。
-- **可以停下来再继续**：未完结的人生保存在本地 SQLite 中，下次打开可以继续，并沿用原模式与情境。
+- **可以停下来再继续**：未完结的人生保存在服务端 PostgreSQL 中，下次打开可以继续，并沿用原模式与情境。
 - **可关闭的背景音乐**：程序化环境音随阶段、模式和事件类型变化，默认开启，首次交互后发声，偏好会被记住。
 - **可选的内容分享**：「觅乐书签」收录关于幸福、人生意义与如何生活的外部内容。
 
@@ -31,7 +31,7 @@ FindJoy 是一款由 AI 驱动的人生模拟游戏。你从人生的某个起�
 - [Next.js 16](https://nextjs.org/) App Router + React 19
 - TypeScript
 - [Vitest](https://vitest.dev/) 领域行为测试
-- SQLite（`better-sqlite3`）保存人生状态
+- PostgreSQL（`pg`）保存身份、人生、订单和积分；`better-sqlite3` 仅保留用于旧数据导入
 - 任意兼容 OpenAI `/chat/completions` 的模型服务
 
 ## 快速开始
@@ -83,13 +83,13 @@ LLM_MODEL=deepseek-chat
 | `npm run typecheck` | 运行 TypeScript 类型检查 |
 | `npm run lint` | 运行 ESLint |
 
-登录和账户集成测试需要独立 PostgreSQL 测试库，通过 `TEST_DATABASE_URL` 显式提供；不要使用生产数据库。测试会在该库内创建并清理随机 schema，不隐式读取生产 `DATABASE_URL`。CI 已配置 PostgreSQL 15 测试服务。本地需先启动测试实例并创建测试库，再设置环境变量，例如：
+存储、登录、游戏和支付集成测试需要独立 PostgreSQL 测试库，通过 `TEST_DATABASE_URL` 显式提供；不要使用生产数据库。测试会在该库内创建并清理随机 schema，不隐式读取生产 `DATABASE_URL`。CI 已配置 PostgreSQL 15 测试服务。本地需先启动测试实例并创建测试库，再设置环境变量，例如：
 
 ```bash
 export TEST_DATABASE_URL='postgresql://findjoy_test@127.0.0.1:55439/findjoy_test'
 ```
 
-上例适用于已初始化的本机测试实例，数据库账号和端口按实际配置填写。未提供测试连接时，登录相关测试会明确失败，不会静默跳过。
+上例适用于已初始化的本机测试实例，数据库账号和端口按实际配置填写。未提供测试连接时，数据库相关测试会明确失败，不会静默跳过。
 
 提交改动前，请确保以下命令全部通过：
 
@@ -99,6 +99,8 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+开发分支的全部服务端存储现已要求 `DATABASE_URL`。应用启动前，先在目标独立数据库通过服务端环境注入连接串并运行 `npm run db:migrate`；生产切换还需完成旧 SQLite 数据导入和发布验收，不能直接将本分支部署覆盖旧版。
 
 ## 项目结构
 

@@ -8,12 +8,12 @@ import { createPayment, publicOrder } from "../../../lib/payments";
 export async function GET() {
   const user=await currentUser();
   if(!user)return Response.json({error:"请先登录"},{status:401});
-  return Response.json({orders:commerceStore.listOrders(user.id).map(publicOrder)},{headers:{"Cache-Control":"no-store"}});
+  return Response.json({orders:(await commerceStore.listOrders(user.id)).map(publicOrder)},{headers:{"Cache-Control":"no-store"}});
 }
 export async function POST(request:Request) {
   const user=await currentUser();
   if(!user)return Response.json({error:"请先登录"},{status:401});
-  if(!takeRateLimit(user.id,"orders",10,60000))return Response.json({error:"操作频繁，请稍后再试"},{status:429});
+  if(!(await takeRateLimit(user.id,"orders",10,60000)))return Response.json({error:"操作频繁，请稍后再试"},{status:429});
   if(!hasSameOrigin(request,appOrigin()))return Response.json({error:"请求来源无效"},{status:403});
   const body=await request.json().catch(()=>null);
   if(!body || typeof body!=="object" || body.channel!=="WECHAT_H5")return Response.json({error:"当前仅支持微信支付"},{status:400});
@@ -21,7 +21,7 @@ export async function POST(request:Request) {
     const product=products().find(item=>item.id===body.productId);
     if(!product)return Response.json({error:"套餐不存在"},{status:400});
     const key=request.headers.get("Idempotency-Key") ?? "";
-    const order=commerceStore.createOrder(user.id,product,key,body.channel);
+    const order=await commerceStore.createOrder(user.id,product,key,body.channel);
     try{
       return Response.json({order:publicOrder(await createPayment(order,request))},{headers:{"Cache-Control":"no-store"}});
     }catch{

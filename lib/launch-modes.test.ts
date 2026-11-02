@@ -1,10 +1,12 @@
+import { setupTestPostgres } from "./test-postgres";
+setupTestPostgres();
 import { afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ currentUser: vi.fn() }));
 vi.mock("./auth", () => ({ currentUser: mocks.currentUser, appOrigin: () => "https://findfire.club" }));
 import { POST } from "../app/api/life/start/route";
 import { lifeStore } from "./life-store";
 
-afterEach(() => lifeStore.close());
+afterEach(async () => (await lifeStore.close()));
 it.each([
   { mode: "script", scriptId: "1980s-factory-succession" },
   { mode: "theme", theme: "love" },
@@ -16,7 +18,7 @@ it.each([
   }));
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({ code: "MODE_UNAVAILABLE" });
-  expect(lifeStore.listSummaries("launch-user")).toEqual([]);
+  expect(await lifeStore.listSummaries("launch-user")).toEqual([]);
 });
 
 it.each([{ mode: "normal" }, {}])("keeps normal and default openings available: %j", async (body) => {

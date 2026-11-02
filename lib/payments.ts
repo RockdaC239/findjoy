@@ -19,16 +19,16 @@ export function payerIp(request: Request): string {
   return ip;
 }
 
-function confirmSnapshot(order: JoyOrder, snapshot: Record<string,unknown>): void {
+async function confirmSnapshot(order: JoyOrder, snapshot: Record<string,unknown>): Promise<void> {
   if(snapshot.outTradeNo!==order.id || snapshot.amountFen!==order.amountFen || snapshot.currency!=="CNY" || snapshot.channel!==order.channel)throw new Error("支付订单核对失败");
-  if(snapshot.status==="SUCCEEDED")commerceStore.confirmPaid(order.id,order.amountFen,`${xiaodouConfig().appId}:${order.id}`);
-  else if(typeof snapshot.status==="string")commerceStore.setOrderStatus(order.id,snapshot.status);
+  if(snapshot.status==="SUCCEEDED")await commerceStore.confirmPaid(order.id,order.amountFen,`${xiaodouConfig().appId}:${order.id}`);
+  else if(typeof snapshot.status==="string")await commerceStore.setOrderStatus(order.id,snapshot.status);
 }
 
 export async function createPayment(order: JoyOrder, request: Request): Promise<JoyOrder> {
   if(order.demo || order.status==="SUCCEEDED")return order;
   if(order.payUrl && order.expiresAt && Date.parse(order.expiresAt)>Date.now())return order;
-  const body=commerceStore.saveOrderRequest(order.id,JSON.stringify({
+  const body=await commerceStore.saveOrderRequest(order.id,JSON.stringify({
     outTradeNo:order.id,channel:order.channel,tradeScope:"CARD_VIRTUAL",amountFen:order.amountFen,
     currency:"CNY",feeBearer:"SELLER",subject:`FindJoy ${order.name}`,payerClientIp:payerIp(request),
     // 本地 HTTP 不符合平台返回地址要求；不传时，付款后回原标签页查单。
@@ -39,35 +39,35 @@ export async function createPayment(order: JoyOrder, request: Request): Promise<
   if(order.requestBody){
     try{
       const current=await xiaodouRequest("GET",`/api/open/v1/payments/${order.id}`);
-      confirmSnapshot(order,current);
-      if(current.status==="SUCCEEDED")return commerceStore.getOrder(order.id,order.userId)!;
-      const pendingAttempt=commerceStore.pendingAttemptRequestId(order.id);
+      await confirmSnapshot(order,current);
+      if(current.status==="SUCCEEDED")return (await commerceStore.getOrder(order.id,order.userId))!;
+      const pendingAttempt=await commerceStore.pendingAttemptRequestId(order.id);
       if(pendingAttempt || current.nextAction==="CREATE_ATTEMPT"){
         attempt=true;
-        snapshot=await xiaodouRequest("POST",`/api/open/v1/payments/${order.id}/attempts`,"",pendingAttempt??commerceStore.attemptRequestId(order.id));
+        snapshot=await xiaodouRequest("POST",`/api/open/v1/payments/${order.id}/attempts`,"",pendingAttempt??(await commerceStore.attemptRequestId(order.id)));
       }
     }catch(error){if(!(!attempt && error instanceof XiaodouError && error.status===404))throw error;}
   }
   snapshot??=await xiaodouRequest("POST","/api/open/v1/payments",body,order.requestId);
-  confirmSnapshot(order,snapshot);
+  await confirmSnapshot(order,snapshot);
   if(snapshot.payUrl){
     const payUrl=validatePayUrl(snapshot.payUrl);
     if(typeof snapshot.expireAt!=="string" || !Number.isFinite(Date.parse(snapshot.expireAt)))throw new Error("支付窗口无效");
-    commerceStore.savePaymentMaterial(order.id,payUrl,snapshot.expireAt);
-    if(attempt)commerceStore.finishAttempt(order.id);
+    await commerceStore.savePaymentMaterial(order.id,payUrl,snapshot.expireAt);
+    if(attempt)await commerceStore.finishAttempt(order.id);
   }
-  return commerceStore.getOrder(order.id,order.userId)!;
+  return (await commerceStore.getOrder(order.id,order.userId))!;
 }
 
 export async function queryPayment(order: JoyOrder):Promise<JoyOrder> {
   if(order.demo || order.status==="SUCCEEDED")return order;
-  if(!commerceStore.claimQuery(order.id))return commerceStore.getOrder(order.id,order.userId)!;
+  if(!(await commerceStore.claimQuery(order.id)))return (await commerceStore.getOrder(order.id,order.userId))!;
   const snapshot=await xiaodouRequest("GET",`/api/open/v1/payments/${encodeURIComponent(order.id)}`);
-  confirmSnapshot(order,snapshot);
-  return commerceStore.getOrder(order.id,order.userId)!;
+  await confirmSnapshot(order,snapshot);
+  return (await commerceStore.getOrder(order.id,order.userId))!;
 }
 
-export function processPaymentWebhook(headers:Headers,raw:Uint8Array):void {
+export async function processPaymentWebhook(headers:Headers,raw:Uint8Array):Promise<void> {
   const config=xiaodouConfig();
   const kid=headers.get("X-XD-Webhook-Key-Id") ?? "";
   const signature=headers.get("X-XD-Webhook-Signature") ?? "";
@@ -81,10 +81,10 @@ export function processPaymentWebhook(headers:Headers,raw:Uint8Array):void {
   if(data.eventId!==eventId || data.eventType!==eventType || data.appId!==config.appId || typeof data.outTradeNo!=="string" || !Number.isSafeInteger(data.grossAmountFen))throw new Error("支付事件核对失败");
   if(eventType==="PAYMENT_SUCCEEDED"){
     if(data.status!=="SUCCEEDED" || data.eventAmountFen!==data.grossAmountFen)throw new Error("支付成功金额核对失败");
-    commerceStore.confirmPaid(data.outTradeNo,Number(data.grossAmountFen),`${config.appId}:${data.outTradeNo}`,eventId);
+    await commerceStore.confirmPaid(data.outTradeNo,Number(data.grossAmountFen),`${config.appId}:${data.outTradeNo}`,eventId);
   }else if(eventType==="PAYMENT_CLOSED" || eventType==="PAYMENT_FAILED"){
     // 查单补偿会确认最终状态，关闭/失败不能覆盖已成功订单。
-    commerceStore.setOrderStatus(data.outTradeNo,eventType==="PAYMENT_CLOSED"?"CLOSED":"FAILED");
+    await commerceStore.setOrderStatus(data.outTradeNo,eventType==="PAYMENT_CLOSED"?"CLOSED":"FAILED");
   }else{
     // 退款须先明确权益回收规则；不确认未处理的财务事件，保留平台重试及人工核对。
     throw new Error("退款事件需人工核对");

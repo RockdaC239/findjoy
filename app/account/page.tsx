@@ -14,11 +14,11 @@ export const metadata = { title: "个人中心 · FindJoy 觅乐" };
 export default async function AccountPage() {
   const user = await currentUser();
   if (!user) redirect("/login?returnTo=%2Ffindjoy%2Faccount");
-  commerceStore.expireOperations();
+  await commerceStore.expireOperations();
   const phone = await identityStore.getPhone(user.id);
-  const orders = commerceStore.listOrders(user.id);
-  const balance = commerceStore.balance(user.id);
-  const ledger = commerceStore.ledger(user.id).slice(-10).reverse();
+  const orders = await commerceStore.listOrders(user.id);
+  const balance = await commerceStore.balance(user.id);
+  const ledger = (await commerceStore.ledger(user.id)).slice(-10).reverse();
   const labels: Record<string, string> = { trial: "新用户积分赠送", purchase: "充值积分到账", life: "开启一段人生" };
 
   return <AccountShell>

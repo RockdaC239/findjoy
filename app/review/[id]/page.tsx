@@ -10,7 +10,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const user = await currentUser();
   if (!user) redirect(`/login?returnTo=${encodeURIComponent(`/findjoy/review/${id}`)}`);
-  const state = lifeStore.get(id, user.id);
+  const state = await lifeStore.get(id, user.id);
   if (!state) notFound();
   if (!state.dead) redirect(`/play?life=${encodeURIComponent(id)}`);
   return <ReviewView lifeId={id} view={buildLifeView(state)} />;

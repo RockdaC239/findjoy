@@ -1,56 +1,10 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 import { flagsToBackground, type BackgroundAvoid } from "./background";
 import { extractLifeStorylines } from "./storyline";
 import { getLifeScenario, getScenarioLabel, getScenarioShortLabel } from "./modes/scenario";
 import type { LifeMode } from "./modes/types";
-
-const DEFAULT_DB_FILE = path.join(process.cwd(), ".data", "life.db");
-
-// 每写多少次执行一次 WAL checkpoint（TRUNCATE），防止 WAL 无限增长、降低崩溃恢复成本。
-const CHECKPOINT_EVERY_N_WRITES = 50;
-
-function resolveDbFile(): string {
-  const configured = process.env.LIFE_DB_PATH;
-  if (configured) return configured;
-  if (process.env.NODE_ENV === "test") return ":memory:";
-  mkdirSync(path.dirname(DEFAULT_DB_FILE), { recursive: true });
-  return DEFAULT_DB_FILE;
-}
-
-let db: Database.Database | null = null;
-let writeCount = 0;
-
-export function getDb(): Database.Database {
-  if (db) return db;
-  db = new Database(resolveDbFile());
-  db.pragma("journal_mode = WAL");
-  db.pragma("busy_timeout = 5000");
-  db.pragma("synchronous = FULL");
-  db.pragma("foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS lives (
-      life_id    TEXT PRIMARY KEY,
-      state      TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS transcripts (
-      life_id    TEXT PRIMARY KEY,
-      messages   TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  const columns = db.pragma("table_info(lives)") as Array<{ name: string }>;
-  if (!columns.some(column => column.name === "user_id")) db.exec("ALTER TABLE lives ADD COLUMN user_id TEXT");
-  db.exec("CREATE INDEX IF NOT EXISTS lives_user_updated ON lives(user_id, updated_at)");
-  return db;
-}
-
-interface LifeRow { state: string }
-
+import { query, withTransaction, closePostgres } from "./database";
 export interface LifeSummary {
   lifeId: string;
   age: number;
@@ -63,52 +17,25 @@ export interface LifeSummary {
   modeShort: string;
 }
 
-function checkpointIfNeeded(): void {
-  writeCount += 1;
-  if (writeCount >= CHECKPOINT_EVERY_N_WRITES) {
-    writeCount = 0;
-    try {
-      db?.pragma("wal_checkpoint(TRUNCATE)");
-    } catch (error) {
-      console.error("[life-store] wal_checkpoint failed:", error instanceof Error ? error.message : error);
-    }
-  }
+async function recentStates(limit: number, userId?: string): Promise<Array<{state: string}>> {
+  return (await query<{state:string}>("SELECT state FROM lives WHERE ($1::text IS NULL OR user_id=$1) ORDER BY updated_at DESC LIMIT $2", [userId ?? null, limit])).rows;
 }
 
 export const lifeStore = {
-  get(id: string, userId?: string): LifeState | null {
-    const row = (userId === undefined
-      ? getDb().prepare("SELECT state FROM lives WHERE life_id = ?").get(id)
-      : getDb().prepare("SELECT state FROM lives WHERE life_id = ? AND user_id = ?").get(id, userId)) as LifeRow | undefined;
+  async get(id: string, userId?: string): Promise<LifeState | null> {
+    const row = (await query("SELECT state FROM lives WHERE life_id=$1 AND ($2::text IS NULL OR user_id=$2)", [id,userId ?? null])).rows[0];
     if (!row) return null;
-    try {
-      return JSON.parse(row.state) as LifeState;
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(row.state) as LifeState; } catch { return null; }
   },
-
-  set(state: LifeState, userId?: string): LifeState {
-    try {
-      const result = getDb().prepare(
-        `INSERT INTO lives (life_id, state, updated_at, user_id) VALUES (?, ?, ?, ?)
-         ON CONFLICT(life_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at
-         WHERE lives.user_id IS excluded.user_id`,
-      ).run(state.lifeId, JSON.stringify(state), new Date().toISOString(), userId ?? null);
-      if (result.changes !== 1) throw new Error("人生归属不匹配");
-      checkpointIfNeeded();
-    } catch (error) {
-      // 持久化失败绝不静默：打日志并向上抛，避免"以为保存了其实没有"
-      console.error(`[life-store] failed to persist life ${state.lifeId.slice(0, 8)}…:`, error instanceof Error ? error.message : error);
-      throw error;
-    }
+  async set(state: LifeState, userId?: string): Promise<LifeState> {
+    const result = await query(`INSERT INTO lives(life_id,state,updated_at,user_id) VALUES ($1,$2,$3,$4)
+      ON CONFLICT(life_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at
+      WHERE lives.user_id IS NOT DISTINCT FROM excluded.user_id`, [state.lifeId,JSON.stringify(state),new Date().toISOString(),userId ?? null]);
+    if (result.rowCount !== 1) throw new Error("人生归属不匹配");
     return state;
   },
-
-  listSummaries(userId?: string): LifeSummary[] {
-    const rows = (userId === undefined
-      ? getDb().prepare("SELECT life_id, state, updated_at FROM lives ORDER BY updated_at DESC").all()
-      : getDb().prepare("SELECT life_id, state, updated_at FROM lives WHERE user_id = ? ORDER BY updated_at DESC").all(userId)) as Array<{ life_id: string; state: string; updated_at: string }>;
+  async listSummaries(userId?: string): Promise<LifeSummary[]> {
+    const rows = (await query<{life_id:string;state:string;updated_at:string}>("SELECT life_id,state,updated_at FROM lives WHERE ($1::text IS NULL OR user_id=$1) ORDER BY updated_at DESC LIMIT 100", [userId ?? null])).rows;
     return rows.map((row) => {
       let state: LifeState;
       try {
@@ -131,13 +58,8 @@ export const lifeStore = {
       };
     });
   },
-
-  // 收集最近几局人生用过的出身维度取值，供新一局开局避开，避免连续人生反复落到
-  // 同一条线上。只统计有完整出身档案的存档。
-  recentBackgroundAvoid(limit = 5, userId?: string): BackgroundAvoid {
-    const rows = (userId === undefined
-      ? getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit)
-      : getDb().prepare("SELECT state FROM lives WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(userId, limit)) as Array<{ state: string }>;
+  async recentBackgroundAvoid(limit = 5, userId?: string): Promise<BackgroundAvoid> {
+    const rows = await recentStates(limit,userId);
     const economy: string[] = [];
     const structure: string[] = [];
     const event: string[] = [];
@@ -156,14 +78,8 @@ export const lifeStore = {
       event: event as BackgroundAvoid["event"],
     };
   },
-
-  // 收集最近几局人生的实际主线（剧本防重）：从各局历史提取职业/题材域（见 lib/storyline.ts），
-  // 供新一局开局写入 flags.avoidStorylines，作为跨人生防重指令与硬契约——
-  // 最近几局刚活过运动员/艺术家，新一局就不得再走同一题材（"无天赋也刷到艺术生"由此被堵住）。
-  recentStorylines(limit = 6, maxDomains = 3, userId?: string): string[] {
-    const rows = (userId === undefined
-      ? getDb().prepare("SELECT state FROM lives ORDER BY updated_at DESC LIMIT ?").all(limit)
-      : getDb().prepare("SELECT state FROM lives WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(userId, limit)) as Array<{ state: string }>;
+  async recentStorylines(limit = 6, maxDomains = 3, userId?: string): Promise<string[]> {
+    const rows = await recentStates(limit,userId);
     const seen: string[] = [];
     for (const row of rows) {
       let state: LifeState;
@@ -175,46 +91,20 @@ export const lifeStore = {
     }
     return seen.slice(0, maxDomains);
   },
-
-  delete(id: string): void {
-    getDb().prepare("DELETE FROM lives WHERE life_id = ?").run(id);
-    getDb().prepare("DELETE FROM transcripts WHERE life_id = ?").run(id);
+  async delete(id: string): Promise<void> {
+    await withTransaction(async () => {
+      await query("DELETE FROM transcripts WHERE life_id=$1", [id]);
+      await query("DELETE FROM lives WHERE life_id=$1", [id]);
+    });
   },
-
-  // 对话转录（DeepSeek 前缀缓存）：没有转录行返回 null（旧存档），
-  // 新人生从第一轮开始由 start/next 路由逐轮追加写入。
-  getTranscript(id: string): TranscriptMessage[] | null {
-    const row = getDb().prepare("SELECT messages FROM transcripts WHERE life_id = ?").get(id) as { messages?: string } | undefined;
-    if (!row || typeof row.messages !== "string") return null;
-    try {
-      const parsed: unknown = JSON.parse(row.messages);
-      return Array.isArray(parsed) ? (parsed as TranscriptMessage[]) : null;
-    } catch {
-      return null;
-    }
+  async getTranscript(id: string): Promise<TranscriptMessage[] | null> {
+    const row = (await query("SELECT messages FROM transcripts WHERE life_id=$1", [id])).rows[0];
+    if (!row) return null;
+    try { const parsed: unknown = JSON.parse(row.messages); return Array.isArray(parsed) ? parsed as TranscriptMessage[] : null; } catch { return null; }
   },
-
-  setTranscript(id: string, messages: TranscriptMessage[]): void {
-    try {
-      getDb()
-        .prepare(
-          `INSERT INTO transcripts (life_id, messages, updated_at) VALUES (?, ?, ?)
-           ON CONFLICT(life_id) DO UPDATE SET messages = excluded.messages, updated_at = excluded.updated_at`,
-        )
-        .run(id, JSON.stringify(messages), new Date().toISOString());
-      checkpointIfNeeded();
-    } catch (error) {
-      console.error(`[life-store] failed to persist transcript ${id.slice(0, 8)}…:`, error instanceof Error ? error.message : error);
-      throw error;
-    }
+  async setTranscript(id: string, messages: TranscriptMessage[]): Promise<void> {
+    await query(`INSERT INTO transcripts VALUES ($1,$2,$3) ON CONFLICT(life_id)
+      DO UPDATE SET messages=excluded.messages,updated_at=excluded.updated_at`, [id,JSON.stringify(messages),new Date().toISOString()]);
   },
-
-  close(): void {
-    try {
-      db?.pragma("wal_checkpoint(TRUNCATE)");
-    } catch { /* ignore */ }
-    db?.close();
-    db = null;
-    writeCount = 0;
-  },
+  close: closePostgres,
 };

@@ -1,4 +1,11 @@
-import { Pool, type PoolClient } from "pg";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { Pool, type QueryResultRow, type PoolClient } from "pg";
+
+const transactionClient = new AsyncLocalStorage<PoolClient>();
+
+export function query<T extends QueryResultRow = QueryResultRow>(sql: string, values?: unknown[]) {
+  return (transactionClient.getStore() ?? getPostgresPool()).query<T>(sql, values);
+}
 
 const databaseGlobal = globalThis as typeof globalThis & { findjoyPostgres?: Pool };
 
@@ -27,11 +34,13 @@ export function getPostgresPool(): Pool {
 }
 
 export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const existing = transactionClient.getStore();
+  if (existing) return work(existing);
   const client = await getPostgresPool().connect();
   let destroy = false;
   try {
     await client.query("BEGIN");
-    const result = await work(client);
+    const result = await transactionClient.run(client, () => work(client));
     await client.query("COMMIT");
     return result;
   } catch (error) {

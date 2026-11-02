@@ -8,13 +8,13 @@ import { identityStore } from "./identity-store";
 import { lifeStore } from "./life-store";
 
 beforeEach(() => mocks.currentUser.mockResolvedValue(null));
-afterEach(() => lifeStore.close());
+afterEach(async () => (await lifeStore.close()));
 const request = (body: unknown, origin = "https://findfire.club") => new Request("https://findfire.club/findjoy/api/account", { method: "PATCH", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 it("requires login, checks origin, validates nickname and updates only the session owner", async () => {
   expect((await PATCH(request({ displayName: "新昵称" }))).status).toBe(401);
-  const user = (await identityStore.resolveUser("https://auth.example", "owner"));
-  const other = (await identityStore.resolveUser("https://auth.example", "other"));
+  const user = await identityStore.resolveUser("https://auth.example", "owner");
+  const other = await identityStore.resolveUser("https://auth.example", "other");
   mocks.currentUser.mockResolvedValue(user);
   expect((await PATCH(request({ displayName: "新昵称" }, "https://evil.example"))).status).toBe(403);
   for (const displayName of [null, "", "a".repeat(81), "a\nb"]) expect((await PATCH(request({ displayName }))).status).toBe(400);

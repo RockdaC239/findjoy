@@ -24,8 +24,8 @@ export function setupTestPostgres() {
   beforeEach(async () => {
     await closePostgres();
     vi.stubEnv("DATABASE_URL", connectionString);
-    await admin.query(`TRUNCATE ${schema}.identity_users, ${schema}.identity_links,
-      ${schema}.identity_sessions, ${schema}.identity_login_transactions`);
+    const tables = (await admin.query("SELECT tablename FROM pg_tables WHERE schemaname=$1 AND tablename!='schema_migrations'", [schema])).rows;
+    await admin.query(`TRUNCATE ${tables.map(row => `"${schema}"."${row.tablename}"`).join(",")} RESTART IDENTITY`);
   });
   afterAll(async () => {
     await closePostgres();

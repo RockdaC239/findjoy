@@ -15,7 +15,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
   const { id } = await params;
-  const state = lifeStore.get(id, user.id);
+  const state = await lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
   const body = await request.json().catch(() => ({}));
   if (typeof body.expectedEventId !== "string") return NextResponse.json({error:"请恢复最新人生后继续"},{status:400});
@@ -24,11 +24,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const offered = state.history.at(-1)?.choices;
   if (offered?.length && (!body.choice || !offered.some(choice => choice.id === body.choice.id))) return NextResponse.json({error:"请选择当前事件提供的选项"},{status:400});
   let lease;
-  try { lease=lifeGeneration.begin(id,user.id); }
+  try { lease=(await lifeGeneration.begin(id,user.id)); }
   catch(error){ if(error instanceof CommerceError)return NextResponse.json({error:error.message,code:error.code},{status:error.status});throw error; }
-  const latestState=lifeStore.get(id,user.id);
+  const latestState=await lifeStore.get(id,user.id);
   if(latestState?.history.at(-1)?.id!==body.expectedEventId){
-    lifeGeneration.release(lease);
+    await lifeGeneration.release(lease);
     return NextResponse.json({state:latestState,ended:latestState?.dead});
   }
   const choice = body.choice;
@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // 无关文本让模型以为"没有做决定"而复述上一事件；转录与请求使用同一份，缓存前缀一致。
   const choiceForModel = resolveOfferedChoice(choice, state.history.at(-1));
   // 旧存档没有转录行 → null，走旧式单条提示词（不建立转录）；新人生从开局起就有转录。
-  const transcript: TranscriptMessage[] | null = lifeStore.getTranscript(id);
+  const transcript: TranscriptMessage[] | null = await lifeStore.getTranscript(id);
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -60,14 +60,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });
 
         }
-        lifeGeneration.save(lease,nextState,transcript);
+        await lifeGeneration.save(lease,nextState,transcript);
         controller.enqueue(encoder.encode(encodeSseMessage("complete", { state: nextState, event: item.value, ended: nextState.dead })));
       } catch {
-        lifeGeneration.release(lease);
+        await lifeGeneration.release(lease);
         const message = "故事暂未生成，请稍后恢复最新人生。";
         controller.enqueue(encoder.encode(encodeSseMessage("error", { error: message })));
       } finally {
-        lifeGeneration.release(lease);
+        await lifeGeneration.release(lease);
         try { controller.close(); } catch { /* 断流后通过存档恢复。 */ }
       }
     },

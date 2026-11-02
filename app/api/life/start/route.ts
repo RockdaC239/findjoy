@@ -28,23 +28,23 @@ export async function POST(request: Request) {
   // 不掷出身、也不让跨人生防重把主线拉走。
   const selection = parsed.selection;
   const usesBackground = selection.mode === "normal" || selection.mode === "theme";
-  const recentAvoid = usesBackground ? lifeStore.recentBackgroundAvoid(6, user.id) : undefined;
-  const recentStorylines = selection.mode === "normal" ? lifeStore.recentStorylines(6, 3, user.id) : [];
+  const recentAvoid = usesBackground ? await lifeStore.recentBackgroundAvoid(6, user.id) : undefined;
+  const recentStorylines = selection.mode === "normal" ? await lifeStore.recentStorylines(6, 3, user.id) : [];
   const plan = resolveStartPlan(selection, { backgroundAvoid: recentAvoid });
   const key = request.headers.get("Idempotency-Key");
   if (!key || key.length > 128) return NextResponse.json({ error: "缺少有效请求标识" }, { status: 400 });
   const state = createStartLife(plan, parsed.gender, { recentStorylines });
   let operation;
   try {
-    commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
-    operation = commerceStore.beginLife(user.id, key, createHash("sha256").update(JSON.stringify({gender: parsed.gender, selection})).digest("hex"), state);
+    await commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
+    operation = (await commerceStore.beginLife(user.id, key, createHash("sha256").update(JSON.stringify({gender: parsed.gender, selection})).digest("hex"), state));
   } catch (error) {
     if (error instanceof CommerceError) return NextResponse.json({error:error.message,code:error.code}, {status:error.status});
     return NextResponse.json({error:"暂时无法创建人生，请稍后重试"}, {status:503});
   }
   // 重放只查已有结果，不再调用模型；首个请求拥有生成权。
   if (operation.lifeId !== state.lifeId) {
-    if (operation.status === "complete") return NextResponse.json({state:lifeStore.get(operation.lifeId,user.id)});
+    if (operation.status === "complete") return NextResponse.json({state:await lifeStore.get(operation.lifeId,user.id)});
     return NextResponse.json({error: operation.status === "failed" ? "上次开局未完成，次数已退回，请重新开始" : "人生正在生成，请稍后恢复", code:operation.status === "failed" ? "START_FAILED" : "START_PENDING", operationId:operation.id}, {status:409});
   }
 
@@ -74,12 +74,12 @@ export async function POST(request: Request) {
           });
         transcript.push({ role: "user", content: buildTranscriptUserContent(state, undefined, true) });
         transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });
-        commerceStore.completeLife(operation.id, user.id, openedState, transcript);
+        await commerceStore.completeLife(operation.id, user.id, openedState, transcript);
         completed = true;
         controller.enqueue(encoder.encode(encodeSseMessage("complete", { state: openedState, event: item.value })));
       } catch {
         if (completed) return;
-        if (!completed) commerceStore.failLife(operation.id,user.id);
+        if (!completed) await commerceStore.failLife(operation.id,user.id);
         const message = "开局暂未完成，未消费积分。请稍后重试。";
         controller.enqueue(encoder.encode(encodeSseMessage("error", { error: message, code: "START_FAILED" })));
       } finally {
