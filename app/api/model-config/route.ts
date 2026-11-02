@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getModelConfigMode, getLocalModelConfigPath, maskModelConfig, readLocalModelConfig, writeLocalModelConfig } from "../../../lib/model-config";
+import { readJsonObject, withApiGuard } from "../../../lib/api-request";
 
 function environmentView() {
   const apiKey = (process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || "").trim();
@@ -11,20 +12,20 @@ function environmentView() {
   };
 }
 
-export async function GET() {
+export const GET = withApiGuard(async () => {
   const mode = getModelConfigMode();
   return NextResponse.json({ mode, config: mode === "local" ? maskModelConfig(readLocalModelConfig(getLocalModelConfigPath())) : environmentView() });
-}
+});
 
-export async function PUT(request: Request) {
+export const PUT = withApiGuard(async (request: Request) => {
   if (getModelConfigMode() !== "local") {
     return NextResponse.json({ error: "线上环境由服务端统一配置模型，不能修改" }, { status: 403 });
   }
-  const body = await request.json().catch(() => ({}));
+  const body = await readJsonObject(request, 8 * 1024);
   try {
     const config = writeLocalModelConfig(body, getLocalModelConfigPath());
     return NextResponse.json({ mode: "local", config: maskModelConfig(config) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "模型配置保存失败" }, { status: 400 });
   }
-}
+});

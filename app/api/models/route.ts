@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { readJsonObject, withApiGuard } from "../../../lib/api-request";
 import { getProvider, normalizeRemoteModels } from "../../../lib/provider-catalog";
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
+export const POST = withApiGuard(async (request: Request) => {
+  const body = await readJsonObject(request, 16 * 1024);
   const providerId = typeof body.providerId === "string" ? body.providerId : "";
   const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
   const provider = getProvider(providerId);
@@ -23,4 +24,4 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "读取模型列表失败，请稍后重试或使用推荐模型" }, { status: 502 });
   }
-}
+});

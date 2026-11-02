@@ -52,6 +52,26 @@ export async function withTransaction<T>(work: (client: PoolClient) => Promise<T
   }
 }
 
+const unavailableCodes = new Set([
+  "ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "EPIPE", "ETIMEDOUT",
+  "08000", "08001", "08003", "08004", "08006", "08007",
+  "28P01", "28000", "3D000", "53300", "53400", "57P01", "57P02", "57P03",
+]);
+
+/** 只识别连接、认证、库不存在和容量类错误；业务约束错误仍走各自的状态码。 */
+export function isDatabaseUnavailable(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 3; depth += 1) {
+    if (typeof current !== "object") return false;
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && unavailableCodes.has(code)) return true;
+    const message = current instanceof Error ? current.message : "";
+    if (/必须配置 DATABASE_URL|FINDJOY_DB_POOL_MAX 必须|timeout exceeded when trying to connect|Connection terminated|connection refused|ECONNREFUSED|ECONNRESET/i.test(message)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export async function closePostgres(): Promise<void> {
   const pool = databaseGlobal.findjoyPostgres;
   delete databaseGlobal.findjoyPostgres;

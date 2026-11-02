@@ -11,15 +11,16 @@ import { lifeStore } from "../../../../lib/life-store";
 import { createStartLife, parseStartLifeRequest, resolveStartPlan } from "../../../../lib/modes/start";
 import { storyStream } from "../../../../lib/story-stream";
 import { acquireGeneration, releaseGeneration, commitGeneration } from "../../../../lib/generation-capacity";
+import { readJsonObject, withApiGuard } from "../../../../lib/api-request";
 
 const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" };
 
-export async function POST(request: Request) {
+export const POST = withApiGuard(async (request: Request) => {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
-  const input = await request.json().catch(() => ({}));
-  if (!isLaunchModeAvailable(input?.mode ?? "normal")) {
+  const input = await readJsonObject(request);
+  if (!isLaunchModeAvailable(input.mode ?? "normal")) {
     return NextResponse.json({ error: "当前仅开放普通模式，其他玩法敬请期待", code: "MODE_UNAVAILABLE" }, { status: 403 });
   }
   const parsed = parseStartLifeRequest(input);
@@ -109,4 +110,4 @@ export async function POST(request: Request) {
     }
   });
   return new Response(stream, { headers: streamHeaders });
-}
+});

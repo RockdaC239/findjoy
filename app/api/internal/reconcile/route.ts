@@ -1,7 +1,8 @@
 import {timingSafeEqual} from "node:crypto";
 import {commerceStore} from "../../../../lib/commerce-store";
 import {queryPayment} from "../../../../lib/payments";
-export async function POST(request:Request){
+import {withApiGuard} from "../../../../lib/api-request";
+export const POST = withApiGuard(async (request:Request)=>{
  const secret=process.env.FINDJOY_RECONCILE_TOKEN??"";
  const supplied=request.headers.get("authorization")??"";
  const expected=`Bearer ${secret}`;
@@ -10,4 +11,4 @@ export async function POST(request:Request){
  const orders=await commerceStore.outstandingOrders();let checked=0,unconfirmed=0;
  for(const order of orders){try{await queryPayment(order);checked++;}catch{unconfirmed++;}}
  return Response.json({checked,unconfirmed},{headers:{"Cache-Control":"no-store"}});
-}
+});

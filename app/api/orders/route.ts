@@ -4,19 +4,20 @@ import { hasSameOrigin } from "../../../lib/auth-policy";
 import { commerceStore, CommerceError } from "../../../lib/commerce-store";
 import { products } from "../../../lib/products";
 import { createPayment, publicOrder } from "../../../lib/payments";
+import { readJsonObject, withApiGuard } from "../../../lib/api-request";
 
-export async function GET() {
+export const GET = withApiGuard(async () => {
   const user=await currentUser();
   if(!user)return Response.json({error:"请先登录"},{status:401});
   return Response.json({orders:(await commerceStore.listOrders(user.id)).map(publicOrder)},{headers:{"Cache-Control":"no-store"}});
-}
-export async function POST(request:Request) {
+});
+export const POST = withApiGuard(async (request:Request) => {
   const user=await currentUser();
   if(!user)return Response.json({error:"请先登录"},{status:401});
   if(!(await takeRateLimit(user.id,"orders",10,60000)))return Response.json({error:"操作频繁，请稍后再试"},{status:429});
   if(!hasSameOrigin(request,appOrigin()))return Response.json({error:"请求来源无效"},{status:403});
-  const body=await request.json().catch(()=>null);
-  if(!body || typeof body!=="object" || body.channel!=="WECHAT_H5")return Response.json({error:"当前仅支持微信支付"},{status:400});
+  const body=await readJsonObject(request, 8 * 1024);
+  if(body.channel!=="WECHAT_H5")return Response.json({error:"当前仅支持微信支付"},{status:400});
   try{
     const product=products().find(item=>item.id===body.productId);
     if(!product)return Response.json({error:"套餐不存在"},{status:400});
@@ -31,4 +32,4 @@ export async function POST(request:Request) {
     if(error instanceof CommerceError)return Response.json({error:error.message,code:error.code},{status:error.status});
     return Response.json({error:"暂时无法创建订单"},{status:503});
   }
-}
+});

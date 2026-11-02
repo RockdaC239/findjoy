@@ -12,6 +12,23 @@ import {identityStore} from "./identity-store";
 import {commerceStore} from "./commerce-store";
 beforeEach(async ()=>{await lifeStore.close();mocks.currentUser.mockResolvedValue(null);vi.stubEnv("FINDJOY_PAYMENTS_MODE","demo");});
 describe("order API ownership and authoritative pricing",()=>{
+ it("rejects oversized, malformed and non-object bodies before creating an order",async()=>{
+  const id=(await identityStore.resolveUser("https://auth.example","body-limits")).id;mocks.currentUser.mockResolvedValue({id});
+  const headers={origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":"body-limit"};
+  const oversized=new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers,body:JSON.stringify({productId:"light",channel:"WECHAT_H5",padding:"x".repeat(9000)})});
+  const tooLarge=await createOrder(oversized);expect(tooLarge.status).toBe(413);expect((await tooLarge.json()).code).toBe("BODY_TOO_LARGE");
+  const malformed=await createOrder(new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers,body:"{"}));
+  expect(malformed.status).toBe(400);expect((await malformed.json()).code).toBe("INVALID_BODY");
+  const array=await createOrder(new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers,body:"[]"}));
+  expect(array.status).toBe(400);
+  expect(await commerceStore.listOrders(id)).toHaveLength(0);
+ });
+ it("returns a retryable 503 instead of an unhandled error when the database is unavailable",async()=>{
+  mocks.currentUser.mockRejectedValueOnce(Object.assign(new Error("password=secret"),{code:"57P03"}));
+  const response=await createOrder(new Request("https://findfire.club/findjoy/api/orders",{method:"POST"}));
+  expect(response.status).toBe(503);expect(response.headers.get("retry-after")).toBe("5");
+  expect(JSON.stringify(await response.json())).not.toContain("secret");
+ });
  it("requires login and rejects cross-site writes",async()=>{
   const req=new Request("https://findfire.club/findjoy/api/orders",{method:"POST"});
   expect((await createOrder(req)).status).toBe(401);

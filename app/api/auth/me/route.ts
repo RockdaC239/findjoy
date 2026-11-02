@@ -1,4 +1,5 @@
 import { currentUser } from "../../../../lib/auth";
-export async function GET() {
+import { withApiGuard } from "../../../../lib/api-request";
+export const GET = withApiGuard(async () => {
   return Response.json({ user: await currentUser() }, { headers: { "Cache-Control": "no-store" } });
-}
+});
