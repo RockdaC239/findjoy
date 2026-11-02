@@ -50,6 +50,31 @@ npm run dev
 
 打开 <http://localhost:3000/findjoy>。项目使用 `basePath: /findjoy`，所以本地访问也需要带 `/findjoy` 前缀。
 
+### 本地 PostgreSQL
+
+所有服务端存储都要求 PostgreSQL，未配置 `DATABASE_URL` 时登录会跳回 `?error=unavailable`，健康检查返回 503；这不是登录页样式问题。准备一个仅监听本机的独立实例（推荐 PostgreSQL 15，与生产一致），在 `.env.local` 写入连接串后再启动 Next：
+
+```bash
+# macOS + Homebrew 示例；Linux 用对应发行版的 PostgreSQL 15 包
+brew install postgresql@15
+initdb -D .data/pg15-test/cluster -A trust --locale=en_US.UTF-8 -E UTF-8
+pg_ctl -D .data/pg15-test/cluster -o "-h 127.0.0.1 -p 55440" -l .data/pg15-test/server.log start
+createdb -h 127.0.0.1 -p 55440 findjoy_dev
+```
+
+```env
+# .env.local（不要提交）
+DATABASE_URL=postgresql://<本机用户>@127.0.0.1:55440/findjoy_dev
+FINDJOY_PG_BIN=/opt/homebrew/opt/postgresql@15/bin
+```
+
+```bash
+DATABASE_URL='postgresql://<本机用户>@127.0.0.1:55440/findjoy_dev' npm run db:migrate
+npm run dev
+```
+
+Next 只在进程启动时读取环境变量；修改 `.env.local` 后需要重启服务。可用 `curl -s http://localhost:3000/findjoy/api/health` 确认 `{"ready":true}`，再访问登录页。备份/恢复命令需要与数据库同版本的 `pg_dump` / `pg_restore`，通过 `FINDJOY_PG_BIN` 指向对应目录。
+
 ### 配置模型
 
 本地开发模式下，点击页面右上角「模型设置」，填写供应商、API Key 和模型，保存即可。配置由本地服务端写入：

@@ -6,15 +6,20 @@ import { safeReturnTo } from "../../../../lib/auth-policy";
 import { identityStore } from "../../../../lib/identity-store";
 
 export async function GET(request: Request) {
-  if (!(await takeRateLimit(request.headers.get("x-real-ip") ?? "local", "login", 20, 600000))) return NextResponse.json({error:"登录请求过于频繁，请稍后重试"},{status:429});
+  let step = "rate-limit";
   try {
+    if (!(await takeRateLimit(request.headers.get("x-real-ip") ?? "local", "login", 20, 600000))) return NextResponse.json({error:"登录请求过于频繁，请稍后重试"},{status:429});
+    step = "authorization";
     const { url, pending } = await authorizationRequest(safeReturnTo(new URL(request.url).searchParams.get("returnTo")));
+    step = "transaction";
     const token = await identityStore.beginLogin(pending);
     const response = NextResponse.redirect(url);
     response.cookies.set(LOGIN_COOKIE, token, cookieOptions(600));
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch {
+    // 只记录固定阶段，不输出连接串、认证参数或异常正文。
+    console.error(`[auth] login unavailable at ${step}`);
     if (!process.env.FINDJOY_APP_ORIGIN) return NextResponse.json({ error: "登录尚未配置" }, { status: 503 });
     return NextResponse.redirect(new URL("/findjoy/login?error=unavailable", appOrigin()));
   }
