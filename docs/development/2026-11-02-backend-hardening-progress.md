@@ -143,3 +143,76 @@ Owner 已授权按 [上线清单](backend-database-launch-checklist.md) 实施�
 - 修复证书 DNS 前缀误匹配，只有证书 SAN 精确包含别名时才生成相应 HTTPS 跳转块；自签名测试证书验证了正常覆盖与未覆盖前缀两种情况。
 - 本地安装 nginx 仅用于验证，未启动守护服务；真实 nginx 校验 HTTP/HTTPS 生成配置，故障注入覆盖语法失败、重载失败和正常应用。CI 已准备 nginx 工具但尚未实际运行。
 - 全套 245 项测试、lint、build、typecheck 及部署脚本 bash 语法检查通过。应用发布仍沿用旧目录流程，数据库预检、不可变发布目录、版本切换失败回退等后续项尚未完成，不能据此宣称整个发布流程已稳固。
+
+## 登录页 `error=unavailable` 诊断与本地数据库修复
+
+- 截图对应 `localhost:3000/findjoy/login?error=unavailable`。只读核验发现本机 Next 进程启动时没有 `DATABASE_URL`，`/findjoy/api/health` 返回 503；登录入口在限流/登录事务阶段访问 PostgreSQL 失败，随后跳回通用不可用提示。不是登录页样式或 Authing 品牌样式问题。
+- 在忽略目录 `.data/pg15-test` 建立独立 PostgreSQL 15.19 实例（仅监听 127.0.0.1:55440），创建 `findjoy_dev`，执行迁移；`.env.local` 增加本机连接串和 `FINDJOY_PG_BIN` 后重启 Next。健康检查恢复 `{"ready":true}`，登录入口恢复 307 到 Authing。
+- 登录入口只记录固定失败阶段（rate-limit / authorization / transaction），不输出连接串、认证参数或异常正文；补充成功、限流失败、授权失败三条测试。README 增加本地 PostgreSQL 准备和“修改环境变量后必须重启”的说明。
+- 提交：`fd7ad19 fix:登录不可用记录固定阶段并补齐本地数据库说明`。
+- 仍未完成真实 Authing 账号验证：浏览器只能确认跳转到 Authing 登录页，验证码/手机号验证需要 Owner 测试账号。
+
+## PostgreSQL 15.19 本地复验
+
+- 使用 Homebrew `postgresql@15`（15.19，与服务器版本一致）在 `.data/pg15-test` 启动独立实例；`findjoy_test` 用于全套测试，`findjoy_dev` 用于本地运行。
+- 首次用默认 PATH 的 PostgreSQL 14 `pg_dump` 跑备份测试时，在 dump 阶段失败；设置 `FINDJOY_PG_BIN=/opt/homebrew/opt/postgresql@15/bin` 后通过。这验证了备份工具必须与数据库大版本匹配，不能依赖服务器默认 PATH。
+- 配置 `TEST_DATABASE_URL` 和 `FINDJOY_PG_BIN` 后：47 个测试文件、281 项测试通过，`typecheck`、`lint`、`build` 通过。覆盖迁移、账号并发登录、订单/积分、SQLite 导入、备份恢复、生成准入、退款复核、API 边界、部署脚本和本地压测脚本。
+- 本地复验不等于 CI 或生产复验；GitHub Actions 的 PostgreSQL 15.19 服务尚未实际运行并保存结果。
+
+## API 请求边界与数据库故障反馈
+
+- 新增统一 JSON 读取：同时检查 `Content-Length` 和实际流式字节数，超限返回 413 `BODY_TOO_LARGE`；非法 UTF-8/JSON 或非对象返回 400 `INVALID_BODY`。各入口按用途限制 8–64 KiB，支付 webhook 保持 64 KiB。
+- 所有 API 路由接入兜底守卫：连接拒绝、认证失败、库不存在、连接池/容量类错误返回 503 `SERVICE_UNAVAILABLE` 和 `Retry-After: 5`；未知异常返回固定 500，不把堆栈、SQL 参数或连接串返回客户端。业务错误仍保留原状态码。
+- `next` 接口对 `choice` 做对象和长度校验，避免异常客户端把非对象传给领域逻辑。
+- 提交：`badd900 fix:限制API请求体并统一数据库故障反馈`。
+
+## 部署前预检与不可变发布回退
+
+- 新增 `scripts/preflight-deploy.mjs`：检查 Node 版本、应用/Authing/模型/支付配置、连接池和生成开关、PostgreSQL 版本、迁移版本与 SHA-256、运行角色是否越权、必要表/序列权限、最近备份的时效/大小/SHA-256、异机目标、告警 Webhook、磁盘余量。
+- 生产部署脚本改为：`npm ci` → 预检 → 构建 → 更新 systemd/nginx → 原子切换 `current` → 重启健康检查。预检/构建/nginx 失败不切换版本；健康检查失败自动切回上一个 release、恢复上一份 `.env` 并重启，新版本保留供排查。
+- 每次发布写入 `releases/<commit>`，默认保留最近 3 个；CI 从 `src` 改为同步到 release 目录。nginx 配置仍先校验后应用，失败恢复原文件，并保留 FindFire 的 `/` 与 `/api/v1/` 路由。
+- 提交：`0283f92 feat:增加部署前预检与不可变发布失败回退`。
+- 尚未在真实服务器执行；首次切换到 release 目录、systemd `WorkingDirectory=current` 和真实回退仍需要一次受控演练。
+
+## 备份保留、异机副本、告警与对账定时任务
+
+- 备份成功后先复制 archive/清单到 `FINDJOY_BACKUP_OFFSITE`（rclone 远程或私有绝对目录），校验大小/SHA-256，再清理本地过期备份；默认每日 7 份、每周 4 份，并清理超过一天的 `.partial`。异机失败时保留全部本地副本并非零退出。
+- 失败向 HTTPS `FINDJOY_ALERT_WEBHOOK` 发送固定字段告警；不包含凭据、订单或用户数据。
+- 新增 `scripts/reconcile-payments.mjs` 和 systemd timer 模板：每日 03:30 备份；每 5 分钟调用对账接口，令牌从环境文件读取。`scripts/install-maintenance-units.sh` 在缺少备份/异机/告警/对账配置时拒绝启用。
+- 提交：`ea0d00a feat:增加备份保留异机副本和支付对账定时任务`。
+- 尚未在服务器配置真实异机存储、Webhook、timer 或执行 RPO/RTO 演练；预检会在这些配置缺失时阻止发布。
+
+## 本地突发流量压测
+
+- 独立 `findjoy_load` 数据库、3200 端口生产构建、12 个合成用户、本地模型替身、全站生成并发 4。
+- 只读 20 并发 10 秒：5534 请求，551.5 req/s，全部 200，p99 22 ms，无网络/流错误。
+- 读 + 开局 12 并发 20 秒：7283 请求，364.0 req/s；读取 4859 全 200；开局 240 × 200、1792 × 429、392 × 503，p99 21 ms。429/503 分别来自每用户限制和全站 4 个在途上限，均有 `Retry-After: 5`，不是未处理异常。
+- 记录见 [load-test-2026-11-02.md](load-test-2026-11-02.md)，提交：`7179f3b feat:增加突发压测脚本和生产依赖审计门禁`。这是本地合成负载，不证明真实模型、4C 服务器或支付回调容量。
+
+## 浏览器链路验收
+
+- 本机 3000 端口：登录页不再显示不可用提示，点击「登录 / 创建账号」跳转到真实 Authing 登录页；健康检查 200。
+- 隔离 3100 端口（demo 支付、本地模型替身、独立 e2e 数据库，种子会话）：桌面 1652×762 完成首页 → 普通模式 → 性别选择 → 首幕 → 回首页恢复 → 继续到 2 岁 → 刷新仍保留；积分页 → 确认页 → 演示订单 → 模拟支付完成。移动 390×844 检查登录、游戏、积分、确认页，`scrollWidth` 等于视口宽度，无横向溢出。
+- 未完成：真实 Authing 验证码登录、真实支付回调/退款、真实模型长局和真实 4G 网络；演示购买不发放积分，不能替代收款验收。
+
+## 退款复核与积分调整
+
+- 新增 `003_payment_review.sql` 和 `joy_payment_review_events`。签名有效的退款/拒付/未知财务事件写入待复核队列并返回成功，停止平台无效重试；不自动改订单或积分，重复事件幂等。
+- 新增 `scripts/adjust-points.mjs`：只通过账本追加，默认 dry-run；同一 `reason + reference` 幂等，引用金额冲突拒绝，负调整不能使可用积分小于 0，`held` 不受影响；可在同一事务把复核事件标记为 reviewed。
+- 操作与生产回调验收步骤见 [payment-refund-adjustment.md](payment-refund-adjustment.md)，提交：`4bc4ce0 feat:退款事件转人工复核并增加可审计积分调整`。
+- 退款政策、已消费积分如何处理仍待 Owner 决定；真实退款演练和真实回调验收未执行。
+
+## 依赖安全核查
+
+- `npm audit --omit=dev --audit-level=high`：0 个生产依赖漏洞。
+- 完整 `npm audit` 仍有 eslint/vitest 工具链的开发依赖公告；它们不进入生产运行包。未使用 `npm audit fix --force` 做未验证的大版本升级。
+- CI 已增加生产依赖审计门禁；提交：`7179f3b`。
+
+## 当前仍不能视为具备上线条件
+
+1. 生产数据库迁移、旧 SQLite 导入、独立受限角色创建和生产库切换尚未执行；线上仍是原版本。
+2. 真实异机备份、告警、systemd timer、恢复演练和 RPO/RTO 尚未在服务器完成。
+3. PostgreSQL 15.19 只在本地复验；CI 尚未实际运行，服务器版本/权限/容量仍需实测。
+4. 真实 Authing 登录、真实支付首单、重复回调、退款和对账未验收；`FINDJOY_PAYMENTS_MODE` 在真实验收前保持 demo。
+5. 真实模型与 4C 服务器的受控压测未完成，现有并发 4 只是保守初值。
+6. 退款/部分退款和已消费积分的业务规则待 Owner 确认。
