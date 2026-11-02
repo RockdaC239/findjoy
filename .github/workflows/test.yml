@@ -1,0 +1,78 @@
+name: 测试（test 分支）
+
+on:
+  push:
+    branches: [test]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15.19-alpine
+        env:
+          POSTGRES_USER: findjoy_test
+          POSTGRES_PASSWORD: findjoy_test_ci
+          POSTGRES_DB: findjoy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U findjoy_test -d findjoy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://findjoy_test:findjoy_test_ci@127.0.0.1:5432/findjoy_test
+      FINDJOY_APP_ORIGIN: http://localhost:3000
+      DATABASE_URL: postgresql://findjoy_test:findjoy_test_ci@127.0.0.1:5432/findjoy_test
+      AUTHING_ISSUER: https://issuer.example/oidc
+      AUTHING_CLIENT_ID: ci-test
+      LLM_BASE_URL: https://api.example.com/v1
+      LLM_API_KEY: ci-test-key
+      LLM_MODEL: ci-test-model
+      FINDJOY_PAYMENTS_MODE: demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 使用 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 准备 PostgreSQL 15 备份恢复客户端
+        run: |
+          if [ ! -x /usr/lib/postgresql/15/bin/pg_dump ]; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-common
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client-15
+          fi
+          echo "FINDJOY_PG_BIN=/usr/lib/postgresql/15/bin" >> "$GITHUB_ENV"
+
+      - name: 准备 nginx 配置验证工具
+        run: |
+          if [ ! -x /usr/sbin/nginx ]; then
+            sudo apt-get update
+            sudo apt-get install --yes nginx
+          fi
+          echo "NGINX_BIN=/usr/sbin/nginx" >> "$GITHUB_ENV"
+
+      - name: 生产依赖安全审计
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: 类型检查 / 测试 / Lint / 构建
+        run: |
+          npm run typecheck
+          npm test
+          npm run lint
+          npm run build
