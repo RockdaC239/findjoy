@@ -41,9 +41,11 @@ nginx:
 
 # 服务器路径（由 GitHub Secrets 里的 DEPLOY_USER 决定，默认 rocc）
 paths:
-  src: /home/rocc/apps/findjoy/src
+  src: /home/rocc/apps/findjoy/src          # 旧布局保留为回退目录/首次切换前的版本
+  releases: /home/rocc/apps/findjoy/releases # 每次提交一个不可变发布目录
+  current: /home/rocc/apps/findjoy/current   # 指向当前 release 的软链，systemd 使用
   env: /home/rocc/apps/findjoy/.env
-  data: /home/rocc/apps/findjoy/data   # SQLite 持久化目录（LIFE_DB_PATH 指向这里）
+  data: /home/rocc/apps/findjoy/data        # 持久化数据目录（备份、旧库文件）
 
 environments:
   production:

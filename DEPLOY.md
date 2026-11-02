@@ -11,8 +11,9 @@
 | 执行层 | 服务器上的幂等部署脚本 | `deploy/deploy-production.sh` |
 | 服务器初始化 | 一次性脚本 | `scripts/bootstrap-server.sh` |
 
-架构：`GitHub push main` → Actions 跑测试 → rsync 代码到服务器 → 执行部署脚本
-（npm ci + build → systemd 守护 `next start` 监听 127.0.0.1:3001 → nginx 反代对外 80/443 → 健康检查）。
+架构：`GitHub push main` → Actions 跑测试 → rsync 到 `releases/<commit>` → 部署前预检
+→ npm ci + build → 原子切换 `current` 软链 → systemd 守护 `next start` 监听 127.0.0.1:3001
+→ nginx 反代对外 80/443 → 健康检查；失败自动切回上一个 release。
 
 ---
 
@@ -66,20 +67,36 @@ sudo bash ~/bootstrap-server.sh
 | `DEPLOY_HOST` | 服务器公网 IP |
 | `DEPLOY_USER` | `rocc`（与 bootstrap 一致） |
 | `DEPLOY_SSH_KEY` | bootstrap 打印的私钥全文（含 `-----BEGIN/END OPENSSH PRIVATE KEY-----`） |
-| `APP_ENV` | 应用环境变量，多行，例如： |
+| `APP_ENV` | 应用环境变量，多行，必须使用 PostgreSQL，例如： |
 
-```
-LLM_BASE_URL=https://api.openai.com/v1
+```env
+FINDJOY_APP_ORIGIN=https://findfire.club
+AUTHING_ISSUER=https://findjoy.authing.cn/oidc
+AUTHING_CLIENT_ID=...
+DATABASE_URL=postgresql://findjoy_app:密码@127.0.0.1:54323/findjoy
+FINDJOY_DB_POOL_MAX=5
+FINDJOY_PG_BIN=/usr/lib/postgresql/15/bin
+
+LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=sk-你的key
-LLM_MODEL=gpt-4o-mini
-LLM_INPUT_COST_PER_MILLION=0
-LLM_OUTPUT_COST_PER_MILLION=0
-LIFE_DB_PATH=/home/rocc/apps/findjoy/data/life.db
+LLM_MODEL=deepseek-chat
+
+FINDJOY_PAYMENTS_MODE=demo
+FINDJOY_TRIAL_CREDITS=100
+FINDJOY_GENERATION_ENABLED=true
+FINDJOY_GENERATION_MAX_CONCURRENT=4
+FINDJOY_RECONCILE_TOKEN=至少32位随机字符
+
+FINDJOY_BACKUP_DIR=/home/rocc/apps/findjoy/backups
+FINDJOY_BACKUP_OFFSITE=rclone:findjoy-backup:findjoy
+FINDJOY_ALERT_WEBHOOK=https://hooks.example.com/findjoy
 ```
 
-> `LIFE_DB_PATH` 指向服务器持久化目录，SQLite 数据不会因部署被覆盖。
+> 生产预检会检查数据库版本/迁移/权限、最近备份、异机目标、告警 Webhook、支付配置和磁盘余量；任何一项失败都不会构建或切换版本。`DATABASE_URL` 必须使用独立受限角色，不能复用 PostgreSQL 超级用户。`.env` 只保存在服务器，不进入 Git 或发布目录。
 
 ## 第 4 步：推送代码，触发部署
+
+首次发布前还要完成数据库迁移、备份/异机/告警配置和恢复演练；生产预检未通过时流水线会停在构建前。
 
 ```bash
 git add deploy.config.yml deploy/ scripts/ .github/
@@ -169,13 +186,29 @@ openssl s_client -connect findfire.club:443 -servername findfire.club </dev/null
 
 `app/showcase/ShowcaseDeck.tsx` 的链接文案和 `public/findjoy-qr.png` 目前指向 `http://124.221.235.9/findjoy`。强制 HTTPS 后，用 IP 访问的 HTTP 会被 301 到 `https://<IP>`，触发证书不匹配警告；建议把二维码和文案改成 `https://findfire.club/findjoy`。
 
-## 回滚
+## 发布目录、预检与回滚
 
-部署脚本在构建失败时自动回滚 `.next`。若要回滚整个版本：在 GitHub 重新跑上一个 commit 的 Actions（`workflow_dispatch`），或服务器上手动 `git checkout <旧commit>` 后重新部署。
+- 每次发布写入 `SERVER_PATH/releases/<commit>`，构建成功后才把 `current` 软链原子切换到该目录；正在运行的旧进程和旧文件不被覆盖。
+- 构建、预检或 nginx 配置失败时，`current` 不切换，旧版本继续服务；失败的新目录会被清理。
+- 健康检查失败时，脚本自动把 `current` 切回上一个 release、恢复上一份 `.env` 并重启，保留失败版本供排查。
+- 默认保留最近 3 个 release（`KEEP_RELEASES` 可调），旧目录在成功后清理；`src` 仅作为旧布局的回退目录保留。
+- 紧急手动回退须由 Owner 确认范围，只切换到已验证的旧 release：
+
+```bash
+# 示例；先确认目标 release 和当前版本，禁止直接改数据库或手工覆盖源码
+sudo systemctl stop findjoy
+sudo bash /home/rocc/apps/findjoy/current/deploy/switch-release.sh \
+  rollback /home/rocc/apps/findjoy /home/rocc/apps/findjoy/releases/<旧commit>
+sudo systemctl start findjoy
+curl -fsS http://127.0.0.1:3001/findjoy/api/health
+```
+
+切换后若已有新写入，不能简单恢复旧数据库备份；应暂停写入口、保全新数据并前向修复。
 
 ## 常见问题
 
 - **SSH Permission denied**：确认 `DEPLOY_SSH_KEY` 是 bootstrap 打印的私钥全文；`DEPLOY_USER` 与 bootstrap 的 `DEPLOY_USER` 一致。
 - **端口访问不了**：安全组没放行 80/443；或 nginx 未 reload（看 `sudo nginx -t`）。
 - **better-sqlite3 编译失败**：服务器缺 build-essential/python3，重跑 bootstrap。
-- **服务反复重启**：`sudo journalctl -u findjoy -n 50` 看日志，多为 `.env` 缺 `LLM_API_KEY`。
+- **服务反复重启**：`sudo journalctl -u findjoy -n 50` 看日志，多为 `.env` 缺 `LLM_API_KEY` 或数据库迁移未执行。
+- **部署停在预检**：按输出逐项修复，常见原因是迁移校验和不一致、运行角色权限过高、最近备份超过 26 小时、未配置异机/告警目标或磁盘不足。不要用跳过预检的方式强行发布。

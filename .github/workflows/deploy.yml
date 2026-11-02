@@ -75,12 +75,19 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: 计算发布版本
+        id: release
+        run: echo "id=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
       - name: 同步代码到服务器
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           SERVER_PATH: /home/${{ secrets.DEPLOY_USER }}/apps/findjoy
+          RELEASE_ID: ${{ steps.release.outputs.id }}
         run: |
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
+            "$USER@$HOST" "mkdir -p '$SERVER_PATH/releases/$RELEASE_ID'"
           rsync -avz --delete \
             --exclude='.git/' \
             --exclude='node_modules/' \
@@ -93,16 +100,17 @@ jobs:
             --exclude='.playwright-mcp/' \
             --exclude='.workbuddy/' \
             -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no" \
-            ./ "$USER@$HOST:$SERVER_PATH/src/"
+            ./ "$USER@$HOST:$SERVER_PATH/releases/$RELEASE_ID/"
 
       - name: 执行部署脚本
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           SERVER_PATH: /home/${{ secrets.DEPLOY_USER }}/apps/findjoy
+          RELEASE_ID: ${{ steps.release.outputs.id }}
           APP_ENV: ${{ secrets.APP_ENV }}
         run: |
           printf '%s\n' "$APP_ENV" | ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
             "$USER@$HOST" "cat > /tmp/findjoy_app_env"
           ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no "$USER@$HOST" \
-            "cd $SERVER_PATH/src && DEPLOY_USER='$USER' bash deploy/deploy-production.sh"
+            "cd '$SERVER_PATH/releases/$RELEASE_ID' && DEPLOY_USER='$USER' SERVER_PATH='$SERVER_PATH' RELEASE_ID='$RELEASE_ID' bash deploy/deploy-production.sh"
