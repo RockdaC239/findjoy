@@ -1,6 +1,7 @@
 import * as oidc from "openid-client";
 import { appOrigin } from "./auth";
 import type { LoginTransaction } from "./identity-store";
+import { verifiedPhoneNumber } from "./account-profile";
 
 let cached: Promise<oidc.Configuration> | undefined;
 
@@ -28,10 +29,10 @@ export async function authorizationRequest(returnTo: string) {
     verifier: oidc.randomPKCECodeVerifier(), returnTo,
   };
   const url = oidc.buildAuthorizationUrl(config, {
-    redirect_uri: `${appOrigin()}/findjoy/api/auth/callback`, scope: "openid profile",
+    redirect_uri: `${appOrigin()}/findjoy/api/auth/callback`, scope: "openid profile phone",
     code_challenge: await oidc.calculatePKCECodeChallenge(pending.verifier),
     code_challenge_method: "S256", state: pending.state, nonce: pending.nonce,
-    response_mode: "query",
+    response_mode: "query", prompt: "login",
   });
   return { url, pending };
 }
@@ -46,6 +47,10 @@ export async function authenticateCallback(request: Request, pending: LoginTrans
   });
   const claims = tokens.claims();
   if (!claims?.sub) throw new Error("认证结果缺少身份");
+  const profile = !verifiedPhoneNumber(claims) && config.serverMetadata().userinfo_endpoint
+    ? await oidc.fetchUserInfo(config, tokens.access_token, claims.sub)
+    : claims;
   return { issuer: config.serverMetadata().issuer, subject: claims.sub,
+    phone: verifiedPhoneNumber(profile),
     displayName: typeof claims.nickname === "string" ? claims.nickname : "探索者" };
 }

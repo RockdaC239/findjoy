@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AccountAvatar } from "./AccountAvatar";
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 const AccountUserContext = createContext<{ displayName: string } | null>(null);
@@ -9,7 +10,7 @@ export function AccountUserProvider({ user, children }: { user: { displayName: s
   return <AccountUserContext.Provider value={user}>{children}</AccountUserContext.Provider>;
 }
 
-export function AccountNav({ children, showRecharge = true }: { children?: ReactNode; showRecharge?: boolean }) {
+export function AccountNav({ children }: { children?: ReactNode }) {
   const user = useContext(AccountUserContext);
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -25,7 +26,6 @@ export function AccountNav({ children, showRecharge = true }: { children?: React
   }, [open]);
 
   return <>
-    {showRecharge && <Link className="settings-button" href="/plans">积分充值</Link>}
     {children}
     {user ? <div ref={menu} className="account-menu"
       onMouseEnter={() => { if (window.matchMedia("(hover: hover)").matches) setOpen(true); }}
@@ -36,7 +36,7 @@ export function AccountNav({ children, showRecharge = true }: { children?: React
       }}>
       <div className="account-menu-trigger">
         <Link href="/account" className="account-profile-link" aria-label={`${user.displayName}的个人中心`}>
-          <span className="account-avatar" aria-hidden="true">{Array.from(user.displayName)[0]}</span>
+          <AccountAvatar />
           <span className="account-nickname">{user.displayName}</span>
         </Link>
         <button ref={toggle} className="account-menu-toggle" type="button" aria-label="展开账户菜单" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen(value => window.matchMedia("(hover: hover)").matches || !value)}>

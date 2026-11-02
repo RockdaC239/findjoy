@@ -5,6 +5,34 @@ import { getDb, lifeStore } from "./life-store";
 afterEach(() => lifeStore.close());
 
 describe("shared identity boundary", () => {
+  it("preserves edited nicknames across logins and sessions", () => {
+    const user = identityStore.resolveUser("https://identity.example", "owner");
+    const session = identityStore.createSession(user.id);
+    identityStore.updateDisplayName(user.id, "  小橙  ");
+    identityStore.resolveUser("https://identity.example", "owner", "供应商昵称");
+    expect(identityStore.getSession(session.token)?.displayName).toBe("小橙");
+    for (const name of ["", " ", "a".repeat(81), "名字\n下一行"]) {
+      expect(() => identityStore.updateDisplayName(user.id, name)).toThrow();
+    }
+  });
+
+  it("adds profile columns without losing existing accounts or sessions", () => {
+    getDb().exec("CREATE TABLE identity_users (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, created_at INTEGER NOT NULL); INSERT INTO identity_users VALUES ('legacy', '原昵称', 1)");
+    const session = identityStore.createSession("legacy");
+    expect(identityStore.getSession(session.token)).toMatchObject({ id: "legacy", displayName: "原昵称" });
+    expect(identityStore.getPhone("legacy")).toBeNull();
+  });
+
+  it("stores phone updates for the matching identity without exposing them in navigation profiles", () => {
+    const user = identityStore.resolveUser("https://identity.example", "owner", "探索者", "+8613800000000");
+    const other = identityStore.resolveUser("https://identity.example", "other");
+    expect(identityStore.getPhone(user.id)).toBe("+8613800000000");
+    expect(identityStore.getPhone(other.id)).toBeNull();
+    expect(identityStore.getSession(identityStore.createSession(user.id).token)).not.toHaveProperty("phone");
+    identityStore.resolveUser("https://identity.example", "owner", "探索者", null);
+    expect(identityStore.getPhone(user.id)).toBeNull();
+  });
+
   it("keeps a global UUID stable across logins without using the provider subject as its ID", () => {
     const first = identityStore.resolveUser("https://identity.example/oidc", "external-1", "探索者");
     const again = identityStore.resolveUser("https://identity.example/oidc", "external-1", "新的昵称");

@@ -198,3 +198,18 @@ FindJoy 新增 identity_users / identity_links / identity_sessions 与一次性 
 实现更新：FindJoy 已完成次数预占/消费/释放、事件推进租约、结局缓存，以及小豆 RSA 签名/响应验签/webhook 与查询补偿；套餐/支付页默认 demo，不真实收款、不发付费次数。正式登录和收款仍须真实验证码及首单验证。首次赠送默认 1 次（可设 0）；超时预占按后续请求或对账任务惰性恢复。
 
 后续 FindFire 仍使用独立业务权益；建议支付应用/订单前缀和回调按产品独立，不把 FindJoy 支付凭证或次数账本当生态通用收费中心。当前没有实现 FindFire 订阅或生产账号迁移。运行步骤见 FindJoy 的 docs/development/authing-xiaodou-operations.md。
+
+## 2026-11-02 账户资料展示更新
+
+FindJoy 通过 OIDC `phone` scope 获取 `phone_number` / `phone_number_verified`，只保存认证服务标记为已验证的手机号，供本人账户页展示。旧账号在下次登录时补齐；未返回或未验证时显示暂未获取，不从昵称、subject 或内部 UUID 推断手机号。手机号不进入全站导航资料、模型提示词或日志，不改变 issuer + subject → 全局 UUID 的身份映射，也不用于自动关联 FindFire 账号。
+
+FindJoy 账户页允许本人修改昵称（1–80 字符，拒绝控制字符）；服务端校验会话与请求来源，客户端不能指定修改对象。自定义昵称保存到现有 identity_users，并标记为用户编辑，后续登录不以认证供应商昵称覆盖。该编辑目前只在 FindJoy 生效；FindFire 尚未接入此资料编辑能力，不宣称已经跨产品同步。现有账户、会话及业务归属通过增量加列保留，不删库重建。
+## 2026-11-02 数据库选型与上线准备更新
+
+Owner 已明确当前创业阶段暂不购买托管数据库，先采用服务器自部署 PostgreSQL，用户量与收入增长后再评估托管。此决定覆盖前文针对本阶段默认优先托管数据库的建议，不改变托管认证 Authing 的选型。
+
+FindJoy 当前代码仍使用 SQLite；PostgreSQL 迁移和服务器部署均尚未执行。实施前先核实 FindFire 已有 PostgreSQL 的真实运行状态、资源、网络与备份；适合时复用实例，两产品使用独立数据库与账号权限。共享实例不等于合并业务数据、权益或允许跨库访问，公共身份映射仍只有一个权威来源。
+
+FindJoy 主仓库的 `docs/development/backend-database-launch-checklist.md` 记录上线前数据库迁移、生成并发限制、支付验收、备份恢复、压测及发布回滚要求。该清单不是已实现能力或生产发布授权；后续执行仍遵循各仓库发布约束。FindFire 接入统一身份、旧 ID 迁移与正式持久化禁止静默回退内存，仍需单独实施验收。
+
+登录行为补充：FindJoy 主动发起 OIDC 登录时携带 `prompt=login`，要求认证中心重新验证身份，避免退出本站后再次点击登录直接复用 Authing 会话。退出仍撤销当前 FindJoy 会话，不扩大为全用户池或其他产品的全局登出。参数依据：[Authing OIDC 授权码模式](https://docs.authing.cn/federation/oidc/authorization-code/)。

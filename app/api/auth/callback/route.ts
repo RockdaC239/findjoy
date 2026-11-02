@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   try {
     if (!pending) throw new Error("登录已过期");
     const identity = await authenticateCallback(request, pending);
-    const user = identityStore.resolveUser(identity.issuer, identity.subject, identity.displayName);
+    const user = identityStore.resolveUser(identity.issuer, identity.subject, identity.displayName, identity.phone);
     commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
     const previous = jar.get(SESSION_COOKIE)?.value;
     if (previous) identityStore.revokeSession(previous);
