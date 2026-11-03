@@ -365,9 +365,9 @@ describe("model configuration", () => {
 
   it("guides relationship and love arcs instead of perpetual singleness", () => {
     const prompt = buildSystemPrompt(true);
-    expect(prompt).toContain("感情线");
-    expect(prompt).toContain("恋爱、婚姻、伴侣");
-    expect(prompt).toContain("不要总是让玩家一直单身、迟迟不婚");
+    expect(prompt).toContain("已有亲密关系要发展和回应");
+    expect(prompt).toContain("关系不局限于婚恋");
+    expect(prompt).toContain("不强制每局结婚生子");
   });
 
   it("falls back to a deterministic event instead of leaving a life stuck when the model keeps failing", async () => {
@@ -466,7 +466,7 @@ describe("model configuration", () => {
 describe("life background system prompt", () => {
   it("returns the base prompt without a background profile", () => {
     expect(buildSystemPrompt(true)).toBe(buildSystemPrompt(true, {}));
-    expect(buildSystemPrompt(true)).toContain("开局第一个事件更要重要");
+    expect(buildSystemPrompt(true)).toContain("当前是决策阶段");
   });
 
   it("requires the player gender to stay fixed across the whole life", () => {

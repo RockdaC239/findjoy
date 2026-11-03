@@ -52,10 +52,9 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
   const base = expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
   const profile = background ? buildBackgroundDirective(background) : "";
   const scenarioDirective = scenario ? buildScenarioDirective(scenario) : "";
-  // 预防式张力轴轮换：把上一节点的价值张力轴写进提示词，让模型主动避开，
-  // 而不是等它写重复了再重试（消除"张力轴重复"这一类重试）。
+  // 近期价值课题用于防止复演，允许处境变化后的自然延续。
   const axisHint = expectChoices && avoidAxis
-    ? `【张力轴轮换】上一节点的价值张力轴是"${avoidAxis}"。本轮选项的张力轴必须与它不同（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要重复"${avoidAxis}"这一条。`
+    ? `【张力轴轮换】上一节点的价值张力轴是"${avoidAxis}"。避免复演同样的处境与三项选择；若责任、资源或关系已有变化，可以继续这一课题，让上一行动的结果推进问题，而不是为了换轴另开事件。`
     : "";
   // 题材域层防重指令（预防式）：跨人生主线固定、单局内已离开方向逐轮动态，
   // 与张力轴一样放在提示词尾部，只作为追加后缀，不破坏 DeepSeek 前缀缓存。
