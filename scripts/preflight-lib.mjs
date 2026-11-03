@@ -161,7 +161,7 @@ export function staticChecks(env, options = {}) {
   checks.push(positiveInteger(env.FINDJOY_GENERATION_MAX_CONCURRENT ?? 4, 1, 20)
     ? pass("generation.concurrency", "全站生成并发上限在 1–20 之间")
     : fail("generation.concurrency", "FINDJOY_GENERATION_MAX_CONCURRENT 必须是 1–20 的整数"));
-  checks.push(positiveInteger(env.FINDJOY_TRIAL_CREDITS ?? 100, 0, 100)
+  checks.push(positiveInteger(env.FINDJOY_TRIAL_CREDITS ?? 40, 0, 100)
     ? pass("generation.trialCredits", "新用户赠送积分在 0–100 之间")
     : fail("generation.trialCredits", "FINDJOY_TRIAL_CREDITS 必须是 0–100 的整数"));
 

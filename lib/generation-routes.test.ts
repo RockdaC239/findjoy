@@ -34,7 +34,7 @@ it("continues an admitted opening after cancellation, saves it once and replays 
  const response=await start(request());const reader=response.body!.getReader();await reader.read();await reader.cancel();
  expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:1}]);
  finish();
- await vi.waitFor(async()=>{expect(await commerceStore.balance("alice")).toEqual({available:80,held:0});expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:0}]);});
+ await vi.waitFor(async()=>{expect(await commerceStore.balance("alice")).toEqual({available:20,held:0});expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:0}]);});
  vi.stubEnv("FINDJOY_GENERATION_ENABLED","false");
  const replay=await start(request());expect(replay.status).toBe(200);expect((await replay.json()).state.lifeId).toBeTypeOf("string");
  expect(mocks.stream).toHaveBeenCalledTimes(1);
@@ -42,7 +42,7 @@ it("continues an admitted opening after cancellation, saves it once and replays 
 it("releases admission and refunds the opening when generation fails",async()=>{
  mocks.stream.mockImplementation(async function*(){yield {text:"partial"};throw new Error("upstream");});
  const response=await start(request());expect(await response.text()).toContain("START_FAILED");
- expect(await commerceStore.balance("alice")).toEqual({available:100,held:0});
+ expect(await commerceStore.balance("alice")).toEqual({available:40,held:0});
  expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:0}]);
 });
 
@@ -54,7 +54,7 @@ it("recovers a committed opening when confirmation fails instead of telling the 
  });
  const response=await start(request());const text=await response.text();
  expect(text).toContain("event: complete");expect(text).not.toContain("START_FAILED");
- expect(await commerceStore.balance("alice")).toEqual({available:80,held:0});
+ expect(await commerceStore.balance("alice")).toEqual({available:20,held:0});
  const replay=await start(request());expect(replay.status).toBe(200);expect(mocks.stream).toHaveBeenCalledTimes(1);
 });
 
@@ -64,5 +64,5 @@ it("preserves an uncertain opening key when the database cannot confirm recovery
  vi.spyOn(commerceStore,"getOperation").mockRejectedValueOnce(new Error("database unavailable"));
  const response=await start(request());const text=await response.text();
  expect(text).toContain("START_UNCONFIRMED");expect(text).not.toContain("START_FAILED");
- expect(await commerceStore.balance("alice")).toEqual({available:80,held:20});
+ expect(await commerceStore.balance("alice")).toEqual({available:20,held:20});
 });

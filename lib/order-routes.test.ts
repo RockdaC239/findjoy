@@ -40,7 +40,7 @@ describe("order API ownership and authoritative pricing",()=>{
   const request=()=>new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":"buy"},body:JSON.stringify({productId:"light",channel:"WECHAT_H5",amountFen:1,credits:999})});
   const first=await(await createOrder(request())).json();
   const second=await(await createOrder(request())).json();
-  expect(first.order.id).toBe(second.order.id);expect(first.order.amountFen).toBe(990);expect(first.order.credits).toBe(100);
+  expect(first.order.id).toBe(second.order.id);expect(first.order.amountFen).toBe(990);expect(first.order.credits).toBe(40);
   mocks.currentUser.mockResolvedValue({id:"bob"});
   const params={params:Promise.resolve({id:first.order.id})};
   expect((await orderStatus(new Request("https://findfire.club"),params)).status).toBe(404);
