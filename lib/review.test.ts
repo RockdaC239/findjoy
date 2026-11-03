@@ -45,3 +45,18 @@ describe("life review", () => {
     expect(review.modeLabel).toBe("普通模式");
   });
 });
+
+it("renders the grounded reflection separately from short public sharing copy", () => {
+  const review = parseReview({ ending: {
+    age: 82, death: "自然离世", facts: { events: 3 }, highlights: [], patterns: ["旧观察"],
+    reflection: "你给别人留出了时间，也逐渐给自己的生活留出了位置。",
+    shareLines: ["把能给的说清楚，照顾才有长久的形状。", "手机号15200297440", "https://example.com", "债务和病史留在这里", "把能给的说清楚，照顾才有长久的形状。"],
+  } }, view);
+  expect(review.observation).toBe("你给别人留出了时间，也逐渐给自己的生活留出了位置。");
+  expect(review.shareLines).toEqual(["把能给的说清楚，照顾才有长久的形状。"]);
+});
+
+it("does not turn a private legacy observation into public poster text", () => {
+  const review = parseReview({ ending: { patterns: ["家人的疾病让你重新安排生活。"] } }, view);
+  expect(review.shareLines).toEqual([]);
+});

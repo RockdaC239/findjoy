@@ -1,3 +1,4 @@
+import { normalizeShareLines } from "./share-copy";
 import type { LifeView } from "./life-view";
 import { getScenarioLabel, getScenarioReviewQuestion } from "./modes/scenario";
 
@@ -7,6 +8,7 @@ export interface Review {
   facts: string[];
   moments: string[];
   observation: string;
+  shareLines?: string[];
   question: string;
   modeLabel: string;
   modeDetail: string;
@@ -24,6 +26,7 @@ const demoReview: Review = {
   ],
   observation:
     "从你的选择来看，你常常会在真正重要的时刻为关系停下来。年轻时，你也许很在意证明自己；后来，你似乎越来越愿意把时间留给那些无法替代的人和事。",
+  shareLines: [],
   question: "如果这是你真实的一生，你愿意这样活吗？",
   modeLabel: "普通模式",
   modeDetail: "随机出身 · 从 0 岁开始",
@@ -67,7 +70,8 @@ export function parseReview(payload: unknown, current: LifeView): Review {
     death: getString(ending.death, demoReview.death),
     facts: [getString(facts.occupation, current.occupation), `在${getString(facts.city, current.city)}生活过`, eventCount],
     moments: moments.length ? moments : demoReview.moments,
-    observation: patterns.filter((item): item is string => typeof item === "string").join(" ") || demoReview.observation,
+    observation: getString(ending.reflection, patterns.filter((item): item is string => typeof item === "string").join(" ") || demoReview.observation),
+    shareLines: normalizeShareLines(ending.shareLines),
     question: getScenarioReviewQuestion(current.scenario),
     modeLabel: getScenarioLabel(current.scenario).label,
     modeDetail: getScenarioLabel(current.scenario).detail,
