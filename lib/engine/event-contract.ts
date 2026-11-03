@@ -361,3 +361,6 @@ export function normalizeEnding(value: unknown): LifeEnding | null {
   };
 }
 
+
+export const EVENT_RETRY_GUIDANCE = "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。";
+export const ENDING_RETRY_GUIDANCE = "age 为数字，death 为字符串，facts 含 occupation/city/events，highlights 4-8 条（每项含 age 和 title），patterns 1-3 句，全程不含姓名。";
