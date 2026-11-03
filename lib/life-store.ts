@@ -60,6 +60,7 @@ export const lifeStore = {
   },
   async recentBackgroundAvoid(limit = 5, userId?: string): Promise<BackgroundAvoid> {
     const rows = await recentStates(limit,userId);
+    const opportunity: NonNullable<BackgroundAvoid["opportunity"]>[number][] = [];
     const economy: string[] = [];
     const structure: string[] = [];
     const event: string[] = [];
@@ -71,8 +72,10 @@ export const lifeStore = {
       if (!economy.includes(bg.economy)) economy.push(bg.economy);
       if (!structure.includes(bg.structure)) structure.push(bg.structure);
       if (!event.includes(bg.event)) event.push(bg.event);
+      if (bg.opportunity && !opportunity.includes(bg.opportunity)) opportunity.push(bg.opportunity);
     }
     return {
+      opportunity,
       economy: economy as BackgroundAvoid["economy"],
       structure: structure as BackgroundAvoid["structure"],
       event: event as BackgroundAvoid["event"],

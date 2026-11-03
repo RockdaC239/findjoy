@@ -8,6 +8,7 @@ import {
   flagsToBackground,
   OPENING_EVENT_GENRES,
   rollBackground,
+  OPPORTUNITY_SETTINGS,
 } from "./background";
 
 function seededRandom(seed: number) {
@@ -95,4 +96,18 @@ describe("life background", () => {
     expect(directive).toContain("开局事件基调：平凡开端");
     expect(directive).not.toContain("天赋");
   });
+});
+
+ it("samples and persists opportunity environments without prescribing a career", () => {
+  const seen = new Set<string>();
+  for (let i = 0; i < 500; i++) {
+    const bg = rollBackground(seededRandom(i));
+    expect(OPPORTUNITY_SETTINGS).toContain(bg.opportunity);
+    expect(flagsToBackground(backgroundToFlags(bg))).toEqual(bg);
+    seen.add(bg.opportunity!);
+  }
+  expect(seen.size).toBe(OPPORTUNITY_SETTINGS.length);
+  const avoided = rollBackground(() => 0, { opportunity: [OPPORTUNITY_SETTINGS[0]] });
+  expect(avoided.opportunity).not.toBe(OPPORTUNITY_SETTINGS[0]);
+  expect(buildBackgroundDirective(avoided)).toContain("不决定你的职业");
 });

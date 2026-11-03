@@ -65,7 +65,7 @@ describe("life store", () => {
 
   it("collects recently-used background dimensions for the next life to avoid", async () => {
     const remarried = createStarterLife();
-    remarried.flags = { bgEconomy: "小康", bgStructure: "再婚家庭", bgEvent: "机会降临" };
+    remarried.flags = { bgEconomy: "小康", bgStructure: "再婚家庭", bgEvent: "机会降临", bgOpportunity: "街坊维修铺与手艺传承" };
     const upheaval = createStarterLife();
     upheaval.flags = { bgEconomy: "普通", bgStructure: "单亲", bgEvent: "家庭变故" };
     await lifeStore.set(upheaval);
@@ -74,6 +74,7 @@ describe("life store", () => {
     const avoid = await lifeStore.recentBackgroundAvoid(5);
     expect(avoid.structure).toContain("再婚家庭");
     expect(avoid.event).toContain("家庭变故");
+    expect(avoid.opportunity).toContain("街坊维修铺与手艺传承");
   });
 
   it("collects recent lives' main storylines for the next life to avoid", async () => {

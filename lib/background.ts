@@ -13,10 +13,20 @@ export type FamilyStructure = (typeof FAMILY_STRUCTURE)[number];
 export const OPENING_EVENT_GENRES = ["安稳温暖", "机会降临", "家庭变故", "平凡开端"] as const;
 export type OpeningEventGenre = (typeof OPENING_EVENT_GENRES)[number];
 
+// 机会环境是编辑覆盖范围，不是人口概率或预定职业。
+export const OPPORTUNITY_SETTINGS = [
+  "社区小店与熟客往来", "工厂家属区与轮班生活", "乡镇农忙与邻里互助",
+  "公共图书馆与普通学校", "运输站点与流动人口", "街坊维修铺与手艺传承",
+  "社区照护与代际相处", "办公室家庭与通勤生活", "市场摊位与进货往来",
+  "新搬入的小区与陌生邻居", "基层公共服务与办事窗口", "社区运动与文艺活动",
+] as const;
+export type OpportunitySetting = (typeof OPPORTUNITY_SETTINGS)[number];
+
 export interface LifeBackground {
   economy: FamilyEconomy;
   structure: FamilyStructure;
   event: OpeningEventGenre;
+  opportunity?: OpportunitySetting;
 }
 
 // 概率权重：经济/结构参考现实分布（普通与小康为主，大富稀有；双亲完整为主，单亲/留守/隔代/收养为少数）；
@@ -43,10 +53,12 @@ export interface BackgroundAvoid {
   economy?: ReadonlyArray<FamilyEconomy>;
   structure?: ReadonlyArray<FamilyStructure>;
   event?: ReadonlyArray<OpeningEventGenre>;
+  opportunity?: ReadonlyArray<OpportunitySetting>;
 }
 
 export function rollBackground(random: () => number = Math.random, avoid: BackgroundAvoid = {}): LifeBackground {
   return {
+    opportunity: pickWeighted(random, OPPORTUNITY_SETTINGS.map(value => [value, 1]), avoid.opportunity),
     economy: pickWeighted(random, [["拮据", 12], ["普通", 38], ["小康", 32], ["富裕", 14], ["大富", 4]], avoid.economy),
     structure: pickWeighted(random, [["双亲完整", 68], ["单亲", 12], ["再婚家庭", 7], ["留守隔代", 8], ["收养", 5]], avoid.structure),
     event: pickWeighted(random, [["安稳温暖", 30], ["机会降临", 25], ["家庭变故", 25], ["平凡开端", 20]], avoid.event),
@@ -73,6 +85,7 @@ export function backgroundToFinance(background: Pick<LifeBackground, "economy">)
 // 同时让出身档案随 state 持久化、可追溯。
 export function backgroundToFlags(background: LifeBackground): Record<string, string> {
   return {
+    ...(background.opportunity ? { bgOpportunity: background.opportunity } : {}),
     bgEconomy: background.economy,
     bgStructure: background.structure,
     bgEvent: background.event,
@@ -85,7 +98,7 @@ export function flagsToBackground(flags: Record<string, unknown>): LifeBackgroun
   if (!(FAMILY_ECONOMY as readonly string[]).includes(bgEconomy)) return undefined;
   if (!(FAMILY_STRUCTURE as readonly string[]).includes(bgStructure)) return undefined;
   if (!(OPENING_EVENT_GENRES as readonly string[]).includes(bgEvent)) return undefined;
-  return { economy: bgEconomy as FamilyEconomy, structure: bgStructure as FamilyStructure, event: bgEvent as OpeningEventGenre };
+  return { economy: bgEconomy as FamilyEconomy, structure: bgStructure as FamilyStructure, event: bgEvent as OpeningEventGenre, ...(OPPORTUNITY_SETTINGS.includes(flags.bgOpportunity as OpportunitySetting) ? { opportunity: flags.bgOpportunity as OpportunitySetting } : {}) };
 }
 
 export const ECONOMY_GUIDANCE: Record<FamilyEconomy, string> = {
@@ -106,7 +119,7 @@ export const STRUCTURE_GUIDANCE: Record<FamilyStructure, string> = {
 
 export const EVENT_GUIDANCE: Record<OpeningEventGenre, string> = {
   安稳温暖: "写一件温暖的小事或家庭普通决定让生活有了第一次颜色（迎接新成员、搬进更好的住处、一次家庭旅行）；不写危机",
-  机会降临: "写一个机会如何落到你面前：被某位老师/前辈看中、一次比赛或展览获奖、收到意外的邀请或资助（机会的类型要多样：学业、手艺、机遇、贵人、平台，不一定要落在体育或艺术赛道上）；开局基调可以明亮一些",
+  机会降临: "写一个机会如何落到你面前：一次被托付的小事、接触新工具、进入新的生活环境、获得学习或参与的机会（机会的类型要多样：学业、手艺、机遇、贵人、平台，不一定要落在体育或艺术赛道上）；开局基调可以明亮一些",
   家庭变故: "写家庭的一次真实变故：失业、疾病、搬迁、父母分开或亲人离去；这只是多种可能之一，照实写即可，不渲染苦难",
   平凡开端: "没有大事发生，第一个有分量的决定来自你自己的愿望或好奇（想学一样东西、想交一个朋友、第一次独自出门）",
 };
@@ -117,6 +130,7 @@ export function buildBackgroundDirective(background: LifeBackground): string {
     "【本局出身档案】（只约束开局，之后人生自然发展；家庭经济与结构决定初始状态，故事要与之一致）",
     `- 家庭经济：${background.economy}——${ECONOMY_GUIDANCE[background.economy]}。`,
     `- 家庭结构：${background.structure}——${STRUCTURE_GUIDANCE[background.structure]}。`,
+    ...(background.opportunity ? [`- 可接触的生活环境：${background.opportunity}。这是背景，不决定你的职业、天赋或性格；儿童只接触符合年龄的人和事，之后方向由选择发展。`] : []),
     `- 开局事件基调：${background.event}——${EVENT_GUIDANCE[background.event]}。`,
   ].join("\n");
 }
