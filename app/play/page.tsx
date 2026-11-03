@@ -362,7 +362,7 @@ export default function PlayPage() {
             })()}
           </p>
         </div>
-        <div className="decision-area" aria-label="人生决策">
+        <div className="decision-area" aria-label="人生决策" hidden={isLoading && streamingEvent.outcome === "death"}>
           {life.age < CHILDHOOD_BOUNDARY ? (
             <>
               <p className="decision-label">命运在继续。</p>

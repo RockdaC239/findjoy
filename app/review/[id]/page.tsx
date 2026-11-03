@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { ReviewView } from "../../../components/ReviewView";
+import { ReviewExperience } from "../../../components/ReviewExperience";
+import { DEATH_CAUSE_LABEL } from "../../../lib/life";
 import { currentUser } from "../../../lib/auth";
 import { buildLifeView } from "../../../lib/life-view";
 import { lifeStore } from "../../../lib/life-store";
@@ -13,5 +14,5 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const state = await lifeStore.get(id, user.id);
   if (!state) notFound();
   if (!state.dead) redirect(`/play?life=${encodeURIComponent(id)}`);
-  return <ReviewView lifeId={id} view={buildLifeView(state)} />;
+  return <ReviewExperience lifeId={id} view={buildLifeView(state)} story={state.history.at(-1)?.outcome === "death" ? state.history.at(-1)?.story : undefined} cause={DEATH_CAUSE_LABEL[String(state.flags.deathCause)] ?? "离开了这个世界"} />;
 }

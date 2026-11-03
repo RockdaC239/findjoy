@@ -9,13 +9,14 @@ import type { LifeView } from "../lib/life-view";
 import { parseReview, type Review } from "../lib/review";
 import { API_BASE } from "../lib/life-session";
 
-export function ReviewView({ lifeId, view }: { lifeId: string; view: LifeView }) {
+export function ReviewView({ lifeId, view, onStatus, initialReview }: { lifeId: string; view: LifeView; onStatus?: (status: { ready: boolean; error: string }) => void; initialReview?: Review }) {
   const router = useRouter();
-  const [review, setReview] = useState<Review | null>(null);
+  const [review, setReview] = useState<Review | null>(initialReview ?? null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (initialReview) { onStatus?.({ ready: true, error: "" }); return; }
     let cancelled = false;
     async function load() {
       try {
@@ -43,14 +44,17 @@ export function ReviewView({ lifeId, view }: { lifeId: string; view: LifeView })
           throw new Error(payload?.error || "这一生的回顾暂时没有生成，请稍后重试。");
         }
         const payload = (await response.json()) as unknown;
-        if (!cancelled) setReview(parseReview(payload, view));
+        if (!cancelled) { setReview(parseReview(payload, view)); onStatus?.({ ready: true, error: "" }); }
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "这一生的回顾暂时没有生成，请稍后重试。");
+        if (!cancelled) {
+          const message = cause instanceof Error ? cause.message : "这一生的回顾暂时没有生成，请稍后重试。";
+          setError(message); onStatus?.({ ready: false, error: message });
+        }
       }
     }
     load();
     return () => { cancelled = true; };
-  }, [lifeId, view, attempt, router]);
+  }, [lifeId, view, attempt, router, onStatus, initialReview]);
 
   return (
     <main className="page page--review">
