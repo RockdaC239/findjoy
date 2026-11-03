@@ -4,8 +4,8 @@
 
 **约束：** 在 test 分支实施，不发布；保留 LifeState、NextEvent、现有模式与旧转录兼容；不引入依赖、不调整提示词效果。
 
-- [ ] 记录现有提示词与消息的基线，增加模块边界与预览测试。
-- [ ] 拆出 Markdown 提示词、协议处理、上下文、通信与编排，保留 model-adapter 公共入口。
-- [ ] 让生产生成与本地预览复用消息组装；前端流式读取使用协议模块。
-- [ ] 编写维护约定，验证原提示词字节一致及四种模式、旧存档路径。
-- [ ] 运行 npm test、npm run typecheck、npm run lint、npm run build，审查 diff。
+- [x] 记录现有提示词与消息的基线，增加模块边界与预览测试。
+- [x] 拆出 Markdown 提示词、协议处理、上下文、通信与编排，保留 model-adapter 公共入口。
+- [x] 让生产生成与本地预览复用消息组装；前端流式读取使用协议模块。
+- [x] 编写维护约定，验证原提示词字节一致及四种模式、旧存档路径。
+- [x] 运行 npm test、npm run typecheck、npm run lint、npm run build，审查 diff。

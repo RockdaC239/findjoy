@@ -44,3 +44,5 @@
 - [部署指南](../DEPLOY.md)
 - [贡献指南](../CONTRIBUTING.md)
 - [安全策略](../SECURITY.md)
+
+- [人生 AI 引擎维护约定](development/ai-engine.md)：模块边界、提示词预览、JSON 协议变更与模式扩展。
