@@ -214,6 +214,7 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
   if (typeof candidate.story !== "string" || !candidate.story.trim()) return "story 缺失或为空";
   if (typeof event.title !== "string" || !event.title.trim()) return "event.title 缺失或为空";
   if (!normalizeEventType(event.type)) return "event.type 非法：" + String(event.type) + "（应为 career/relationship/health/finance/random/family 之一）";
+  if (candidate.outcome === "death") return null;
   if (expectChoices && normalizeChoices(candidate.choices).length < 2) return "choices 少于 2 个有效选项（每项需 id + 非空 text）";
   if (expectChoices) {
     const currentAxis = detectValueAxis(normalizeChoices(candidate.choices));
@@ -246,8 +247,11 @@ export function normalizeGeneratedEvent(value: unknown, expectChoices = true, pr
   const story = (candidate.story as string).trim();
   const title = (event.title as string).trim();
   const type = (normalizeEventType(event.type) ?? EVENT_TYPES[0]) as NextEvent["event"]["type"];
-  const choices = expectChoices ? normalizeChoices(candidate.choices) : [];
+  const dying = candidate.outcome === "death";
+  const choices = !dying && expectChoices ? normalizeChoices(candidate.choices) : [];
   return {
+    outcome: candidate.outcome === "death" ? "death" : "continue",
+    deathCause: candidate.outcome === "death" ? normalizeDeathCause(candidate.deathCause) : undefined,
     timePassed: Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
     story,
     event: { type, title, importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
@@ -281,6 +285,7 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean, sto
   if (typeof event.title !== "string" || !event.title.trim()) return null;
   const type = normalizeEventType(event.type);
   if (!type) return null;
+  if (candidate.outcome === "death") return normalizeGeneratedEvent(candidate, false);
   const texts = [candidate.story, candidate.memory, event.title].filter((item): item is string => typeof item === "string");
   if (texts.some(containsNameInstruction)) return null;
   // 题材冲突不可修复（修复层只解决格式问题）：命中跨局防重或单局内防重的主线 → 返回 null 走重试。
@@ -299,6 +304,8 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean, sto
     }
   }
   return {
+    outcome: candidate.outcome === "death" ? "death" : "continue",
+    deathCause: candidate.outcome === "death" ? normalizeDeathCause(candidate.deathCause) : undefined,
     timePassed: Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
     story: (candidate.story as string).trim(),
     event: { type, title: (event.title as string).trim(), importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
@@ -311,6 +318,8 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean, sto
 // 转录里 assistant 消息的内容：模型产出的规范化事件（去掉 usage 等请求无关字段），字节固定。
 export function serializeTranscriptEvent(event: NextEvent): string {
   return JSON.stringify({
+    ...(event.outcome ? { outcome: event.outcome } : {}),
+    ...(event.deathCause ? { deathCause: event.deathCause } : {}),
     timePassed: event.timePassed,
     story: event.story,
     event: event.event,
@@ -364,3 +373,7 @@ export function normalizeEnding(value: unknown): LifeEnding | null {
 
 export const EVENT_RETRY_GUIDANCE = "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。";
 export const ENDING_RETRY_GUIDANCE = "age 为数字，death 为字符串，facts 含 occupation/city/events，highlights 4-8 条（每项含 age 和 title），patterns 1-3 句，全程不含姓名。";
+
+function normalizeDeathCause(value: unknown): NonNullable<NextEvent["deathCause"]> {
+  return value === "natural" || value === "disease" || value === "accident" ? value : "other";
+}

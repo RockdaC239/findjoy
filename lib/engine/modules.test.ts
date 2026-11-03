@@ -28,7 +28,7 @@ describe("engine module boundaries", () => {
     expect(event).not.toBeNull();
     const wire = serializeTranscriptEvent(event!);
     expect(normalizeGeneratedEvent(JSON.parse(wire))).toEqual(event);
-    expect(readStreamedEvent(wire)).toEqual({ timePassed: 3, story: event!.story, title: event!.event.title, choices: event!.choices });
+    expect(readStreamedEvent(wire)).toEqual({ outcome: "continue", timePassed: 3, story: event!.story, title: event!.event.title, choices: event!.choices });
   });
   it("uses actual state facts in ending messages", () => {
     const state = createStarterLife({ age: 72 });

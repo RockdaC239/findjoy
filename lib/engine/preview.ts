@@ -39,7 +39,7 @@ export function previewMessages(options: PreviewOptions) {
       objectiveChanges: {}, memory: "你曾在工作机会与熟悉的生活之间犹豫。",
     };
     transcript = [{ role: "user", content: buildTranscriptUserContent(state, undefined, true) }, { role: "assistant", content: serializeTranscriptEvent(event) }];
-    state = applyNextEvent(state, event, undefined, { rollDeath: false, allowZeroTime: true });
+    state = applyNextEvent(state, event, undefined, { allowZeroTime: true });
     state.history[0].id = "synthetic-event";
     state.history[0].storedAt = state.createdAt;
     choice = event.choices[0];

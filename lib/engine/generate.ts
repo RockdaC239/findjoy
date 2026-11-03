@@ -58,7 +58,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
         logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason: reason ?? "事件契约未通过且无法自动修复", raw: generatedText });
         throw new ModelError(`模型返回内容未满足${expectChoices ? "事件" : "童年"}契约：${reason ?? "无法自动修复"}`);
       }
-      if (!expectChoices && crossesAdulthoodBoundary(state.basic.age, parsed.timePassed)) {
+      if (parsed.outcome !== "death" && !expectChoices && crossesAdulthoodBoundary(state.basic.age, parsed.timePassed)) {
         // 安全兜底：童年提示词要求落地 <15 岁，若模型仍越界，硬钳制落地到 14 岁（不重生成）。
         // 正常路径下从 14 岁起已切到决策提示词，这里只防模型违规。
         parsed.timePassed = CHILDHOOD_BOUNDARY - 1 - state.basic.age;

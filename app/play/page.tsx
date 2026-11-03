@@ -238,6 +238,12 @@ export default function PlayPage() {
       setBootError("开局结果暂未确认，请重试恢复原进度。");
       return;
     }
+    if (state.dead) {
+      clearPendingStart();
+      forgetActiveLife();
+      router.replace(`/review/${encodeURIComponent(state.lifeId)}`);
+      return;
+    }
     const next = buildLifeView(state);
     setLife(next);
     rememberActiveLife(next.lifeId);
@@ -325,7 +331,7 @@ export default function PlayPage() {
 
   const modeMeta = getScenarioLabel(life.scenario);
   const displayAge = isLoading && typeof streamingEvent.timePassed === "number"
-    ? Math.min(110, life.age + streamingEvent.timePassed)
+    ? life.age + streamingEvent.timePassed
     : life.age;
 
   return (

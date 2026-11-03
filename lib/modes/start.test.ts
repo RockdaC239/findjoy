@@ -169,11 +169,11 @@ describe("zero-time opening", () => {
       choices: [{ id: "A", text: "留下" }, { id: "B", text: "离开" }],
       objectiveChanges: {},
     };
-    const opened = applyNextEvent(state, opening, undefined, { rollDeath: false, allowZeroTime: true });
+    const opened = applyNextEvent(state, opening, undefined, { allowZeroTime: true });
     expect(opened.basic.age).toBe(29);
     expect(opened.history.at(-1)?.age).toBe(29);
 
-    const advanced = applyNextEvent(state, opening, undefined, { rollDeath: false });
+    const advanced = applyNextEvent(state, opening, undefined, {  });
     expect(advanced.basic.age).toBe(30);
   });
 });

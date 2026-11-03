@@ -1,6 +1,7 @@
 export type StreamedChoice = { id: string; text: string };
 
 export type StreamedEvent = {
+  outcome?: "continue" | "death";
   story: string;
   title: string;
   choices: StreamedChoice[];
@@ -47,10 +48,12 @@ function extractStreamedChoices(input: string): StreamedChoice[] {
 
 export function readStreamedEvent(input: string): StreamedEvent {
   const choices = extractStreamedChoices(input);
+  const outcome = readStringField(input, "outcome");
   return {
+    ...(outcome === "death" || outcome === "continue" ? { outcome } : {}),
     story: readStringField(input, "story"),
     title: readStringField(input, "title"),
-    choices,
+    choices: outcome === "death" ? [] : choices,
     timePassed: readNumberField(input, "timePassed") ?? readNumberField(input, "time_passed"),
   };
 }

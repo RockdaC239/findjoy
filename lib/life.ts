@@ -38,7 +38,11 @@ export function resolveOfferedChoice(choice: LifeChoice | undefined, pendingNode
   const offered = pendingNode.choices.find((item) => item.id === choice.id);
   return offered ?? choice;
 }
+export type DeathCause = "natural" | "disease" | "accident" | "other" | "age";
+
 export interface LifeEvent {
+  outcome?: "continue" | "death";
+  deathCause?: DeathCause;
   id: string;
   age: number;
   type: EventType;
@@ -57,41 +61,13 @@ export interface LifeEvent {
   usage?: ModelUsage;
 }
 export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; occupation: string; partnerStatus: string }
-export interface NextEvent { timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
+export interface NextEvent { outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
 export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string; promptCacheHitTokens?: number; promptCacheMissTokens?: number }
 
 const cities = ["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"];
 
 function randomCity(random: () => number = Math.random) {
   return cities[Math.floor(random() * cities.length)] ?? cities[0];
-}
-
-// 年度基础死亡率（近似真实生命表量级），随年龄上升。
-// 50 岁以下基础死亡率置零：年轻人生只可能因疾病（physical<=0 或慢性病风险）或意外离世，
-// 避免"二十几岁、身体健康却自然离世"这类破坏可信度的死亡。
-function baseMortalityRate(age: number): number {
-  if (age < 50) return 0;
-  if (age < 60) return 0.007;
-  if (age < 70) return 0.018;
-  if (age < 80) return 0.045;
-  if (age < 90) return 0.11;
-  return 0.25;
-}
-
-const ACCIDENT_CHANCE_PER_YEAR = 0.0004;
-
-export function computeDeathChance(state: LifeState, timePassed: number): number {
-  const age = state.basic.age;
-  const base = baseMortalityRate(age);
-  const physical = state.health.physical;
-  const healthMultiplier = physical <= 20 ? 5 : physical <= 40 ? 2.5 : physical <= 60 ? 1.5 : 1;
-  const conditionsRisk = Math.min(0.15, state.health.conditions.length * 0.02);
-  const hazard = Math.min(0.9, base * healthMultiplier + conditionsRisk);
-  return 1 - Math.pow(1 - hazard, Math.max(1, timePassed));
-}
-
-export function computeAccidentChance(timePassed: number): number {
-  return 1 - Math.pow(1 - ACCIDENT_CHANCE_PER_YEAR, Math.max(1, timePassed));
 }
 
 export function createStarterLife(input: Partial<LifeBasics> = {}): LifeState {
@@ -112,17 +88,17 @@ export function createStarterLife(input: Partial<LifeBasics> = {}): LifeState {
 // - 玩家本次选择（choice）挂到“给出该选择”的上一个节点上（history 末尾的待定节点），
 //   而不是挂到本节点，消除时间轴上决策错位一格的问题；
 // - 新节点以“待定”状态入列（choiceId/choiceText 暂缺），等玩家做出选择后由下一次调用补齐；
-// - 开局节点（start 路由，无 choice + rollDeath:false）同样以待定节点入列，不再丢失。
+// - 开局节点（start 路由，无 choice + ）同样以待定节点入列，不再丢失。
 export function applyNextEvent(
   state: LifeState,
   event: NextEvent,
   choice?: LifeChoice,
-  options: { random?: () => number; rollDeath?: boolean; allowZeroTime?: boolean } = {},
+  options: { allowZeroTime?: boolean } = {},
 ): LifeState {
   const changes = event.objectiveChanges ?? {};
   // ForU/剧本的第一幕发生在“当前年龄”，timePassed=0；其余节点仍至少推进 1 年。
   const rawTimePassed = options.allowZeroTime ? Math.max(0, event.timePassed || 0) : Math.max(1, event.timePassed || 1);
-  const age = Math.min(110, state.basic.age + rawTimePassed);
+  const age = state.basic.age + rawTimePassed;
   const next: LifeState = structuredClone(state);
   next.basic.age = age;
   if (changes.occupation) next.career.occupation = changes.occupation;
@@ -145,7 +121,9 @@ export function applyNextEvent(
     type: event.event.type,
     title: event.event.title,
     story: event.story,
-    choices: event.choices ?? [],
+    choices: event.outcome === "death" ? [] : event.choices ?? [],
+    outcome: event.outcome,
+    deathCause: event.deathCause,
     importance: event.event.importance,
     memory: event.memory,
     objectiveChanges: changes,
@@ -159,28 +137,17 @@ export function applyNextEvent(
     record.choiceText = choice.text;
   }
   if (event.memory && event.event.importance >= 0.65) next.majorMemories.push(event.memory);
-  if (!next.dead && options.rollDeath !== false) {
-    const random = options.random ?? Math.random;
-    if (next.health.physical <= 0) {
-      next.dead = true;
-      next.flags.deathCause = "disease";
-    } else if (next.basic.age >= 95) {
-      next.dead = true;
-      next.flags.deathCause = "age";
-    } else if (random() < computeAccidentChance(event.timePassed || 1)) {
-      next.dead = true;
-      next.flags.deathCause = "accident";
-    } else if (random() < computeDeathChance(next, event.timePassed || 1)) {
-      next.dead = true;
-      // 50 岁以下的死亡只可能是疾病路径（基础死亡率已置零），不要标注成"自然离世"
-      next.flags.deathCause = next.health.physical <= 40 || next.basic.age < 50 ? "disease" : "natural";
-    }
+  // 生死由本轮模型结果确定，不在故事展示后另掷一次死亡概率。
+  if (event.outcome === "death") {
+    next.dead = true;
+    next.flags.deathCause = event.deathCause ?? "other";
   }
   return next;
 }
 
 export const DEATH_CAUSE_LABEL: Record<string, string> = {
   natural: "自然离世",
+  other: "离开了这个世界",
   disease: "因病离世",
   accident: "意外离世",
   age: "在很深的年纪平静离世",

@@ -78,10 +78,8 @@ export const POST = withApiGuard(async (request: Request) => {
         item = await iterator.next();
       }
       // 开局事件以“待定节点”写入 history（含完整选项/时间戳/usage），不丢开局；
-      // 开局不参与死亡判定（rollDeath:false），避免开局即死。
       // 剧本/ForU 的第一幕发生在当前年龄，允许 timePassed=0，不凭空加一岁。
       const openedState = applyNextEvent(generationState, item.value, undefined, {
-          rollDeath: false,
           allowZeroTime: openingAtCurrentAge,
         });
       transcript.push({ role: "user", content: buildTranscriptUserContent(generationState, undefined, true) });
