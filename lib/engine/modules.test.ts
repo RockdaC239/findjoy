@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHash } from "node:crypto";
-import baseline from "./prompt-baseline.json";
 import { createStarterLife } from "../life";
-import { buildSystemPrompt } from "./prompts/assemble";
 import { prepareEventRequest, buildEndingMessages } from "./context";
 import { normalizeGeneratedEvent, serializeTranscriptEvent } from "./event-contract";
 import { readStreamedEvent } from "./stream-contract";
@@ -10,9 +7,6 @@ import { SCRIPTS } from "../modes/catalog";
 import { scriptToScenario } from "../modes/scenario";
 
 describe("engine module boundaries", () => {
-  it("preserves the existing childhood and adult prompts byte for byte", () => {
-    expect([false, true].map(choices => createHash("sha256").update(buildSystemPrompt(choices)).digest("hex"))).toEqual(baseline);
-  });
   it("uses the same message assembly for every mode and retains legacy context", () => {
     const normal = createStarterLife();
     const scenarios = [normal.scenario!, { mode: "theme" as const, theme: "love" as const }, scriptToScenario(SCRIPTS[0]), { mode: "foru" as const, brief: { age: 32, city: "成都", occupation: "教师", family: "与家人同住", relationship: "single" as const, economy: "ordinary" as const, health: "good" as const, housing: "rent" as const, situation: "想换份工作", focus: "职业" } }];

@@ -1,3 +1,4 @@
+import { OUTPUT_EXAMPLES } from "../output-format";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { buildBackgroundDirective, type LifeBackground } from "../../background";
@@ -5,9 +6,15 @@ import { buildStorylinePromptHint, type StorylineGuards } from "../../storyline"
 import { buildOpeningDirective, buildScenarioDirective } from "../../modes/scenario";
 import type { LifeScenario } from "../../modes/types";
 
-// Markdown 是唯一文本源；只去掉文件末尾换行，保持现有请求字节不变。
+// Markdown 维护叙事，output-format 维护 JSON；审阅标题不发送给模型。
 function readPrompt(name: string): string {
-  return readFileSync(path.join(process.cwd(), "lib/engine/prompts", `${name}.md`), "utf8").replace(/\n$/, "");
+  return readFileSync(path.join(process.cwd(), "lib/engine/prompts", `${name}.md`), "utf8")
+    .replace(/^## .*\n/gm, "")
+    .replace(/\n$/, "")
+    .replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+      if (!Object.hasOwn(OUTPUT_EXAMPLES, key)) throw new Error(`未知提示词格式占位符：${key}`);
+      return JSON.stringify(OUTPUT_EXAMPLES[key as keyof typeof OUTPUT_EXAMPLES]);
+    });
 }
 
 const SYSTEM_PROMPT = readPrompt("adult");
