@@ -116,7 +116,6 @@ export function withRetryCorrection(attempt: number, messages: NextEventMessage[
   ];
 }
 
-
 // 生产生成和本地预览共用入口；模式差异来自 modes/，不进入模型通信层。
 export function prepareEventRequest(state: LifeState, choice?: LifeChoice, transcript?: TranscriptMessage[] | null) {
   // 从 14 岁起直接进入决策阶段：下一次跳跃（timePassed ≥ 1）必然落地 ≥15 岁，
@@ -140,16 +139,16 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
     const left = leftStorylines(state);
     return avoidStorylines.length > 0 || left.length > 0 ? { avoidStorylines, leftStorylines: left } : undefined;
   })();
-      const systemPrompt = buildSystemPrompt(expectChoices, {
-        background: scenario.mode === "script" || scenario.mode === "foru" ? undefined : flagsToBackground(state.flags),
-        transitioning: expectChoices && state.basic.age < CHILDHOOD_BOUNDARY && !openingAtCurrentAge,
-        avoidAxis,
-        storylineGuards,
-        scenario,
-        isOpening,
-        themeHint: buildThemeTurnHint(scenario, state),
-      });
-      const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
+  const systemPrompt = buildSystemPrompt(expectChoices, {
+    background: scenario.mode === "script" || scenario.mode === "foru" ? undefined : flagsToBackground(state.flags),
+    transitioning: expectChoices && state.basic.age < CHILDHOOD_BOUNDARY && !openingAtCurrentAge,
+    avoidAxis,
+    storylineGuards,
+    scenario,
+    isOpening,
+    themeHint: buildThemeTurnHint(scenario, state),
+  });
+  const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
   return { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages };
 }
 

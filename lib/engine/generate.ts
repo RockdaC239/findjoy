@@ -99,7 +99,6 @@ export async function generateNextEvent(state: LifeState, choice?: LifeChoice, r
 }
 
 
-
 // 结局硬事实纠正：年龄、事件数、死因必须以状态为准（LLM 可能抄示例编造年龄，
 // 如"27 岁人生被写成 81 岁"）；LLM 只负责回顾文字本身。
 export function applyEndingHardFacts(ending: LifeEnding, state: LifeState): LifeEnding {

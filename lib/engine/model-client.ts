@@ -64,60 +64,60 @@ export function sanitizeModelConfig(value: unknown): Partial<ModelConfig> | unde
 export async function* streamModel(config: ResolvedModelConfig, messages: NextEventMessage[]): AsyncGenerator<{ text?: string; usage?: Record<string, unknown> }> {
   const { apiKey, baseUrl, model } = config;
   let firstTokenSeen = false;
-      const controller = new AbortController();
-      // 首 token 看门狗：25 秒没开始输出就中断本轮，快速进入重试（避免干等 60 秒）
-      const watchdog = setTimeout(() => { if (!firstTokenSeen) controller?.abort(); }, FIRST_TOKEN_TIMEOUT_MS);
-      const overall = setTimeout(() => controller?.abort(), MODEL_REQUEST_TIMEOUT_MS);
-      try {
-        const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: controller.signal, body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages }) });
-        if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
-        if (!response.body) throw new ModelError("模型服务未返回内容");
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const blocks = buffer.split("\n\n");
-          buffer = blocks.pop() ?? "";
-          for (const block of blocks) {
-            const data = block.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
-            if (!data || data === "[DONE]") continue;
-            try {
-              const packet = JSON.parse(data) as {
-                choices?: Array<{ delta?: { content?: string } }>;
-                usage?: Record<string, unknown>;
-              };
-              const content = packet.choices?.[0]?.delta?.content;
-              if (typeof content === "string") {
-                firstTokenSeen = true;
-                yield { text: content };
-              }
-              if (packet.usage && typeof packet.usage === "object") yield { usage: packet.usage };
-            } catch { /* Ignore malformed keepalive frames. */ }
+  const controller = new AbortController();
+  // 首 token 看门狗：25 秒没开始输出就中断本轮，快速进入重试（避免干等 60 秒）
+  const watchdog = setTimeout(() => { if (!firstTokenSeen) controller.abort(); }, FIRST_TOKEN_TIMEOUT_MS);
+  const overall = setTimeout(() => controller.abort(), MODEL_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: controller.signal, body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages }) });
+    if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
+    if (!response.body) throw new ModelError("模型服务未返回内容");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+      for (const block of blocks) {
+        const data = block.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+        if (!data || data === "[DONE]") continue;
+        try {
+          const packet = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+            usage?: Record<string, unknown>;
+          };
+          const content = packet.choices?.[0]?.delta?.content;
+          if (typeof content === "string") {
+            firstTokenSeen = true;
+            yield { text: content };
           }
-        }
-      } catch (error) {
-        if (controller.signal.aborted) throw new ModelError(firstTokenSeen
-          ? "模型响应超时（超过 60 秒），请稍后重试或更换模型"
-          : "模型迟迟未开始输出（超过 25 秒），正在重试");
-        throw error;
-      } finally {
-        clearTimeout(watchdog);
-        clearTimeout(overall);
+          if (packet.usage && typeof packet.usage === "object") yield { usage: packet.usage };
+        } catch { /* Ignore malformed keepalive frames. */ }
       }
+    }
+  } catch (error) {
+    if (controller.signal.aborted) throw new ModelError(firstTokenSeen
+      ? "模型响应超时（超过 60 秒），请稍后重试或更换模型"
+      : "模型迟迟未开始输出（超过 25 秒），正在重试");
+    throw error;
+  } finally {
+    clearTimeout(watchdog);
+    clearTimeout(overall);
+  }
 }
 
 export async function requestModel(config: ResolvedModelConfig, messages: NextEventMessage[]): Promise<string> {
   const { apiKey, baseUrl, model } = config;
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
-        body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 2048, response_format: { type: "json_object" }, messages }),
-      });
-      if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
-      const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      return payload.choices?.[0]?.message?.content ?? "";
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
+    body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 2048, response_format: { type: "json_object" }, messages }),
+  });
+  if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
+  const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  return payload.choices?.[0]?.message?.content ?? "";
 }
