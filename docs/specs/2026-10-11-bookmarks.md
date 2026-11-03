@@ -206,4 +206,4 @@
 
 ## 11. 实现与验收记录
 
-实现后的布局检查、截图和命令结果见 [`docs/ui-design/bookmarks-2026-10-11/`](../ui-design/bookmarks-2026-10-11/README.md)。
+早期布局检查与截图材料已清理，历史结果可在 Git 中查阅；当前界面规范见 [设计系统](../../design/DESIGN.md)。

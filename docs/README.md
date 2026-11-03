@@ -18,15 +18,17 @@
 | [模型配置双模式设计](./specs/2026-08-22-model-config-design.md) | 本地文件配置与线上环境变量锁定的设计 |
 | [模型配置实施计划](./plans/2026-08-22-model-config.md) | 上述设计的任务拆解与测试顺序 |
 
-## 设计过程
+## 设计系统
 
-| 目录 | 内容 |
+| 文档 | 说明 |
 | --- | --- |
-| [展示页设计](./ui-design/showcase-page-2026-08-21/) | 产品展示页的设计简报、实施计划、QA 报告与截图 |
-| [展示页 PPT 改版](./ui-design/showcase-ppt-2026-08-22/) | 演示版的设计、参考分析、需求、实施计划与验收截图 |
-| [觅乐书签验收记录](./ui-design/bookmarks-2026-10-11/) | 四个断点的布局检查、截图与验证结果 |
-| [玩法模式 UI 验收](./ui-design/game-modes-2026-10-27/) | 模式选择、事件顶栏、历史与回顾的断点截图和交互记录 |
-| [界面截图](./assets/screenshots/) | 早期事件页布局截图，保留作历史参考 |
+| [FindJoy 设计系统](../design/DESIGN.md) | 正式设计语言、品牌字标、Owner 偏好、组件和响应式规则 |
+| [语义 Tokens](../design/tokens/tokens.json) | 配色、字体、间距、圆角、阴影、密度与动效的数值来源 |
+| [组件基础 Showcase](../design/showcase/index.html) | 可直接打开的静态组件与状态展示，含积分说明弹窗 |
+| [设计语言提取记录](../design/references/ui-audit.md) | 现有页面来源、原品牌页保留方式、旧目录清理与待迁移项 |
+| [展示页图片来源](../design/references/showcase-image-attribution.md) | 保留仍使用素材的原始来源与许可记录 |
+
+原品牌页 `/findjoy/brand` 和 `app/brand/page.tsx` 保留，已纳入设计系统的品牌章节。早期设计简报/预览/验收截图目录按 Owner 要求清理，历史版本可在 Git 中查阅；新规范不代表当时或当前的视觉验收报告。
 
 ## 示例记录
 

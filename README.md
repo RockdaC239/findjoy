@@ -26,6 +26,10 @@ FindJoy 是一款由 AI 驱动的人生模拟游戏。你从人生的某个起�
 - **可关闭的背景音乐**：程序化环境音随阶段、模式和事件类型变化，默认开启，首次交互后发声，偏好会被记住。
 - **可选的内容分享**：「觅乐书签」收录关于幸福、人生意义与如何生活的外部内容。
 
+## 设计系统
+
+界面规范从 [design/DESIGN.md](./design/DESIGN.md) 开始；精确值维护在 [tokens.json](./design/tokens/tokens.json)，运行 `npm run design:tokens` 生成 CSS，`npm run design:check` 检查同步。[组件 Showcase](./design/showcase/index.html) 可直接打开；原品牌页 `/findjoy/brand` 保留并纳入规范。
+
 ## 技术栈
 
 - [Next.js 16](https://nextjs.org/) App Router + React 19

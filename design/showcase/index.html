@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FindJoy · 设计系统</title>
+  <link rel="stylesheet" href="../tokens/tokens.css">
+  <link rel="stylesheet" href="showcase.css">
+</head>
+<body>
+  <main class="canvas">
+    <header class="topbar">
+      <span class="wordmark" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span>
+      <nav aria-label="设计系统导航"><a href="../DESIGN.md">设计规则 ↗</a><a href="http://localhost:3000/findjoy/brand">原品牌页 ↗</a><span class="edition">DESIGN SYSTEM / 01</span></nav>
+    </header>
+
+    <section class="intro" aria-labelledby="intro-title">
+      <div><p class="eyebrow">A QUIET SPACE FOR POSSIBILITY</p><h1 id="intro-title">把可能留给人生<br><span>把分寸留给界面</span></h1></div>
+      <div class="intro-note"><p>纸白 · 墨色 · 一点橙</p><p>内容先行，选择清晰<br>有温度，也有留白</p><span class="caption">FindJoy 觅乐 · 组件基础画布</span></div>
+    </section>
+
+    <section class="brand-section" aria-labelledby="brand-title">
+      <div class="section-head"><h2 id="brand-title">01 / 同一个落点</h2><p>保留原品牌字标与系列继承规则</p></div>
+      <div class="brand-grid">
+        <div class="brand-specimen"><span class="eyebrow">ON PAPER</span><span class="wordmark brand-large" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span><span class="caption">DM Sans / 600 / −0.06em</span></div>
+        <div class="brand-specimen brand-ink"><span class="eyebrow">ON INK</span><span class="wordmark brand-large" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span><span class="caption">字色反转，橙点保留</span></div>
+        <div class="brand-specimen brand-orange"><span class="eyebrow">ON ORANGE</span><span class="wordmark brand-large" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span><span class="caption">原品牌页的背景适配变体</span></div>
+      </div>
+      <div class="brand-baseline"><span class="wordmark compact" aria-label="findjoy compact">findjoy<b aria-hidden="true">.</b></span><span class="caption">COMPACT / 16px</span><div class="series"><span class="wordmark" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span><span aria-hidden="true">·</span><strong>studio</strong></div><span class="caption">名称延展，字标不变</span></div>
+    </section>
+
+    <section aria-labelledby="controls-title">
+      <div class="section-head"><h2 id="controls-title">02 / 让操作说清楚</h2><p>按钮、字段与反馈</p></div>
+      <div class="foundation-grid">
+        <div class="control-surface">
+          <h3>操作的轻重</h3>
+          <div class="control-row"><button class="button primary" type="button">继续这一生 <span aria-hidden="true">↗</span></button><button class="button secondary" type="button">返回首页</button></div>
+          <div class="control-row"><button class="button primary" type="button" disabled>暂未开放</button><button class="button primary" type="button" disabled aria-busy="true"><span class="spinner" aria-hidden="true"></span>正在生成</button></div>
+          <div class="control-row"><button class="button secondary focus-sample" type="button">键盘焦点</button><button class="button danger" type="button">结束体验</button></div>
+          <p class="caption">默认 / 次操作 / 禁用 / 加载 / 焦点 / 危险操作</p>
+          <div class="separator"></div>
+          <div class="credit-actions"><div class="credit-pill">我的积分 <strong>40</strong> 积分</div><button class="credit-pill credit-action" id="usage-trigger" data-usage-trigger type="button">积分使用说明</button></div>
+          <p class="caption">尺寸与圆角一致，信息与操作保留各自颜色</p>
+        </div>
+        <div class="control-surface">
+          <h3>字段不让人猜</h3>
+          <label for="nickname">昵称</label><input id="nickname" placeholder="怎么称呼你" autocomplete="off" aria-describedby="nickname-help"><p class="helper" id="nickname-help">这个名字会出现在你的个人中心</p>
+          <label for="focus-input">焦点状态</label><input id="focus-input" class="focus-sample" value="探索者" aria-describedby="focus-help"><p class="helper" id="focus-help">保留明确的焦点轮廓</p>
+          <label for="error-input">校验反馈</label><input id="error-input" value="" aria-invalid="true" aria-describedby="name-error"><p class="helper error" id="name-error">请输入昵称，再继续</p>
+          <div class="feedback" role="status">已保存，下次回来可以继续</div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="cards-title">
+      <div class="section-head"><h2 id="cards-title">03 / 留白承接内容</h2><p>已有表面的组件直接放在画布上</p></div>
+      <div class="card-grid">
+        <article class="story-card">
+          <p class="eyebrow">一段人生 / 21 岁</p><h3>一封迟来的信</h3><p class="story-copy">离开故乡的第三年，你收到一封熟悉笔迹的信。那些以为已经走远的事，又轻轻回到了眼前。</p>
+          <fieldset><legend>这一次，你会</legend><label class="choice"><input type="radio" name="choice" checked>找个安静的下午，认真回信</label><label class="choice"><input type="radio" name="choice">先收好它，等自己准备好</label></fieldset>
+        </article>
+        <article class="plan-card featured">
+          <div class="card-top"><p class="eyebrow">CHAPTER 02</p><span class="badge">推荐</span></div><h3>标准包</h3><p class="caption">不急着下结论，再看看几种生活</p><div class="price"><small>¥</small>19.90</div><p class="caption"><strong>100</strong> 积分 · 普通模式 5 局</p><p class="unit-price">折合 ¥3.98/局，比单次购买省约 33%</p><button class="button primary" type="button">充值这份积分 <span aria-hidden="true">↗</span></button>
+        </article>
+        <article class="empty-card"><span class="eyebrow">过往人生</span><h3>故事尚未开始</h3><p class="caption">第一段人生结束后<br>你可以在这里重新翻阅</p><button class="button secondary" type="button">去看看</button></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="mobile-title">
+      <div class="section-head"><h2 id="mobile-title">04 / 手机上，也从容</h2><p>窄屏阅读 · 完整触控 · 自然换行</p></div>
+      <div class="mobile-grid">
+        <div class="mobile-sample">
+          <p class="eyebrow">MOBILE / STORY</p>
+          <div class="mobile-topbar"><span class="wordmark" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span><button class="mobile-text-button" type="button" aria-label="打开过往人生">过往人生</button></div>
+          <div class="mobile-heading"><p class="eyebrow">普通模式 / 21 岁</p><h3>给远方一个回声</h3></div>
+          <p class="type-body">信纸被折得很整齐。你坐在窗边，想起了那条每天放学都会经过的小路。</p>
+          <fieldset><legend>你想怎么回应</legend><label class="choice"><input type="radio" name="mobile-choice" checked>认真写一封回信，说说这些年的生活</label><label class="choice"><input type="radio" name="mobile-choice">打个电话，让熟悉的声音先回来</label></fieldset>
+          <div class="mobile-bottom"><button class="button primary" type="button">继续这一生 <span aria-hidden="true">↗</span></button></div>
+        </div>
+        <div class="mobile-sample">
+          <p class="eyebrow">MOBILE / PURCHASE</p>
+          <div class="mobile-topbar"><span class="wordmark" aria-label="findjoy">findjoy<b aria-hidden="true">.</b></span><button class="mobile-text-button" type="button">返回首页</button></div>
+          <div class="mobile-heading"><h3>给好奇心，多一点可能</h3><p class="caption">新用户赠送 40 积分，免费体验 2 次普通模式</p></div>
+          <div class="credit-actions mobile-credit"><div class="credit-pill">我的积分 <strong>40</strong> 积分</div><button class="credit-pill credit-action" data-usage-trigger type="button">积分使用说明</button></div>
+          <article class="plan-card featured mobile-plan"><div class="card-top"><p class="eyebrow">CHAPTER 02</p><span class="badge">推荐</span></div><h3>标准包</h3><div class="price"><small>¥</small>19.90</div><p class="caption">100 积分 · 普通模式 5 局</p><p class="unit-price">折合 ¥3.98/局，比单次购买省约 33%</p><button class="button primary" type="button">充值这份积分 <span aria-hidden="true">↗</span></button></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="foundations" aria-labelledby="foundations-title">
+      <div class="section-head"><h2 id="foundations-title">05 / 小而稳定的基础</h2><p>一种阅读节奏，少量清楚的层级</p></div>
+      <div class="palette" aria-label="语义配色样本">
+        <div><span class="swatch paper"></span><span>纸白 / 画布</span></div><div><span class="swatch surface"></span><span>温白 / 表面</span></div><div><span class="swatch ink"></span><span>墨黑 / 内容</span></div><div><span class="swatch orange"></span><span>橙色 / 落点</span></div><div><span class="swatch muted"></span><span>次文字 / 说明</span></div><div><span class="swatch line"></span><span>细边线 / 分隔</span></div>
+      </div>
+      <div class="type-and-density">
+        <div class="type-samples"><p class="type-display">给好奇心，多一点可能</p><p class="type-section">标题留白，正文左对齐</p><p class="type-body">每一种选择，都有回声。界面只把路铺开，不替人评价哪一条更好。</p><p class="eyebrow">A LIFE WORTH EXPLORING</p></div>
+        <div class="density-samples"><div class="density roomy"><span>宽松</span><span class="caption">开场 / 回顾</span></div><div class="density balanced"><span>平衡</span><span class="caption">账户 / 购买</span></div><div class="density compact-density"><span>紧凑</span><span class="caption">导航 / 历史</span></div></div>
+      </div>
+    </section>
+    <footer class="footer"><span>FindJoy 觅乐 · 设计系统 1.0</span><span>One mark. Many ways to find joy.</span></footer>
+  </main>
+
+  <dialog id="usage-dialog" aria-labelledby="usage-title">
+    <h2 id="usage-title">积分使用说明</h2><ul><li>普通模式每局 20 积分，首幕成功保存后扣除；开局失败，积分退回。</li><li>同一局继续、恢复与查看已保存的回顾，不重复扣积分。</li><li>积分仅用于 FindJoy，不设有效期；其他模式开放后将单独标价。</li></ul><form method="dialog"><button class="button primary" type="submit">知道了</button></form>
+  </dialog>
+  <script>
+    document.querySelectorAll("[data-usage-trigger]").forEach(button => {
+      button.addEventListener("click", () => document.getElementById("usage-dialog").showModal());
+    });
+  </script>
+</body>
+</html>

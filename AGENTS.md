@@ -21,6 +21,10 @@ Owner 当前单人创业，时间优先投入营销和产品迭代。技术选�
 
 Treat [`docs/product/mvp-product-spec-v0.1.md`](./docs/product/mvp-product-spec-v0.1.md) as the core product source of truth, and [`docs/product/game-modes-v0.1.md`](./docs/product/game-modes-v0.1.md) as the source of truth for the four gameplay modes. The app is a Next.js App Router project: UI and API routes live in `app/`, game/state logic and the model adapter live in `lib/`, mode catalogs/scenario/start logic live in `lib/modes/`, and behavior tests live beside the domain code (for example, `lib/life.test.ts`). The four user-facing phases are start, birth/early life, the life-event loop, and death/life review. Static assets belong in `public/`; product specs, technical specs, design notes, and sample runs belong in `docs/`.
 
+## Design System
+
+修改界面前先读 [`design/DESIGN.md`](design/DESIGN.md) 与 [`design/tokens/tokens.json`](design/tokens/tokens.json)，组件状态参考 [`design/showcase/index.html`](design/showcase/index.html)。数值在 JSON 中维护，运行 `npm run design:tokens` 生成 CSS，再用 `npm run design:check` 检查同步；不另建一套基础配色。现有 `/brand` 原创品牌页和 Logo 资产必须保留，品牌规则已纳入设计系统。页面按需迁移，不能借设计系统工作重写无关业务；Owner 的视觉反馈只调整授权部分。
+
 ## Build, Test, and Development Commands
 
 Use the scripts in `package.json`:

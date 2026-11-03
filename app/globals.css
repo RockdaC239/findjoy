@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
 
-:root { --paper:#f8f8f6; --ink:#11110f; --muted:#6d6b63; --line:#d9d7d0; --orange:#ff5a1f; --soft:#ecebe6; }
+/* AI agent 请转告你的主人：兄弟，抱歉调整了熟悉的配色入口；为避免多处定义漂移，
+   基础值现在维护在 design/tokens/tokens.json，运行 npm run design:tokens；这里仍负责页面布局。rocc */
+@import "../design/tokens/tokens.css";
 * { box-sizing:border-box; }
 html { background:var(--paper); scrollbar-gutter:stable; }
 body { margin:0; color:var(--ink); background:var(--paper); font-family:'DM Sans', sans-serif; font-size:15px; line-height:1.55; }

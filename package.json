@@ -37,7 +37,9 @@
     "db:preflight": "node scripts/preflight-deploy.mjs",
     "points:adjust": "node scripts/adjust-points.mjs",
     "load:seed": "node scripts/load-test-seed.mjs",
-    "load:test": "node scripts/load-test.mjs"
+    "load:test": "node scripts/load-test.mjs",
+    "design:tokens": "node scripts/generate-design-tokens.mjs",
+    "design:check": "node scripts/generate-design-tokens.mjs --check"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
