@@ -51,6 +51,8 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
     current_state: {
       age: state.basic.age,
       gender: state.basic.gender,
+      city: state.basic.city,
+      education: state.basic.education,
       career: state.career,
       finance: state.finance,
       health: state.health,
@@ -58,6 +60,7 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
       flags: state.flags,
       dead: state.dead,
     },
+    narrative: state.narrative ?? null,
     current_choice: choice ?? null,
     turn_task: buildTurnTask(state, choice),
   });
@@ -86,6 +89,8 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
   payload.current_state = {
     age: state.basic.age,
     gender: state.basic.gender,
+    city: state.basic.city,
+    education: state.basic.education,
     career: state.career,
     finance: state.finance,
     health: state.health,
@@ -93,6 +98,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
     flags: state.flags,
     dead: state.dead,
   };
+  payload.narrative = state.narrative ?? null;
   payload.current_choice = choice ?? null;
   payload.turn_task = buildTurnTask(state, choice);
   return JSON.stringify(payload);

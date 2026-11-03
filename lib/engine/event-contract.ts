@@ -1,3 +1,4 @@
+import { normalizeShareLines } from "../share-copy";
 import { boundedText, boundedStrings, normalizeNarrative } from "./narrative";
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, LifeEnding } from "../life";
 import { detectStorylineDomains, storylineLabel, type StorylineGuards } from "../storyline";
@@ -373,6 +374,9 @@ export function normalizeEnding(value: unknown): LifeEnding | null {
   }).slice(0, 8);
   const patterns = (Array.isArray(candidate.patterns) ? candidate.patterns : []).filter((item): item is string => typeof item === "string" && Boolean(item.trim())).slice(0, 3);
   return {
+    ...(typeof candidate.reflection === "string" && candidate.reflection.trim() && candidate.reflection.length <= 1200 ? { reflection: candidate.reflection.trim() } : {}),
+    shareLines: normalizeShareLines(candidate.shareLines),
+    evidenceEventIds: Array.isArray(candidate.evidenceEventIds) ? [...new Set(candidate.evidenceEventIds.filter((id): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(id)))].slice(0, 4) : [],
     age: candidate.age as number,
     death: (candidate.death as string).trim(),
     facts: { occupation: (facts.occupation as string).trim(), city: (facts.city as string).trim(), events: typeof facts.events === "number" ? facts.events : 0 },

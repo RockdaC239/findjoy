@@ -82,7 +82,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
       if (!mock) nextState.flags.developerMock = false;
       if (transcript) {
         transcript.push({ role: "user", content: buildTranscriptUserContent(state, choiceForModel, false) });
-        transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });
+        transcript.push({ role: "assistant", content: serializeTranscriptEvent({ ...item.value, narrative: nextState.history.at(-1)?.narrative }) });
 
       }
       await commitGeneration(admission!, () => lifeGeneration.save(lease,nextState,transcript));

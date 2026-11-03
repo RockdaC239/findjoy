@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createStarterLife } from "../life";
 import { prepareEventRequest, buildEndingMessages } from "./context";
-import { normalizeGeneratedEvent, serializeTranscriptEvent } from "./event-contract";
+import { normalizeGeneratedEvent, normalizeEnding, serializeTranscriptEvent } from "./event-contract";
 import { readStreamedEvent } from "./stream-contract";
 import { SCRIPTS } from "../modes/catalog";
 import { scriptToScenario } from "../modes/scenario";
@@ -37,4 +37,13 @@ describe("engine module boundaries", () => {
     expect(JSON.parse(messages[1].content).current_age).toBe(72);
     expect(prepareEventRequest(state, undefined, []).messages[1].content).toContain('"life"');
   });
+});
+
+it("preserves grounded ending prose while filtering public copy independently", () => {
+  const ending = normalizeEnding({ age: 70, death: "自然离世", facts: { occupation: "维修工", city: "县城", events: 3 },
+    highlights: [{ age: 22, title: "留下学手艺" }, { age: 26, title: "保留周末" }], patterns: ["你逐渐留出了自己的时间。"],
+    reflection: "你为关系出了力，也为自己的生活留出了位置。", shareLines: ["留给别人的时间里，也可以有自己。", "手机号15200297440"], evidenceEventIds: ["e1", "e2"] });
+  expect(ending?.reflection).toContain("自己的生活");
+  expect(ending?.shareLines).toEqual(["留给别人的时间里，也可以有自己。"]);
+  expect(ending?.evidenceEventIds).toEqual(["e1", "e2"]);
 });

@@ -55,3 +55,8 @@ event.type仅限career、relationship、health、finance、random、family。imp
 ## 生命终点
 每轮返回outcome：continue表示继续，death表示生命终点。死亡结合年龄、健康、经历、本轮选择与偶然性推演，不按固定年龄阈值。健康年轻人死亡应少见但可能，疾病与危险处境影响风险，年老增加风险；不要固定每局同龄终结或为了戏剧性频繁早逝。
 当outcome=death：deathCause为natural、disease、accident、other之一；story写最后一幕，第二人称、不血腥、不说教。choices必须为空数组，event标题与memory对应终点，不留下等待玩家操作的假悬念；年龄仍按当前年龄加timePassed，不另编死亡年龄。突发疾病和意外不必有先前病史。既有转录没有outcome是旧格式，不改变本轮要求。不要为了回收伏笔而强迫寿命延长，也不把死亡当作玩家选择的道德惩罚。
+
+## 状态与叙事记忆更新
+objectiveChanges只记录这一幕已经成立的事实：city/education为新值；fatherStatus、motherStatus分别记录父母状态；children、friends、conditions为完整字符串数组快照，仅有变化时给出；不输出未知或猜测。已有收入/职业是新值，cash/assets/debt/physical沿用增量规则。已故人物只能作为回忆出现。
+可在memory之后输出narrative，只写实际变化，不复制全量档案。direction为{content,sourceEventId}，表示由实际选择形成的当前方向；people最多4项，每项{id,relation,want,sharedMemory,sourceEventId,status:"active"或"inactive"}，用稳定英文ID区分称谓相同的人；threads最多3项，每项{id,content,status:"open"或"closed",sourceEventId}。sourceEventId必须引用输入中本局真实事件ID；本幕新成立的事实填"current"，保存时由程序替换。关闭已解决事项，人物不再活跃可标inactive，勿将未来计划写成既成事实。缺省字段保留历史记录；儿童不得被预定成年职业或人格。不在故事前输出这些后台字段，不输出规划或推理。
+旧转录缺少narrative属于旧格式，继续依据已保存状态，不要求改写历史。state.narrative或user.narrative是当前活跃记录，历史中已关闭的事项不能当成仍未解决。

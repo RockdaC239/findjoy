@@ -89,7 +89,7 @@ export const POST = withApiGuard(async (request: Request) => {
           allowZeroTime: openingAtCurrentAge,
         });
       transcript.push({ role: "user", content: buildTranscriptUserContent(generationState, undefined, true) });
-      transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });
+      transcript.push({ role: "assistant", content: serializeTranscriptEvent({ ...item.value, narrative: openedState.history.at(-1)?.narrative }) });
       await commitGeneration(admission!, () => commerceStore.completeLife(operation.id,user.id,openedState,transcript));
       completed = true;
       send("complete", { state: openedState, event: item.value });
