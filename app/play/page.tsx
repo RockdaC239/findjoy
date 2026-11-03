@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import farewellStyles from "../../components/Farewell.module.css";
 import { DeveloperDebugButton } from "../../components/DeveloperMode";
 import { LifeEventScene } from "../../components/LifeEventScene";
 import { AccountNav } from "../../components/AccountNav";
@@ -71,6 +72,7 @@ export default function PlayPage() {
   const [isBooting, setIsBooting] = useState(true);
   const [bootError, setBootError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [enteringFarewell, setEnteringFarewell] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(defaultModelConfig);
   const [requestError, setRequestError] = useState("");
   const [streamingEvent, setStreamingEvent] = useState<StreamedEvent>({ story: "", title: "", choices: [] });
@@ -88,6 +90,11 @@ export default function PlayPage() {
 
   function startMusicIfEnabled() {
     if (musicEnabled) music.start();
+  }
+
+  function receiveLifePayload(payload: unknown) {
+    if (stateFromPayload(payload)?.dead || (isRecord(payload) && payload.ended === true)) setEnteringFarewell(true);
+    return payload;
   }
 
   async function requestLife(url: string, body?: Record<string, unknown>, idempotencyKey?: string, config?: ModelConfig): Promise<unknown | null> {
@@ -120,14 +127,14 @@ export default function PlayPage() {
             const statusResponse = await fetch(`${API_BASE}/api/life/operations/${encodeURIComponent(payload.operationId)}`);
             if (!statusResponse.ok) break;
             const result = await statusResponse.json() as { status: string; state?: unknown };
-            if (result.status === "complete" && result.state) return { state: result.state };
+            if (result.status === "complete" && result.state) return receiveLifePayload({ state: result.state });
             if (result.status === "failed") { clearPendingStart(); break; }
           }
         }
         discardPendingStartOnError(payload?.code);
         throw new Error(payload?.error || "人生服务暂时不可用，请稍后重试。");
       }
-      if (response.headers.get("content-type")?.includes("application/json")) return (await response.json()) as unknown;
+      if (response.headers.get("content-type")?.includes("application/json")) return receiveLifePayload(await response.json());
       if (!response.body) throw new Error("Life stream unavailable");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -146,13 +153,16 @@ export default function PlayPage() {
             const token = JSON.parse(message.data) as { text?: string };
             if (typeof token.text === "string") {
               generated += token.text;
-              setStreamingEvent(readStreamedEvent(generated));
+              const event = readStreamedEvent(generated);
+              if (event.outcome === "death") setEnteringFarewell(true);
+              setStreamingEvent(event);
             }
           } else if (message.event === "retry") {
             generated = "";
+            setEnteringFarewell(false);
             setStreamingEvent({ story: "", title: "", choices: [] });
           } else if (message.event === "complete") {
-            return JSON.parse(message.data) as unknown;
+            return receiveLifePayload(JSON.parse(message.data));
           } else if (message.event === "error") {
             const payload = JSON.parse(message.data) as { error?: string; code?: string };
             discardPendingStartOnError(payload.code);
@@ -162,6 +172,7 @@ export default function PlayPage() {
       }
       throw new Error("Life stream ended before completion");
     } catch (error) {
+      setEnteringFarewell(false);
       if (error instanceof DOMException && error.name === "TimeoutError") {
         lastError.current = "本次等待超时，故事可能仍在生成，请重试恢复进度。";
       } else {
@@ -195,6 +206,7 @@ export default function PlayPage() {
         return;
       }
       if (payload.state.dead === true) {
+        setEnteringFarewell(true);
         forgetActiveLife();
         router.replace(`/review/${encodeURIComponent(payload.state.lifeId)}`);
         return;
@@ -314,6 +326,8 @@ export default function PlayPage() {
     setLife(next);
     rememberActiveLife(next.lifeId);
   }
+
+  if (enteringFarewell) return <main className={farewellStyles.farewell} aria-label="正在进入人生告别" aria-busy="true" />;
 
   if (!life) {
     return (
