@@ -1,20 +1,34 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { API_BASE } from "../lib/life-session";
 import type { DeveloperMode } from "../lib/developer-mode";
 import styles from "./DeveloperMode.module.css";
 
 interface DeveloperContext extends DeveloperMode {
   busy: boolean;
+  panelOpen: boolean;
+  panelId: string;
+  togglePanel: () => void;
   update: (settings: DeveloperMode) => Promise<boolean>;
 }
-const Context = createContext<DeveloperContext>({ enabled: false, mock: false, busy: false, update: async () => false });
+const Context = createContext<DeveloperContext>({ enabled: false, mock: false, busy: false, panelOpen: false, panelId: "developer-remote", togglePanel: () => {}, update: async () => false });
 export const useDeveloperMode = () => useContext(Context);
 
 export function DeveloperModeProvider({ allowed, initial, children }: { allowed: boolean; initial: DeveloperMode; children: ReactNode }) {
   const router = useRouter();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelId = useId();
+  const panel = useRef<HTMLElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  function closePanel() { setPanelOpen(false); opener.current?.focus(); }
+  function togglePanel() {
+    if (panelOpen) { closePanel(); return; }
+    opener.current = document.activeElement as HTMLElement;
+    setPanelOpen(true);
+  }
+  useEffect(() => { if (panelOpen) panel.current?.focus(); }, [panelOpen]);
   const [settings, setSettings] = useState<DeveloperMode>(allowed ? initial : { enabled: false, mock: false });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -27,6 +41,7 @@ export function DeveloperModeProvider({ allowed, initial, children }: { allowed:
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "调试设置更新失败");
       setSettings(result);
+      if (!result.enabled) setPanelOpen(false);
       return true;
     } catch (error) { setMessage(error instanceof Error ? error.message : "请求失败，请重试"); return false; }
     finally { setBusy(false); }
@@ -45,16 +60,27 @@ export function DeveloperModeProvider({ allowed, initial, children }: { allowed:
     } catch (error) { setMessage(error instanceof Error ? error.message : "请求失败，请重试"); }
     finally { setBusy(false); }
   }
-  return <Context.Provider value={{ ...settings, busy, update }}>
+  return <Context.Provider value={{ ...settings, busy, update, panelOpen, panelId, togglePanel }}>
     {allowed && settings.enabled && <>
       <div className={styles.corner} aria-label="dev 调试模式"><span>dev</span></div>
-      <aside className={styles.toolbar} aria-label="页面调试工具">
-        <button className={styles.control} role="switch" aria-checked={settings.mock} disabled={busy} onClick={() => update({ enabled: true, mock: !settings.mock })}>普通模式 Mock：{settings.mock ? "开启" : "关闭"}</button>
-        <button className={styles.control} disabled={busy} onClick={grant}>增加 1000 积分</button>
-        <span className={styles.hint}>Mock 新局：童年 → 选择 → 告别，不扣积分</span>
-      </aside>
+      {panelOpen && <aside ref={panel} id={panelId} className={styles.remote} role="dialog" aria-modal="false" aria-labelledby={`${panelId}-title`} tabIndex={-1} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); closePanel(); } }}>
+        <header className={styles.remoteHeader}><div><span>DEV TOOLS</span><h2 id={`${panelId}-title`}>调试遥控器</h2></div><button className={styles.collapse} onClick={closePanel} aria-label="收起调试遥控器">×</button></header>
+        <div className={styles.remoteBody}>
+          <button className={styles.control} role="switch" aria-checked={settings.mock} disabled={busy} onClick={() => update({ enabled: true, mock: !settings.mock })}>普通模式 Mock：{settings.mock ? "开启" : "关闭"}</button>
+          <button className={styles.control} disabled={busy} onClick={grant}>增加 1000 积分</button>
+          <p className={styles.hint}>Mock 新局：童年 → 选择 → 告别，不扣积分</p>
+          {message && <p className={styles.message} role="status">{message}</p>}
+        </div>
+      </aside>}
     </>}
-    {message && <p className={styles.message} role="status">{message}</p>}
     {children}
   </Context.Provider>;
+}
+
+export function DeveloperDebugButton() {
+  const dev = useDeveloperMode();
+  if (!dev.enabled) return null;
+  return <button className={styles.debugButton} type="button" onClick={dev.togglePanel} aria-label={dev.panelOpen ? "收起调试遥控器" : "打开调试遥控器"} aria-expanded={dev.panelOpen} aria-controls={dev.panelId}>
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M9 7V5a3 3 0 0 1 6 0v2M5 10h2m10 0h2M5 15h2m10 0h2M8 4 6 2m10 2 2-2M12 8v11" /><rect x="7" y="7" width="10" height="14" rx="5" /></svg>
+  </button>;
 }

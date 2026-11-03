@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DeveloperDebugButton } from "../../components/DeveloperMode";
 import { LifeEventScene } from "../../components/LifeEventScene";
 import { AccountNav } from "../../components/AccountNav";
 import { BrandLogo } from "../../components/BrandLogo";
@@ -343,6 +344,7 @@ export default function PlayPage() {
         </div>
         <p className="current-age">{displayAge} 岁</p>
         <div className="topbar-actions"><AccountNav>
+          <DeveloperDebugButton />
           <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />
         </AccountNav></div>
       </header>
