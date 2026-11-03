@@ -21,6 +21,8 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
   const state = await lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
   if (!state.dead) return NextResponse.json({error:"人生尚未结束"},{status:409});
+  const mockEnding = state.flags.developerMock === true;
+  if (mockEnding && !await isDeveloper(user)) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
   const cached=await lifeGeneration.getEnding(id,user.id);
   if(cached)return NextResponse.json({ending:cached});
   const body = await readJsonObject(request);
@@ -33,7 +35,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
     return NextResponse.json({error:"服务暂时不可用，请稍后重试"},{status:503});
   }
   try {
-    const ending = mock && state.flags.developerMock === true ? mockLifeEnding(state) : await generateEnding(state, sanitizeModelConfig(body.modelConfig));
+    const ending = mockEnding ? mockLifeEnding(state) : await generateEnding(state, sanitizeModelConfig(body.modelConfig));
     await commitGeneration(admission!, () => lifeGeneration.saveEnding(lease,ending));
     return NextResponse.json({ ending });
   } catch {

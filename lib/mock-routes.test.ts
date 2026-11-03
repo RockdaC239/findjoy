@@ -67,3 +67,14 @@ it("persists mode with HTTP-only cookies and exits with mock off", async () => {
   mocks.user.mockResolvedValue(await identityStore.resolveUser("test", "ordinary"));
   expect((await settings(request({ enabled: true, mock: true }))).status).toBe(403);
 });
+
+it("keeps a saved Mock ending local even when the Mock switch has since been turned off", async () => {
+  let life = await state(await start(request()));
+  const params = { params: Promise.resolve({ id: life.lifeId }) };
+  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id }), params));
+  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
+  const response = await ending(request({}, false), params);
+  expect(response.status).toBe(200);
+  expect((await response.json()).ending.age).toBe(81);
+  expect(mocks.ending).not.toHaveBeenCalled();
+});
