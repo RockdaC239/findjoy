@@ -14,7 +14,7 @@ export function useAccountUser() {
   return useContext(AccountUserContext);
 }
 
-export function AccountNav({ children }: { children?: ReactNode }) {
+export function AccountNav({ children, showRecharge = true }: { children?: ReactNode; showRecharge?: boolean }) {
   const user = useContext(AccountUserContext);
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -30,6 +30,7 @@ export function AccountNav({ children }: { children?: ReactNode }) {
   }, [open]);
 
   return <>
+    {showRecharge && <Link className="settings-button" href="/plans">积分充值</Link>}
     {children}
     {user ? <div ref={menu} className="account-menu"
       onMouseEnter={() => { if (window.matchMedia("(hover: hover)").matches) setOpen(true); }}
