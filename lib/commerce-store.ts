@@ -114,7 +114,8 @@ export const commerceStore = {
       await query("UPDATE joy_orders SET status='SUCCEEDED',platform_id=$1,pay_url=NULL WHERE id=$2", [platformId,id]);
     });
   },
-  async beginLife(userId: string,key: string,requestHash: string,life: LifeState,now=Date.now()): Promise<LifeOperation> {
+  async beginLife(userId: string,key: string,requestHash: string,life: LifeState,now=Date.now(),cost=NORMAL_LIFE_POINTS): Promise<LifeOperation> {
+    if (cost !== 0 && cost !== NORMAL_LIFE_POINTS) throw new CommerceError("INVALID_COST", "开局积分无效", 400);
     await commerceStore.expireOperations(now);
     return withTransaction(async () => {
       await lockUser(userId);
@@ -123,12 +124,12 @@ export const commerceStore = {
         if(previous.requestHash!==requestHash) throw new CommerceError("IDEMPOTENCY_CONFLICT","重复请求参数不一致");
         return previous;
       }
-      const debit = await query("UPDATE joy_accounts SET available=available-$1,held=held+$1 WHERE user_id=$2 AND available>=$1", [NORMAL_LIFE_POINTS,userId]);
+      const debit = await query("UPDATE joy_accounts SET available=available-$1,held=held+$1 WHERE user_id=$2 AND available>=$1", [cost,userId]);
       if (!debit.rowCount) throw new CommerceError("INSUFFICIENT_CREDITS","积分不足，请先充值积分",402);
       const id=randomUUID(), expiresAt=now+600000;
       await lifeStore.set(life,userId);
-      await query("INSERT INTO joy_life_operations VALUES ($1,$2,$3,$4,$5,'pending',$6,$7)", [id,userId,life.lifeId,key,requestHash,expiresAt,NORMAL_LIFE_POINTS]);
-      return {id,userId,lifeId:life.lifeId,requestHash,status:"pending" as const,expiresAt,cost:NORMAL_LIFE_POINTS};
+      await query("INSERT INTO joy_life_operations VALUES ($1,$2,$3,$4,$5,'pending',$6,$7)", [id,userId,life.lifeId,key,requestHash,expiresAt,cost]);
+      return {id,userId,lifeId:life.lifeId,requestHash,status:"pending" as const,expiresAt,cost};
     });
   },
   async findOperation(userId: string,key: string,requestHash: string): Promise<LifeOperation|null> {

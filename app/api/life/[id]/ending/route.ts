@@ -1,3 +1,6 @@
+import { readDeveloperMode } from "../../../../../lib/developer-mode";
+import { isDeveloper } from "../../../../../lib/developer";
+import { mockLifeEnding } from "../../../../../lib/mock-life";
 import { acquireGeneration, releaseGeneration, commitGeneration } from "../../../../../lib/generation-capacity";
 import { lifeGeneration } from "../../../../../lib/life-generation";
 import { CommerceError } from "../../../../../lib/commerce-store";
@@ -12,6 +15,8 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
+  const mock = readDeveloperMode(request.headers.get("cookie")).mock;
+  if (mock && !await isDeveloper(user)) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
   const { id } = await params;
   const state = await lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
@@ -28,7 +33,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
     return NextResponse.json({error:"服务暂时不可用，请稍后重试"},{status:503});
   }
   try {
-    const ending = await generateEnding(state, sanitizeModelConfig(body.modelConfig));
+    const ending = mock && state.flags.developerMock === true ? mockLifeEnding(state) : await generateEnding(state, sanitizeModelConfig(body.modelConfig));
     await commitGeneration(admission!, () => lifeGeneration.saveEnding(lease,ending));
     return NextResponse.json({ ending });
   } catch {

@@ -1,5 +1,8 @@
+import { readDeveloperMode } from "../../../../lib/developer-mode";
+import { isDeveloper } from "../../../../lib/developer";
+import { streamMockLifeEvent } from "../../../../lib/mock-life";
 import { isLaunchModeAvailable } from "../../../../lib/modes/catalog";
-import { SIGNUP_POINTS } from "../../../../lib/points";
+import { NORMAL_LIFE_POINTS, SIGNUP_POINTS } from "../../../../lib/points";
 import { createHash } from "node:crypto";
 import { commerceStore, CommerceError } from "../../../../lib/commerce-store";
 import { currentUser, appOrigin } from "../../../../lib/auth";
@@ -19,6 +22,8 @@ export const POST = withApiGuard(async (request: Request) => {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
+  const mock = readDeveloperMode(request.headers.get("cookie")).mock;
+  if (mock && !await isDeveloper(user)) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
   const input = await readJsonObject(request);
   if (!isLaunchModeAvailable(input.mode ?? "normal")) {
     return NextResponse.json({ error: "当前仅开放普通模式，其他玩法敬请期待", code: "MODE_UNAVAILABLE" }, { status: 403 });
@@ -35,7 +40,7 @@ export const POST = withApiGuard(async (request: Request) => {
   let plan;
   let operation;
   let admission: string | undefined;
-  const requestHash=createHash("sha256").update(JSON.stringify({gender: parsed.gender, selection})).digest("hex");
+  const requestHash=createHash("sha256").update(JSON.stringify({gender: parsed.gender, selection, ...(mock ? { mock: true } : {})})).digest("hex");
   try {
     operation=await commerceStore.findOperation(user.id,key,requestHash);
     if (!operation) {
@@ -45,8 +50,9 @@ export const POST = withApiGuard(async (request: Request) => {
       const recentStorylines=selection.mode === "normal" ? await lifeStore.recentStorylines(6,3,user.id) : [];
       plan=resolveStartPlan(selection,{backgroundAvoid:recentAvoid});
       state=createStartLife(plan,parsed.gender,{recentStorylines});
+      if (mock) state.flags.developerMock = true;
       await commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
-      operation = await commerceStore.beginLife(user.id,key,requestHash,state);
+      operation = await commerceStore.beginLife(user.id,key,requestHash,state,Date.now(),mock ? 0 : NORMAL_LIFE_POINTS);
     }
   } catch (error) {
     if (admission) await releaseGeneration(admission);
@@ -67,7 +73,7 @@ export const POST = withApiGuard(async (request: Request) => {
     send("status", { message: "人生正在展开", operationId: operation.id });
     let completed = false;
     try {
-      const iterator = streamNextEvent(generationState, undefined, sanitizeModelConfig(input.modelConfig), transcript);
+      const iterator = mock ? streamMockLifeEvent(generationState) : streamNextEvent(generationState, undefined, sanitizeModelConfig(input.modelConfig), transcript);
       let item = await iterator.next();
       while (!item.done) {
         if (item.value.retry) {

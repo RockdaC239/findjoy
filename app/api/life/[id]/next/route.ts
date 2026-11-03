@@ -1,3 +1,6 @@
+import { readDeveloperMode } from "../../../../../lib/developer-mode";
+import { isDeveloper } from "../../../../../lib/developer";
+import { streamMockLifeEvent } from "../../../../../lib/mock-life";
 import { lifeGeneration } from "../../../../../lib/life-generation";
 import { CommerceError } from "../../../../../lib/commerce-store";
 import { currentUser, appOrigin } from "../../../../../lib/auth";
@@ -24,6 +27,8 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
+  const mock = readDeveloperMode(request.headers.get("cookie")).mock;
+  if (mock && !await isDeveloper(user)) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
   const { id } = await params;
   const state = await lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
@@ -61,7 +66,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
   const stream = storyStream(async (send) => {
     send("status", { message: "人生正在继续" });
     try {
-      const iterator = streamNextEvent(state, choiceForModel, sanitizeModelConfig(body.modelConfig), transcript);
+      const iterator = mock && state.flags.developerMock === true ? streamMockLifeEvent(state, choiceForModel) : streamNextEvent(state, choiceForModel, sanitizeModelConfig(body.modelConfig), transcript);
       let item = await iterator.next();
       while (!item.done) {
         if (item.value.retry) {
@@ -74,6 +79,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
       // 选择可能为空（童年纯叙事节点）。applyNextEvent 会把真实选择挂到给出它的节点上，
       // 新节点以待定状态入列；不选择则不补齐任何 choiceText。
       const nextState = applyNextEvent(state, item.value, choiceForModel);
+      if (!mock) nextState.flags.developerMock = false;
       if (transcript) {
         transcript.push({ role: "user", content: buildTranscriptUserContent(state, choiceForModel, false) });
         transcript.push({ role: "assistant", content: serializeTranscriptEvent(item.value) });
