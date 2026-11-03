@@ -1,3 +1,4 @@
+import { applyNarrative, resolveNarrativeReferences, type NarrativeState, type NarrativeUpdate } from "./engine/narrative";
 import type { LifeScenario } from "./modes/types";
 
 export type Gender = "female" | "male" | "nonbinary" | "unspecified";
@@ -16,13 +17,14 @@ export interface LifeState {
   career: { occupation: string; companyType: string; incomeYearly: number; careerStage: string };
   finance: { cash: number; assets: number; debt: number; housing: string };
   health: { physical: number; conditions: string[]; lifestyle: string };
-  relationships: { partner: { status: string; years: number }; children: string[]; parents: { status: string }; friends: string[] };
+  relationships: { partner: { status: string; years: number }; children: string[]; parents: { status: string; fatherStatus?: string; motherStatus?: string }; friends: string[] };
   psychology: { valueProfile: Record<string, number>; behaviorPatterns: string[]; internalConflicts: string[] };
   history: LifeEvent[];
   majorMemories: string[];
   flags: Record<string, boolean | string | number>;
   /** 玩法情境；旧存档没有该字段时按普通人生处理。 */
   scenario?: LifeScenario;
+  narrative?: NarrativeState;
   dead: boolean;
   createdAt: string;
 }
@@ -55,13 +57,14 @@ export interface LifeEvent {
   importance: number;
   memory?: string;
   objectiveChanges?: Partial<ObjectiveChanges>;
+  narrative?: NarrativeUpdate;
   /** 该节点写入时间（UTC ISO），用于逐节点追溯。 */
   storedAt?: string;
   /** 生成该节点时的模型调用用量（token/成本/前缀缓存命中），用于追溯与成本审计。 */
   usage?: ModelUsage;
 }
-export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; occupation: string; partnerStatus: string }
-export interface NextEvent { outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
+export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; occupation: string; partnerStatus: string; city: string; education: string; parentsStatus: string; fatherStatus: string; motherStatus: string; children: string[]; friends: string[]; conditions: string[] }
+export interface NextEvent { narrative?: NarrativeUpdate; outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
 export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string; promptCacheHitTokens?: number; promptCacheMissTokens?: number }
 
 const cities = ["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"];
@@ -108,6 +111,16 @@ export function applyNextEvent(
   if (typeof changes.debt === "number") next.finance.debt = Math.max(0, next.finance.debt + changes.debt);
   if (typeof changes.physical === "number") next.health.physical = Math.max(0, Math.min(100, next.health.physical + changes.physical));
   if (changes.partnerStatus) next.relationships.partner.status = changes.partnerStatus;
+  if (changes.city) next.basic.city = changes.city;
+  if (changes.education) next.basic.education = changes.education;
+  if (changes.children) next.relationships.children = [...changes.children];
+  if (changes.friends) next.relationships.friends = [...changes.friends];
+  if (changes.conditions) next.health.conditions = [...changes.conditions];
+  const parents = next.relationships.parents;
+  if (changes.parentsStatus && !parents.fatherStatus && !parents.motherStatus) parents.status = changes.parentsStatus;
+  if (changes.fatherStatus) parents.fatherStatus = changes.fatherStatus;
+  if (changes.motherStatus) parents.motherStatus = changes.motherStatus;
+  if (parents.fatherStatus || parents.motherStatus) parents.status = `父亲：${parents.fatherStatus ?? "未记录"}；母亲：${parents.motherStatus ?? "未记录"}`;
   const pending = next.history.at(-1);
   let choiceAttached = false;
   if (pending && !pending.choiceId && (pending.choices?.length ?? 0) > 0 && choice?.id && choice.id !== "none" && choice.text) {
@@ -127,10 +140,13 @@ export function applyNextEvent(
     importance: event.event.importance,
     memory: event.memory,
     objectiveChanges: changes,
+    narrative: event.narrative,
     storedAt: new Date().toISOString(),
     usage: event.usage,
   };
+  record.narrative = resolveNarrativeReferences(event.narrative, record.id, state.history.map(item => item.id));
   next.history.push(record);
+  next.narrative = applyNarrative(state.narrative, record.narrative, record.id, state.history.map(item => item.id));
   // 兜底：直接调用方（无待定决策节点可挂，如单次生成）把选择挂到本节点上，保持旧语义。
   if (!choiceAttached && choice?.id && choice.id !== "none" && choice.text) {
     record.choiceId = choice.id;

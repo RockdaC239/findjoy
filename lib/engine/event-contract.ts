@@ -1,3 +1,4 @@
+import { boundedText, boundedStrings, normalizeNarrative } from "./narrative";
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, LifeEnding } from "../life";
 import { detectStorylineDomains, storylineLabel, type StorylineGuards } from "../storyline";
 // 模型输出在这里转成内部 NextEvent；不要让原始 JSON 直接更新 LifeState。
@@ -123,6 +124,14 @@ function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"
     physical: pick("physical") as number | undefined,
     occupation: typeof input.occupation === "string" ? input.occupation : undefined,
     partnerStatus: typeof input.partnerStatus === "string" ? input.partnerStatus : undefined,
+    city: boundedText(input.city, 80),
+    education: boundedText(input.education, 80),
+    parentsStatus: boundedText(input.parentsStatus, 80),
+    fatherStatus: boundedText(input.fatherStatus, 80),
+    motherStatus: boundedText(input.motherStatus, 80),
+    children: boundedStrings(input.children),
+    friends: boundedStrings(input.friends),
+    conditions: boundedStrings(input.conditions),
   };
 }
 
@@ -257,6 +266,7 @@ export function normalizeGeneratedEvent(value: unknown, expectChoices = true, pr
     event: { type, title, importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
     choices,
     objectiveChanges: normalizeObjectiveChanges(candidate.objectiveChanges ?? candidate.objective_changes),
+    narrative: normalizeNarrative(candidate.narrative),
     memory: typeof candidate.memory === "string" && candidate.memory.trim() ? candidate.memory.trim() : undefined,
   };
 }
@@ -311,6 +321,7 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean, sto
     event: { type, title: (event.title as string).trim(), importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
     choices: expectChoices ? choices.slice(0, 3) : [],
     objectiveChanges: normalizeObjectiveChanges(candidate.objectiveChanges ?? candidate.objective_changes),
+    narrative: normalizeNarrative(candidate.narrative),
     memory: typeof candidate.memory === "string" && candidate.memory.trim() ? candidate.memory.trim() : undefined,
   };
 }
@@ -325,6 +336,7 @@ export function serializeTranscriptEvent(event: NextEvent): string {
     event: event.event,
     choices: event.choices,
     objectiveChanges: event.objectiveChanges,
+    narrative: event.narrative,
     memory: event.memory,
   });
 }
