@@ -1,0 +1,17 @@
+.dialog { width: min(var(--fj-layout-dialog), calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: var(--fj-space-8); background: var(--fj-color-surface); color: var(--fj-color-text); border: 1px solid var(--fj-color-border); border-radius: var(--fj-radius-dialog); box-shadow: var(--fj-shadow-modal); text-align: left; }
+.dialog::backdrop { background: var(--fj-color-backdrop); }
+.dialog h2 { font: 500 var(--fj-typography-section-size)/1.4 var(--fj-typography-family-ui); margin: 0 0 var(--fj-space-6); }
+.actions { display: grid; gap: var(--fj-space-3); }
+.action, .control { min-height: var(--fj-layout-control); padding: var(--fj-space-3) var(--fj-space-4); border: 1px solid var(--fj-color-border); border-radius: var(--fj-radius-control); color: var(--fj-color-text); background: var(--fj-color-surface); font: 500 var(--fj-typography-ui-size)/1.5 var(--fj-typography-family-ui); text-decoration: none; cursor: pointer; }
+.action { width: 100%; display: flex; align-items: center; justify-content: center; gap: var(--fj-space-3); }
+.primary { color: var(--fj-color-text-inverse); background: var(--fj-color-action); border-color: var(--fj-color-action); }
+.action:hover, .control:hover { border-color: var(--fj-color-text); }
+.primary:hover { background: var(--fj-color-action-hover); }
+.action:focus-visible, .control:focus-visible { outline: 2px solid var(--fj-color-focus); outline-offset: 3px; }
+.action:disabled, .control:disabled { opacity: var(--fj-motion-disabled-opacity); cursor: wait; }
+.corner { position: fixed; inset: 0 auto auto 0; width: 52px; height: 52px; background: var(--fj-color-brand); color: var(--fj-color-text-inverse); clip-path: polygon(0 0, 100% 0, 0 100%); z-index: 100; pointer-events: none; }
+.corner span { position: absolute; top: 9px; left: 5px; transform: rotate(-45deg); font: 600 12px/1 var(--fj-typography-family-ui); }
+.toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--fj-space-3); padding: var(--fj-space-3) var(--fj-space-6) var(--fj-space-3) var(--fj-space-12); border-bottom: 1px solid var(--fj-color-border); background: var(--fj-color-surface); }
+.hint, .message { color: var(--fj-color-text-muted); font: 400 var(--fj-typography-ui-size)/1.6 var(--fj-typography-family-ui); }
+.message { padding: var(--fj-space-3) var(--fj-layout-gutter-mobile); margin: 0; }
+@media (max-width: 600px) { .toolbar { justify-content: flex-start; } .hint { flex-basis: 100%; } }

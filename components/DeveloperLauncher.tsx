@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { useDeveloperMode } from "./DeveloperMode";
 import { BrandLogo } from "./BrandLogo";
 import { API_BASE } from "../lib/life-session";
-import styles from "./DeveloperTools.module.css";
+import styles from "./DeveloperMode.module.css";
 
 export function DeveloperLauncher() {
+  const dev = useDeveloperMode();
   const clicks = useRef({ count: 0, at: 0 });
   const checking = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -29,9 +31,9 @@ export function DeveloperLauncher() {
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="developer-entry-title">
       <h2 id="developer-entry-title">开发工具</h2>
       <div className={styles.actions}>
-        <Link className="primary-button" href="/developer" onClick={() => dialog.current?.close()}>进入调试模式 ↗</Link>
-        <Link className="settings-button" href="/showcase" onClick={() => dialog.current?.close()}>进入 Showcase ↗</Link>
-        <button className="text-button" onClick={() => dialog.current?.close()}>关闭</button>
+        <button className={`${styles.action} ${styles.primary}`} disabled={dev.busy} onClick={async () => { if (await dev.update({ enabled: !dev.enabled, mock: false })) dialog.current?.close(); }}>{dev.enabled ? "退出调试模式" : "进入调试模式"}</button>
+        <Link className={styles.action} href="/showcase" onClick={() => dialog.current?.close()}>进入 Showcase ↗</Link>
+        <button className={styles.action} onClick={() => dialog.current?.close()}>关闭</button>
       </div>
     </dialog>
   </>;
