@@ -1,24 +1,16 @@
+import { CHILDHOOD_BOUNDARY, crossesAdulthoodBoundary } from "./phase";
 import { streamModel, requestModel, resolveModelConfig, MAX_MODEL_ATTEMPTS, type ModelConfig } from "./model-client";
 import { EVENT_RETRY_GUIDANCE, ENDING_RETRY_GUIDANCE } from "./event-contract";
 import type { LifeState, LifeChoice, NextEvent, ModelUsage, LifeEnding } from "../life";
 import { DEATH_CAUSE_LABEL } from "../life";
-import { flagsToBackground } from "../background";
-import { leftStorylines, parseAvoidStorylines, type StorylineGuards } from "../storyline";
-import { buildScenarioReviewDirective, buildThemeTurnHint, getLifeScenario, getScenarioReviewQuestion } from "../modes/scenario";
-import { buildSystemPrompt, ENDING_SYSTEM_PROMPT } from "./prompts/assemble";
+import { parseAvoidStorylines } from "../storyline";
+import { getLifeScenario, getScenarioReviewQuestion } from "../modes/scenario";
 import { ModelError } from "./errors";
 import { buildFallbackEvent } from "./fallback";
-import { buildNextEventMessages, withRetryCorrection, type TranscriptMessage } from "./context";
-import { detectValueAxis, lastChoiceNode, parseGeneratedJson, parseWithTruncationRepair, normalizeGeneratedEvent, diagnoseGeneratedEvent, repairGeneratedEvent, diagnoseEnding, normalizeEnding } from "./event-contract";
+import { prepareEventRequest, buildEndingMessages, withRetryCorrection, type TranscriptMessage } from "./context";
+import { parseGeneratedJson, parseWithTruncationRepair, normalizeGeneratedEvent, diagnoseGeneratedEvent, repairGeneratedEvent, diagnoseEnding, normalizeEnding } from "./event-contract";
 
 function num(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
-
-export const CHILDHOOD_BOUNDARY = 15;
-// 童年节点落地后是否跨入成年（≥15 岁）。判定"该不该给选项"必须用落地年龄，
-// 否则会出现"14 岁生成、落到 17 岁却仍是纯叙事节点"的边界错位（17 岁拿不到任何决策）。
-export function crossesAdulthoodBoundary(stateAge: number, timePassed: number): boolean {
-  return stateAge < CHILDHOOD_BOUNDARY && stateAge + Math.max(1, timePassed) >= CHILDHOOD_BOUNDARY;
-}
 
 function logModelDiagnostic(context: string, fields: Record<string, unknown>) {
   if (process.env.NODE_ENV === "test") return;
@@ -39,43 +31,13 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const config = resolveModelConfig(requestConfig);
   const { apiKey, baseUrl, model } = config;
   if (!apiKey) throw new ModelError("未配置 API Key，请在模型设置中填写后重试");
-  // 从 14 岁起直接进入决策阶段：下一次跳跃（timePassed ≥ 1）必然落地 ≥15 岁，
-  // 因此迈入点直接用决策提示词生成带选项的事件，不需要先出童年事件再重生成。
-  const scenario = getLifeScenario(state);
-  const isOpening = state.history.length === 0;
-  const openingAtCurrentAge = isOpening && (scenario.mode === "script" || scenario.mode === "foru");
-  // 剧本/ForU 从固定年龄/当前年龄开场，不再叠加随机出身档案；普通/主题沿用出身。
-  const expectChoices = openingAtCurrentAge || state.basic.age + 1 >= CHILDHOOD_BOUNDARY;
-  // 预防式张力轴轮换：把上一节点的张力轴写进本轮提示词，让模型主动避开（而不是写重复了再重试）
-  const previousChoices = lastChoiceNode(state)?.choices;
-  const avoidAxis = detectValueAxis(previousChoices);
-  // 题材域层防重守卫：
-  // - avoidStorylines（跨人生防重）：开局时写入 flags.avoidStorylines（最近几局主线），本局固定；
-  // - leftStorylines（单局内防重）：本局已确立且已离开的方向，逐轮动态计算。
-  // 剧本/ForU 的走向由情境决定；主题的主线由主题提醒负责，三者都不应被
-  // 跨局/局内题材防重拉离情境。只有普通人生保留完整防重。
-  const storylineGuards: StorylineGuards | undefined = (() => {
-    if (scenario.mode !== "normal") return undefined;
-    const avoidStorylines = parseAvoidStorylines(state.flags.avoidStorylines);
-    const left = leftStorylines(state);
-    return avoidStorylines.length > 0 || left.length > 0 ? { avoidStorylines, leftStorylines: left } : undefined;
-  })();
+  const { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages } = prepareEventRequest(state, choice, transcript);
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
     try {
-      const systemPrompt = buildSystemPrompt(expectChoices, {
-        background: scenario.mode === "script" || scenario.mode === "foru" ? undefined : flagsToBackground(state.flags),
-        transitioning: expectChoices && state.basic.age < CHILDHOOD_BOUNDARY && !openingAtCurrentAge,
-        avoidAxis,
-        storylineGuards,
-        scenario,
-        isOpening,
-        themeHint: buildThemeTurnHint(scenario, state),
-      });
-      const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
       for await (const chunk of streamModel(config, withRetryCorrection(attempt, messages, lastFailureReason, EVENT_RETRY_GUIDANCE))) {
         if (chunk.text !== undefined) {
           generatedText += chunk.text;
@@ -155,19 +117,7 @@ export async function generateEnding(state: LifeState, requestConfig?: Partial<M
   const config = resolveModelConfig(requestConfig);
   const { apiKey } = config;
   if (!apiKey) throw new ModelError("未配置 API Key，请在模型设置中填写后重试");
-  const scenario = getLifeScenario(state);
-  const scenarioReview = buildScenarioReviewDirective(scenario);
-  const prompt = JSON.stringify({
-    life_state: state,
-    scenario: state.scenario,
-    recent_history: state.history.slice(-12),
-    major_memories: state.majorMemories,
-    behavioral_summary: state.psychology.behaviorPatterns,
-    current_age: state.basic.age,
-    death_cause: state.flags.deathCause ?? "natural",
-  });
-  const systemPrompt = scenarioReview ? `${ENDING_SYSTEM_PROMPT}\n\n${scenarioReview}` : ENDING_SYSTEM_PROMPT;
-  const messages = [{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: prompt }];
+  const messages = buildEndingMessages(state);
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {

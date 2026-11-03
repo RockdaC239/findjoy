@@ -39,7 +39,8 @@
     "load:seed": "node scripts/load-test-seed.mjs",
     "load:test": "node scripts/load-test.mjs",
     "design:tokens": "node scripts/generate-design-tokens.mjs",
-    "design:check": "node scripts/generate-design-tokens.mjs --check"
+    "design:check": "node scripts/generate-design-tokens.mjs --check",
+    "prompt:preview": "vite-node scripts/preview-prompts.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

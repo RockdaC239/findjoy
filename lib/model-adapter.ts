@@ -7,3 +7,4 @@ export { ModelError } from "./engine/errors";
 export { buildSystemPrompt, CHILDHOOD_SYSTEM_PROMPT } from "./engine/prompts/assemble";
 export type { SystemPromptOptions } from "./engine/prompts/assemble";
 export * from "./engine/model-client";
+export * from "./engine/phase";
