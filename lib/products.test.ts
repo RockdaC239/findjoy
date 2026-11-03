@@ -25,3 +25,13 @@ it("offers a purchasable single life and four approved packs with two free signu
  expect(packs.map(p=>(p.amountFen/(p.credits/NORMAL_LIFE_POINTS)/100).toFixed(2))).toEqual(["4.95","3.98","3.63","3.33"]);
  expect(Math.round((1-packs[1].amountFen/(packs[1].credits/NORMAL_LIFE_POINTS)/single.amountFen)*100)).toBe(33);
 });
+
+it("keeps the one-fen test product private and follows the configured payment mode", () => {
+ vi.stubEnv("FINDJOY_PAYMENTS_MODE", "demo");
+ expect(products().find(item => item.id === "developer-test")).toBeUndefined();
+ expect(products({ developer: true }).find(item => item.id === "developer-test")).toMatchObject({ amountFen: 1, credits: 20, demo: true });
+ vi.stubEnv("FINDJOY_PAYMENTS_MODE", "live");
+ vi.stubEnv("FINDJOY_PRODUCTS_JSON", JSON.stringify([{ id: "single", name: "普通模式", credits: 20, amountFen: 590 }]));
+ expect(products({ developer: true }).find(item => item.id === "developer-test")).toMatchObject({ amountFen: 1, demo: false });
+ expect(products()).toHaveLength(1);
+});

@@ -2,6 +2,7 @@ import { takeRateLimit } from "../../../lib/rate-limit";
 import { currentUser, appOrigin } from "../../../lib/auth";
 import { hasSameOrigin } from "../../../lib/auth-policy";
 import { commerceStore, CommerceError } from "../../../lib/commerce-store";
+import { isDeveloper } from "../../../lib/developer";
 import { products } from "../../../lib/products";
 import { createPayment, publicOrder } from "../../../lib/payments";
 import { readJsonObject, withApiGuard } from "../../../lib/api-request";
@@ -19,7 +20,7 @@ export const POST = withApiGuard(async (request:Request) => {
   const body=await readJsonObject(request, 8 * 1024);
   if(body.channel!=="WECHAT_H5")return Response.json({error:"当前仅支持微信支付"},{status:400});
   try{
-    const product=products().find(item=>item.id===body.productId);
+    const product=products({ developer: await isDeveloper(user) }).find(item=>item.id===body.productId);
     if(!product)return Response.json({error:"套餐不存在"},{status:400});
     const key=request.headers.get("Idempotency-Key") ?? "";
     const order=await commerceStore.createOrder(user.id,product,key,body.channel);

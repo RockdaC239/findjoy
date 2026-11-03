@@ -4,16 +4,18 @@ import { PointsUsageDialog } from "../../components/PointsUsageDialog";
 import { AccountShell } from "../../components/AccountShell";
 import { currentUser } from "../../lib/auth";
 import { commerceStore } from "../../lib/commerce-store";
-import { formatPrice, products } from "../../lib/products";
+import { isDeveloper } from "../../lib/developer";
+import { DEVELOPER_TEST_PRODUCT_ID, formatPrice, products } from "../../lib/products";
 export const metadata={title:"积分充值 · FindJoy 觅乐"};
 
 export default async function PlansPage() {
   const user=await currentUser();
   await commerceStore.expireOperations();
   const balance=user?await commerceStore.balance(user.id):null;
-  const catalog=products();
+  const catalog=products({ developer: await isDeveloper(user) });
+  const testProduct = catalog.find(product => product.id === DEVELOPER_TEST_PRODUCT_ID);
   const single=catalog.find(product=>product.id==="single");
-  const packs=catalog.filter(product=>product.id!=="single");
+  const packs=catalog.filter(product=>product.id!=="single" && product.id!==DEVELOPER_TEST_PRODUCT_ID);
   const demo=catalog.every(product=>product.demo);
   const signupPoints=Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS);
   const checkoutHref=(id:string)=>user?`/checkout?product=${id}`:`/login?returnTo=${encodeURIComponent(`/findjoy/checkout?product=${id}`)}`;
@@ -37,6 +39,11 @@ export default async function PlansPage() {
         <p className="plan-unit-price">折合 ¥{(product.amountFen/(product.credits/NORMAL_LIFE_POINTS)/100).toFixed(2)}/局{product.id==="standard"&&single&&product.amountFen/product.credits<single.amountFen/single.credits&&<>，比单次购买省约 {Math.round((1-(product.amountFen/product.credits)/(single.amountFen/single.credits))*100)}%</>}</p>
         <Link className={product.id==="standard"?"primary-button account-primary":"plan-button"} href={checkoutHref(product.id)}>{demo?"体验购买流程":"充值这份积分"}<span aria-hidden="true">↗</span></Link>
       </article>)}</section>
+      {testProduct && <section className="single-purchase" aria-labelledby="test-payment-title">
+        <div className="single-purchase-copy"><h2 id="test-payment-title">开发者测试支付</h2><p>仅本人可见 · {testProduct.credits} 积分 · {testProduct.demo ? "演示模式，不会真实扣款" : "真实支付 ¥0.01"}</p></div>
+        <div className="plan-price"><small>¥</small>{formatPrice(testProduct.amountFen)}</div>
+        <Link className="plan-button" href={checkoutHref(testProduct.id)}>{testProduct.demo ? "预览测试订单" : "测试支付 ¥0.01"}<span aria-hidden="true">↗</span></Link>
+      </section>}
     </main>
   </AccountShell>;
 }
