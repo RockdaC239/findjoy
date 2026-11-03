@@ -70,17 +70,17 @@ export async function* streamModel(config: ResolvedModelConfig, messages: NextEv
   const overall = setTimeout(() => controller.abort(), MODEL_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, signal: controller.signal, body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 4096, stream: true, stream_options: { include_usage: true }, response_format: { type: "json_object" }, messages }) });
-    if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
+    if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`, response.status < 400 || response.status >= 500 || [408, 429].includes(response.status));
     if (!response.body) throw new ModelError("模型服务未返回内容");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split("\n\n");
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
       buffer = blocks.pop() ?? "";
+      if (done && buffer.trim()) { blocks.push(buffer); buffer = ""; }
       for (const block of blocks) {
         const data = block.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
         if (!data || data === "[DONE]") continue;
@@ -97,7 +97,9 @@ export async function* streamModel(config: ResolvedModelConfig, messages: NextEv
           if (packet.usage && typeof packet.usage === "object") yield { usage: packet.usage };
         } catch { /* Ignore malformed keepalive frames. */ }
       }
+      if (done) break;
     }
+    reader.releaseLock();
   } catch (error) {
     if (controller.signal.aborted) throw new ModelError(firstTokenSeen
       ? "模型响应超时（超过 60 秒），请稍后重试或更换模型"
@@ -109,7 +111,7 @@ export async function* streamModel(config: ResolvedModelConfig, messages: NextEv
   }
 }
 
-export async function requestModel(config: ResolvedModelConfig, messages: NextEventMessage[]): Promise<string> {
+export async function requestModel(config: ResolvedModelConfig, messages: NextEventMessage[], onUsage?: (usage: Record<string, unknown>) => void): Promise<string> {
   const { apiKey, baseUrl, model } = config;
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -117,7 +119,8 @@ export async function requestModel(config: ResolvedModelConfig, messages: NextEv
     signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
     body: JSON.stringify({ model, thinking: { type: "disabled" }, temperature: 0.6, max_tokens: 2048, response_format: { type: "json_object" }, messages }),
   });
-  if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`);
-  const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  if (!response.ok) throw new ModelError(`模型服务返回错误（HTTP ${response.status}），请检查 Key 权限或供应商状态`, response.status < 400 || response.status >= 500 || [408, 429].includes(response.status));
+  const payload = (await response.json()) as { usage?: Record<string, unknown>; choices?: Array<{ message?: { content?: string } }> };
+  if (payload.usage && typeof payload.usage === "object") onUsage?.(payload.usage);
   return payload.choices?.[0]?.message?.content ?? "";
 }

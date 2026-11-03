@@ -14,15 +14,14 @@ function num(value: unknown) { return typeof value === "number" && Number.isFini
 
 function logModelDiagnostic(context: string, fields: Record<string, unknown>) {
   if (process.env.NODE_ENV === "test") return;
-  const safe = { ...fields };
-  if (typeof safe.raw === "string") safe.raw = safe.raw.slice(0, 800);
+  const safe = Object.fromEntries(Object.entries(fields).filter(([key, value]) => ["age", "phase", "attempt", "clampedTo"].includes(key) && (typeof value === "number" || ["decision", "childhood"].includes(String(value)))));
   console.warn(`[model-diagnostic] ${context} ${JSON.stringify(safe)}`);
 }
 
 function toModelError(error: unknown): ModelError {
   if (error instanceof ModelError) return error;
   if (error instanceof DOMException && error.name === "TimeoutError") return new ModelError("模型响应超时（超过 60 秒），请稍后重试或更换模型");
-  return new ModelError(error instanceof Error ? `模型请求失败：${error.message}` : "模型请求失败");
+  return new ModelError("模型请求失败，请稍后重试");
 }
 
 export type ModelStreamChunk = { text?: string; retry?: boolean; reason?: string };
@@ -34,6 +33,10 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages } = prepareEventRequest(state, choice, transcript);
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
+  const usageTotals: Record<string, unknown> = {};
+  const addUsage = (raw: Record<string, unknown>) => {
+    for (const key of ["prompt_tokens", "completion_tokens", "total_tokens", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"]) usageTotals[key] = num(usageTotals[key]) + Math.max(0, num(raw[key]));
+  };
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
@@ -67,10 +70,13 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       // 剧本/ForU 第一幕必须落在当前年龄；后续节点把节奏收紧到 1~5 年。
       if (openingAtCurrentAge) parsed.timePassed = 0;
       else if (scenario.mode === "script" || scenario.mode === "foru") parsed.timePassed = Math.min(5, Math.max(1, parsed.timePassed));
-      const usage: ModelUsage = { promptTokens: num(usageRaw.prompt_tokens), completionTokens: num(usageRaw.completion_tokens), totalTokens: num(usageRaw.total_tokens), estimatedCostUsd: num(usageRaw.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageRaw.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, promptCacheHitTokens: num(usageRaw.prompt_cache_hit_tokens), promptCacheMissTokens: num(usageRaw.prompt_cache_miss_tokens) };
+      addUsage(usageRaw);
+      const usage: ModelUsage = { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, promptCacheHitTokens: num(usageTotals.prompt_cache_hit_tokens), promptCacheMissTokens: num(usageTotals.prompt_cache_miss_tokens) };
       return { ...parsed, usage };
     } catch (error) {
+      addUsage(usageRaw);
       lastError = toModelError(error);
+      if (!lastError.retryable) throw lastError;
       if (!lastFailureReason) {
         lastFailureReason = lastError.message.includes("无法解析为 JSON")
           ? "JSON 无法解析（可能被截断或混入多余文字）"
@@ -88,7 +94,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const fallback = buildFallbackEvent(state, choice, scenario.mode === "normal" ? parseAvoidStorylines(state.flags.avoidStorylines) : [], scenario);
   if (openingAtCurrentAge) fallback.timePassed = 0;
   else if (scenario.mode === "script" || scenario.mode === "foru") fallback.timePassed = Math.min(5, Math.max(1, fallback.timePassed));
-  return { ...fallback, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedCostUsd: 0, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
+  return { ...fallback, usage: { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
 }
 
 export async function generateNextEvent(state: LifeState, choice?: LifeChoice, requestConfig?: Partial<ModelConfig>): Promise<NextEvent> {
@@ -103,8 +109,16 @@ export async function generateNextEvent(state: LifeState, choice?: LifeChoice, r
 // 如"27 岁人生被写成 81 岁"）；LLM 只负责回顾文字本身。
 export function applyEndingHardFacts(ending: LifeEnding, state: LifeState): LifeEnding {
   const cause = typeof state.flags.deathCause === "string" ? DEATH_CAUSE_LABEL[state.flags.deathCause] : undefined;
+  const historyIds = new Set(state.history.map(event => event.id));
+  const evidenceEventIds = [...new Set(ending.evidenceEventIds ?? [])].filter(id => historyIds.has(id)).slice(0, 4);
+  const supported = Boolean(ending.reflection && evidenceEventIds.length);
   return {
     ...ending,
+    ...(ending.reflection || ending.evidenceEventIds || ending.shareLines ? {
+      evidenceEventIds,
+      reflection: supported ? ending.reflection : undefined,
+      shareLines: supported ? ending.shareLines : undefined,
+    } : {}),
     age: state.basic.age,
     death: cause ?? ending.death,
     facts: { ...ending.facts, events: state.history.length },
@@ -112,7 +126,7 @@ export function applyEndingHardFacts(ending: LifeEnding, state: LifeState): Life
   };
 }
 
-export async function generateEnding(state: LifeState, requestConfig?: Partial<ModelConfig>): Promise<LifeEnding> {
+export async function generateEnding(state: LifeState, requestConfig?: Partial<ModelConfig>, onUsage?: (usage: Record<string, unknown>) => void): Promise<LifeEnding> {
   const config = resolveModelConfig(requestConfig);
   const { apiKey } = config;
   if (!apiKey) throw new ModelError("未配置 API Key，请在模型设置中填写后重试");
@@ -122,7 +136,7 @@ export async function generateEnding(state: LifeState, requestConfig?: Partial<M
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let rawContent = "";
     try {
-      rawContent = await requestModel(config, withRetryCorrection(attempt, messages, lastFailureReason, ENDING_RETRY_GUIDANCE));
+      rawContent = await requestModel(config, withRetryCorrection(attempt, messages, lastFailureReason, ENDING_RETRY_GUIDANCE), onUsage);
       const generated = parseGeneratedJson(rawContent || "{}");
       const reason = diagnoseEnding(generated);
       if (reason) {
@@ -134,6 +148,7 @@ export async function generateEnding(state: LifeState, requestConfig?: Partial<M
       return applyEndingHardFacts(ending, state);
     } catch (error) {
       lastError = toModelError(error);
+      if (!lastError.retryable) throw lastError;
       if (!lastFailureReason) {
         lastFailureReason = lastError.message.includes("无法解析为 JSON")
           ? "JSON 无法解析（可能被截断或混入多余文字）"

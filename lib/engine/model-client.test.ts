@@ -38,3 +38,23 @@ it("reads a non-streaming ending response without interpreting its event content
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: '{"any":"wire format"}' } }] })));
   expect(await requestModel(config, messages)).toBe('{"any":"wire format"}');
 });
+
+it("reads CRLF events and an EOF usage packet without a blank terminator", async () => {
+  const wire = 'data: {"choices":[{"delta":{"content":"下一幕"}}]}\r\n\r\ndata: {"usage":{"total_tokens":19}}';
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(wire)));
+  const chunks = [];
+  for await (const chunk of streamModel(config, messages)) chunks.push(chunk);
+  expect(chunks).toEqual([{ text: "下一幕" }, { usage: { total_tokens: 19 } }]);
+});
+
+it("marks permanent provider errors without including provider body", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("private story", { status: 401 })));
+  await expect(requestModel(config, messages)).rejects.toMatchObject({ retryable: false });
+});
+
+it("reports ending usage while preserving the string response API", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: "{}" } }], usage: { total_tokens: 18 } })));
+  const usage = vi.fn();
+  expect(await requestModel(config, messages, usage)).toBe("{}");
+  expect(usage).toHaveBeenCalledWith({ total_tokens: 18 });
+});
