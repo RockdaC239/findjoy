@@ -5,7 +5,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { DeveloperModeProvider } from "../components/DeveloperMode";
 import { BrandLogo } from "../components/BrandLogo";
 function render(enabled: boolean) {
-  return renderToStaticMarkup(createElement(DeveloperModeProvider, { allowed: true, initial: { enabled, mock: false }, children: createElement(BrandLogo, { href: "/" }) }));
+  return renderToStaticMarkup(createElement(DeveloperModeProvider, { allowed: true, initial: { enabled, mock: false } }, createElement(BrandLogo, { href: "/" })));
 }
 it("keeps normal navigation unchanged and adds only the dev marker and debug icon when enabled", () => {
   const normal = render(false);

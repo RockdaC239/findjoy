@@ -16,7 +16,7 @@ interface DeveloperContext extends DeveloperMode {
 const Context = createContext<DeveloperContext>({ enabled: false, mock: false, busy: false, panelOpen: false, panelId: "developer-remote", togglePanel: () => {}, update: async () => false });
 export const useDeveloperMode = () => useContext(Context);
 
-export function DeveloperModeProvider({ allowed, initial, children }: { allowed: boolean; initial: DeveloperMode; children: ReactNode }) {
+export function DeveloperModeProvider({ allowed, initial, children }: { allowed: boolean; initial: DeveloperMode; children?: ReactNode }) {
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
   const panelId = useId();

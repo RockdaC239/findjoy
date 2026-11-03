@@ -9,14 +9,13 @@ import type { LifeView } from "../lib/life-view";
 import { parseReview, type Review } from "../lib/review";
 import { API_BASE } from "../lib/life-session";
 
-export function ReviewView({ lifeId, view, onStatus, initialReview }: { lifeId: string; view: LifeView; onStatus?: (status: { ready: boolean; error: string }) => void; initialReview?: Review }) {
+export function ReviewView({ lifeId, view, onStatus }: { lifeId: string; view: LifeView; onStatus?: (status: { ready: boolean; error: string }) => void }) {
   const router = useRouter();
-  const [review, setReview] = useState<Review | null>(initialReview ?? null);
+  const [review, setReview] = useState<Review | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (initialReview) { onStatus?.({ ready: true, error: "" }); return; }
     let cancelled = false;
     async function load() {
       try {
@@ -54,7 +53,7 @@ export function ReviewView({ lifeId, view, onStatus, initialReview }: { lifeId: 
     }
     load();
     return () => { cancelled = true; };
-  }, [lifeId, view, attempt, router, onStatus, initialReview]);
+  }, [lifeId, view, attempt, router, onStatus]);
 
   return (
     <main className="page page--review">
