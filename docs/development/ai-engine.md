@@ -1,6 +1,6 @@
 # 人生 AI 引擎维护约定
 
-本次是职责拆分，保持现有四种玩法、模型请求参数、提示词内容、事件协议与存档结构。没有增加新的玩法或模拟规则。
+引擎保持四种玩法共享结构。2026-11-03 后续更新已增加模型主导的生命终点与告别交互，见下方 v2 说明。
 
 ## 模块与依赖
 
@@ -48,7 +48,7 @@ npm run --silent prompt:preview -- --mode theme --theme love --json
 
 ## 修改模型返回 JSON
 
-当前模型输出协议为 v1，`MODEL_OUTPUT_VERSION` 在 `output-format.ts` 中维护。没有给现有存档或转录追加版本字段；现有转录仍沿用原格式。
+当前模型输出协议为 v2，`MODEL_OUTPUT_VERSION` 在 `output-format.ts` 中维护。没有给现有存档或转录追加版本字段；旧转录保留原格式；新转录保存 outcome/deathCause，旧事件缺少 outcome 默认 continue，无需迁移历史消息。
 
 按以下边界检查，不直接让模型 JSON 成为存档：
 
@@ -71,9 +71,18 @@ npm run --silent prompt:preview -- --mode theme --theme love --json
 
 ## 验证
 
-- `lib/engine/prompts/assemble.test.ts`：三类基础提示词与重构前字节一致。
+- `lib/engine/prompts/assemble.test.ts`：三类基础提示词与已审阅基线一致。
 - `lib/engine/modules.test.ts`：四种情境、追加转录、旧 history、协议往返及渐进展示。
 - `lib/engine/preview.test.ts`：合成预览确定性、各阶段、CLI 输出和非法参数。
 - 现有 `model-adapter.test.ts`、模式测试、生成路由与存档测试继续覆盖原调用入口。
 
-提交前运行 `npm test`（需独立 `TEST_DATABASE_URL`）、`npm run typecheck`、`npm run lint`、`npm run build`。本次不修改前端界面，不涉及生产发布。
+提交前运行 `npm test`（需独立 `TEST_DATABASE_URL`）、`npm run typecheck`、`npm run lint`、`npm run build`。功能涉及前端告别与个人调试界面，不涉及生产发布。
+
+
+## v2 生命终点
+
+`outcome: death` 直接转换为 `dead: true`，死因落入 `flags.deathCause`，当前历史节点记录终点与空选项。省略 outcome 的旧响应视为 continue；未知死因本地归为 other。死亡事件不再因选项不足、价值轴或题材防重而重试，误带选项本地清空。只有结构不完整等格式/网络问题仍走异常恢复。
+
+`life.ts` 不再随机决定死亡，也不按 95 岁或健康归零强制结束。早逝与长寿由提示词指导模型根据经历、选择、健康与偶然性推演，实际分布尚需真实模型样本评估。
+
+`ReviewExperience` 同时挂载隐藏的回顾请求与可见的 `Farewell`。回顾结果到达且告别播放结束后展示回顾；可提前点击回望，失败可重试，刷新仍从已保存的人生终点恢复。基础色与动效遵循现有设计系统。
