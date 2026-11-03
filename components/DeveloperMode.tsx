@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useId, useRef, useState, type ReactNode } from "react";
+import { developerPanelPosition } from "../lib/developer-panel-position";
 import { API_BASE } from "../lib/life-session";
 import type { DeveloperMode } from "../lib/developer-mode";
 import styles from "./DeveloperMode.module.css";
@@ -10,7 +11,7 @@ interface DeveloperContext extends DeveloperMode {
   busy: boolean;
   panelOpen: boolean;
   panelId: string;
-  togglePanel: () => void;
+  togglePanel: (trigger: HTMLElement) => void;
   update: (settings: DeveloperMode) => Promise<boolean>;
 }
 const Context = createContext<DeveloperContext>({ enabled: false, mock: false, busy: false, panelOpen: false, panelId: "developer-remote", togglePanel: () => {}, update: async () => false });
@@ -23,12 +24,36 @@ export function DeveloperModeProvider({ allowed, initial, children }: { allowed:
   const panel = useRef<HTMLElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   function closePanel() { setPanelOpen(false); opener.current?.focus(); }
-  function togglePanel() {
+  const [position, setPosition] = useState<ReturnType<typeof developerPanelPosition>>();
+  function togglePanel(trigger: HTMLElement) {
     if (panelOpen) { closePanel(); return; }
-    opener.current = document.activeElement as HTMLElement;
+    opener.current = trigger;
     setPanelOpen(true);
   }
-  useEffect(() => { if (panelOpen) panel.current?.focus(); }, [panelOpen]);
+  useLayoutEffect(() => {
+    if (!panelOpen || !panel.current) return;
+    const element = panel.current;
+    function reposition() {
+      const trigger = opener.current;
+      if (!trigger?.isConnected) { setPanelOpen(false); return; }
+      const anchor = trigger.getBoundingClientRect();
+      if (anchor.bottom <= 0 || anchor.top >= window.innerHeight) { setPanelOpen(false); return; }
+      const bounds = element.getBoundingClientRect();
+      setPosition(developerPanelPosition(anchor, { width: bounds.width, height: Math.max(bounds.height, element.scrollHeight) }, { width: window.innerWidth, height: window.innerHeight }));
+    }
+    reposition();
+    element.focus({ preventScroll: true });
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    const observer = new ResizeObserver(reposition);
+    observer.observe(element);
+    if (opener.current) observer.observe(opener.current);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      observer.disconnect();
+    };
+  }, [panelOpen]);
   const [settings, setSettings] = useState<DeveloperMode>(allowed ? initial : { enabled: false, mock: false });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -63,7 +88,7 @@ export function DeveloperModeProvider({ allowed, initial, children }: { allowed:
   return <Context.Provider value={{ ...settings, busy, update, panelOpen, panelId, togglePanel }}>
     {allowed && settings.enabled && <>
       <div className={styles.corner} aria-label="dev 调试模式"><span>dev</span></div>
-      {panelOpen && <aside ref={panel} id={panelId} className={styles.remote} role="dialog" aria-modal="false" aria-labelledby={`${panelId}-title`} tabIndex={-1} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); closePanel(); } }}>
+      {panelOpen && <aside ref={panel} id={panelId} className={styles.remote} style={position} role="dialog" aria-modal="false" aria-labelledby={`${panelId}-title`} tabIndex={-1} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); closePanel(); } }}>
         <header className={styles.remoteHeader}><div><span>DEV TOOLS</span><h2 id={`${panelId}-title`}>调试遥控器</h2></div><button className={styles.collapse} onClick={closePanel} aria-label="收起调试遥控器">×</button></header>
         <div className={styles.remoteBody}>
           <button className={styles.control} role="switch" aria-checked={settings.mock} disabled={busy} onClick={() => update({ enabled: true, mock: !settings.mock })}>普通模式 Mock：{settings.mock ? "开启" : "关闭"}</button>
@@ -80,7 +105,7 @@ export function DeveloperModeProvider({ allowed, initial, children }: { allowed:
 export function DeveloperDebugButton() {
   const dev = useDeveloperMode();
   if (!dev.enabled) return null;
-  return <button className={styles.debugButton} type="button" onClick={dev.togglePanel} aria-label={dev.panelOpen ? "收起调试遥控器" : "打开调试遥控器"} aria-expanded={dev.panelOpen} aria-controls={dev.panelId}>
+  return <button className={styles.debugButton} type="button" onClick={event => dev.togglePanel(event.currentTarget)} aria-label={dev.panelOpen ? "收起调试遥控器" : "打开调试遥控器"} aria-expanded={dev.panelOpen} aria-controls={dev.panelId}>
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M9 7V5a3 3 0 0 1 6 0v2M5 10h2m10 0h2M5 15h2m10 0h2M8 4 6 2m10 2 2-2M12 8v11" /><rect x="7" y="7" width="10" height="14" rx="5" /></svg>
   </button>;
 }
