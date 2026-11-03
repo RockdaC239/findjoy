@@ -14,6 +14,18 @@ export interface TranscriptMessage {
   content: string;
 }
 
+function buildTurnTask(state: LifeState, choice?: LifeChoice) {
+  const pending = state.history.at(-1);
+  return {
+    respond_to: pending && choice && choice.id !== "none" ? { eventId: pending.id, action: choice.text } : null,
+    recent_decisions: state.history.filter(event => event.choiceText).slice(-4).map(event => ({
+      eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
+    })),
+    priority: "先回应本轮已选行动，呈现人物的具体回应和处境变化；相关旧事尚未有结果时优先推进或结清，不自动另开危机。开局与童年没有选择时只写实际发生的经历，不虚构决定。",
+    continuity: "历史选择只说明当时行动，不证明现实人格。允许相似人生问题在资源、责任和关系变化后再出现；避免复演相同困境。收获可以真实留下，不必立即安排惩罚。未选分支不是已发生事实。",
+  };
+}
+
 export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
   // 旧式单条提示词（无转录的存档/兜底路径）：
   // 字段严格按“稳定在前、易变在后”排列，最大化 DeepSeek 前缀上下文缓存命中率：
@@ -47,6 +59,7 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
       dead: state.dead,
     },
     current_choice: choice ?? null,
+    turn_task: buildTurnTask(state, choice),
   });
 }
 
@@ -81,6 +94,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
     dead: state.dead,
   };
   payload.current_choice = choice ?? null;
+  payload.turn_task = buildTurnTask(state, choice);
   return JSON.stringify(payload);
 }
 
