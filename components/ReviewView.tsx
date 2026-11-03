@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AccountNav } from "./AccountNav";
 import { useRouter } from "next/navigation";
 import { BrandLogo } from "./BrandLogo";
+import { LifeReview } from "./LifeReview";
 import type { LifeView } from "../lib/life-view";
 import { parseReview, type Review } from "../lib/review";
 import { API_BASE } from "../lib/life-session";
@@ -57,7 +58,7 @@ export function ReviewView({ lifeId, view, onStatus }: { lifeId: string; view: L
   }, [lifeId, view, attempt, router, onStatus]);
 
   return (
-    <main className="page page--review">
+    <main className={`page page--review ${styles.page}`}>
       <header className="topbar" aria-label="Primary navigation">
         <BrandLogo href="/" />
         <nav className="topbar-actions" aria-label="页面导航">
@@ -67,18 +68,9 @@ export function ReviewView({ lifeId, view, onStatus }: { lifeId: string; view: L
       </header>
 
       {review ? (
-        <section className="review" aria-labelledby="review-title">
-          <p className="eyebrow">A LIFE REMEMBERED</p>
-          <p className="review-mode">{review.modeLabel} · {review.modeDetail}</p>
-          <h1 id="review-title">你的<br />一生。</h1>
-          <p className="lived">享年 <strong>{review.age}</strong> 岁<span className="death-cause">，{review.death}</span></p>
-          <div className="review-section facts"><p className="section-label">这一生</p>{review.facts.map((fact) => <p key={fact}>{fact}</p>)}</div>
-          <div className="review-section"><p className="section-label">改变方向的时刻</p>{review.moments.map((moment) => <p className="moment" key={moment}>{moment}</p>)}</div>
-          <div className="reflection"><p className="section-label">回望</p><p>{review.observation}</p></div>
-          <div className="final-question"><p>{review.question}</p><div className={styles.actions}><Link className={`primary-button ${styles.action}`} href="/">我愿意 <span aria-hidden="true">↗</span></Link><Link className={`primary-button ${styles.action}`} href="/">我想再活一次 <span aria-hidden="true">↗</span></Link></div></div>
-        </section>
+        <LifeReview review={review} />
       ) : (
-        <section className="review" aria-live="polite">
+        <section className={styles.review} aria-live="polite">
           <p className="eyebrow">A LIFE REMEMBERED</p>
           <h1>你的<br />一生。</h1>
           {error ? (
