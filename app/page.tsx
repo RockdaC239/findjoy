@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MODEL_PROVIDERS } from "../lib/provider-catalog";
-import { BrandLogo } from "../components/BrandLogo";
+import { DeveloperLauncher } from "../components/DeveloperLauncher";
 import { AccountNav, useAccountUser } from "../components/AccountNav";
 import { ModeLauncher } from "../components/ModeLauncher";
 import { MusicToggle } from "../components/MusicToggle";
@@ -192,7 +192,7 @@ export default function StartPage() {
   return (
     <main className="page page--start">
       <header className="topbar" aria-label="Primary navigation">
-        <BrandLogo href="/showcase" className="wordmark" />
+        <DeveloperLauncher />
         <div className="topbar-actions"><AccountNav>
           <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
           <button className="settings-button" onClick={openHistory}>过往人生</button>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LifeEventScene } from "../../components/LifeEventScene";
 import { AccountNav } from "../../components/AccountNav";
 import { BrandLogo } from "../../components/BrandLogo";
 import { MusicToggle } from "../../components/MusicToggle";
@@ -37,7 +38,6 @@ const defaultModelConfig: ModelConfig = {
 };
 
 const LIFE_REQUEST_TIMEOUT_MS = 90_000;
-const CHILDHOOD_BOUNDARY = 15;
 const LOGIN_RETURN_TO = "/findjoy/play";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -349,53 +349,7 @@ export default function PlayPage() {
 
       {requestError && <p className="request-error" role="alert">{requestError}</p>}
 
-      <section className="life-event" aria-labelledby="event-title" aria-busy={isLoading}>
-        <div className="event-story">
-          <div className="event-body" aria-live="polite">
-            {(isLoading ? streamingEvent.story : life.story).split("\n\n").filter(Boolean).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-            {isLoading && !streamingEvent.story && <span className="story-cursor" aria-label="正在生成" />}
-          </div>
-          <p className="event-tagline" id="event-title">
-            {(() => {
-              const title = isLoading ? streamingEvent.title : life.eventTitle;
-              return title ? `“${title}”` : "";
-            })()}
-          </p>
-        </div>
-        <div className="decision-area" aria-label="人生决策" hidden={isLoading && streamingEvent.outcome === "death"}>
-          {life.age < CHILDHOOD_BOUNDARY ? (
-            <>
-              <p className="decision-label">命运在继续。</p>
-              <div className="choice-cards">
-                {[0, 1, 2].map((index) => (
-                  <div className="choice-card choice-card--placeholder" key={index} aria-hidden="true">
-                    <span className="choice-card-back">?</span>
-                  </div>
-                ))}
-              </div>
-              <button className="continue-button" onClick={continueLife} disabled={isLoading}>
-                {isLoading ? "命运正在展开…" : "继续"}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="decision-label">做出你的选择。</p>
-              <div className="choice-cards">
-                {["A", "B", "C"].map((id, index) => {
-                  const choice = isLoading ? streamingEvent.choices[index] : life.choices[index];
-                  return (
-                    <button className={`choice-card ${choice ? "choice-card--revealed" : ""}`} key={id} disabled={!choice || isLoading} onClick={() => choice && choose(choice.id)}>
-                      <span className="choice-card-back" aria-hidden="true">?</span>
-                      <span className="choice-card-front"><small>{choice?.id ?? id}</small><strong>{`“${choice?.text ?? ""}”`}</strong><b aria-hidden="true">↗</b></span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          <button className="rebirth-button" onClick={() => setShowExitDialog(true)} type="button">重生</button>
-        </div>
-      </section>
+      <LifeEventScene life={life} isLoading={isLoading} streamingEvent={streamingEvent} onChoose={choose} onContinue={continueLife} onExit={() => setShowExitDialog(true)} />
 
       {showExitDialog && (
         <div className="gender-modal" role="dialog" aria-modal="true" aria-label="离开当前人生" onClick={(event) => { if (event.target === event.currentTarget) setShowExitDialog(false); }}>
