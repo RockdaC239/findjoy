@@ -15,7 +15,7 @@ export default function BookmarksPage() {
     <div className="page bookmarks-page">
       <header className="topbar" aria-label="书签导航">
         <BrandLogo href="/" />
-        <nav className="topbar-actions" aria-label="页面导航"><Link className="settings-button" href="/">返回首页</Link><AccountNav /></nav>
+        <nav className="topbar-actions" aria-label="页面导航"><Link className="settings-button" href="/">返回首页</Link><AccountNav showRecharge={false} /></nav>
       </header>
       <main className="bookmarks-content">
         <div className="bookmarks-heading">
