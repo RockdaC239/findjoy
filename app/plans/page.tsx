@@ -31,7 +31,7 @@ export default async function PlansPage() {
       </section>}
       <section className="plan-grid" aria-label="积分充值套餐">{packs.map((product,index)=><article key={product.id} className={`plan-card ${product.id==="standard"?"plan-card-featured":""}`}>
         <div className="plan-card-top"><span className="account-kicker">CHAPTER {String(index+1).padStart(2,"0")}</span>{product.id==="standard"&&<span className="plan-tag">推荐</span>}</div>
-        <h2>{product.name}</h2><p>{["给一个未曾做过的选择，一次机会。","不急着下结论，再看看几种生活。","带着好奇心，走过更多人生的岔路。 "][index]??"继续探索属于你的可能。"}</p>
+        <h2>{product.name}</h2>
         <div className="plan-price"><small>¥</small>{formatPrice(product.amountFen)}{demo&&<span>演示价</span>}</div>
         <div className="plan-credits"><strong>{product.credits}</strong> 积分 · 普通模式 {product.credits / NORMAL_LIFE_POINTS} 局</div>
         <p className="plan-unit-price">折合 ¥{(product.amountFen/(product.credits/NORMAL_LIFE_POINTS)/100).toFixed(2)}/局{product.id==="standard"&&single&&product.amountFen/product.credits<single.amountFen/single.credits&&<>，比单次购买省约 {Math.round((1-(product.amountFen/product.credits)/(single.amountFen/single.credits))*100)}%</>}</p>
