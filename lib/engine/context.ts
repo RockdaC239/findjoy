@@ -1,5 +1,5 @@
 import { flagsToBackground } from "../background";
-import { leftStorylines, parseAvoidStorylines, type StorylineGuards } from "../storyline";
+import { buildRecentSituationHint, leftStorylines, parseAvoidStorylines, type StorylineGuards } from "../storyline";
 import { buildScenarioReviewDirective, buildThemeTurnHint, getLifeScenario } from "../modes/scenario";
 import { detectValueAxis, lastChoiceNode } from "./event-contract";
 import { buildSystemPrompt, ENDING_SYSTEM_PROMPT } from "./prompts/assemble";
@@ -21,6 +21,7 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
     recent_decisions: state.history.filter(event => event.choiceText).slice(-4).map(event => ({
       eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
     })),
+    recent_situations: buildRecentSituationHint(state),
     priority: "先回应本轮已选行动，呈现人物的具体回应和处境变化；相关旧事尚未有结果时优先推进或结清，不自动另开危机。开局与童年没有选择时只写实际发生的经历，不虚构决定。",
     continuity: "历史选择只说明当时行动，不证明现实人格。允许相似人生问题在资源、责任和关系变化后再出现；避免复演相同困境。收获可以真实留下，不必立即安排惩罚。未选分支不是已发生事实。",
   };

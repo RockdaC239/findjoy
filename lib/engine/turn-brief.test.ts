@@ -27,3 +27,15 @@ describe("turn writing task", () => {
     expect(task.recent_decisions).toEqual([]);
   });
 });
+
+it("carries active narrative and recent situations through both context paths", () => {
+  const state = createStarterLife({ age: 25 });
+  state.history = [event(0)];
+  state.narrative = { version: 1, people: [], threads: [{ id: "repair", content: "等待维修结果", status: "open", sourceEventId: "e0" }] };
+  for (const content of [buildModelPrompt(state), buildTranscriptUserContent(state)]) {
+    const request = JSON.parse(content);
+    expect(request.narrative).toEqual(state.narrative);
+    expect(request.turn_task.recent_situations).toContain("工作0");
+    expect(request.turn_task.recent_situations).toContain("先回应已选行动");
+  }
+});
