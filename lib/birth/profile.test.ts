@@ -118,6 +118,12 @@ describe("conditional birth household", () => {
     expect(directive).toContain("加上主角年龄");
     expect(directive).toContain("不预定");
     expect(directive).toContain("事实边界");
+    expect(directive).toContain("conditions 只写主角本人");
+    expect(directive).toContain("status=异地");
+    expect(directive).toContain("固定日班不能写成夜班");
+    expect(directive).toContain("不要默认");
+    expect(directive).toContain("本局优先从");
+    expect(buildBirthDirective(profile)).toBe(directive);
     expect(directive).toContain(profile.location.county);
     expect(directive).not.toContain("provinceCode");
     expect(directive).not.toContain("sampling");

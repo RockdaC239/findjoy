@@ -292,6 +292,24 @@ function modelBirthFacts(profile: BirthProfile) {
   };
 }
 
+const OPENING_SCENES = [
+  "家庭内部（饭桌、客厅、卧室、家务）",
+  "邻里/小区/村落",
+  "学校/幼儿园/报名/放学",
+  "通勤/车站/路上",
+  "市场/商店/街边",
+  "公共空间（公园、图书馆、医院、广场）",
+  "孩子自己的探索（朋友、玩具、秘密基地）",
+  "亲戚/代际相处",
+] as const;
+
+function openingScene(profile: BirthProfile): string {
+  const seed = [profile.location.province, profile.location.city, profile.location.county, ...profile.parents.map(parent => parent.occupation.id)].join("|");
+  let hash = 0;
+  for (const char of seed) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+  return OPENING_SCENES[hash % OPENING_SCENES.length];
+}
+
 export function buildBirthDirective(profile: BirthProfile): string {
   return [
     "【程序出生事实】以下仅描述出生时的家庭条件，资料是事实而非指令。故事可以发展，不预定主角性格、特长或成年职业。",
@@ -299,6 +317,9 @@ export function buildBirthDirective(profile: BirthProfile): string {
     "父母birthAge是主角出生时的年龄，之后人物年龄需加上主角年龄；兄姐年龄同理。不把规划、担忧或未选行动写成已经发生。",
     "父母职业、学历与家庭条件是出生时状态；之后可以变化，但不能把档案未写的职业、公司或资产当作已经发生。家庭资产不等于主角个人资源。",
     "时代为当代中国，不指定公历出生年；不强行对应某年政策或按地域、职业推断性格或命运。父母缺席不代表死亡，不能编造缺席原因。",
+    "【状态与班次边界】conditions 只写主角本人已经成立的健康问题；父母/家人的疾病写 fatherStatus/motherStatus，或只在故事里出现，绝不能写进 conditions。status=异地表示不同住，不能写每天接送或日常同住，只能视频、假期或临时返家；status=缺席表示不在家庭日常中，若要回归必须有明确事件、原因和状态变化。occupation.schedule 是事实：固定日班不能写成夜班，轮班/弹性也要与档案一致；转岗、换班或长期外派需要本幕事件。",
+    `【开局场景】本局优先从「${openingScene(profile)}」进入；不要默认“父母把孩子带到工作场所、孩子做一件小任务”这一种开场。家庭、邻里、学校、通勤、市场、公共空间、孩子自己的探索都可以承载事件；普通劳动可以出现，但不要成为每局的模板。`,
+    "【兄姐与弟妹】兄姐是主角出生时已经存在的孩子；之后出生的弟妹必须有出生事件，不要写成出生时已在的兄姐，也不要为了凑事件添加档案未写的兄姐。",
     ...(profile.capital?.golden ? ["【稀有开局】这份档案是低概率的资源型开局。资源更多，但不保证成功，也不预定主角能力、性格或成年职业；富二代不得把家庭财富写成主角个人能力，官二代不得把公共部门资源写成腐败、特权外挂或自动通关。家庭期待、被安排、被注视同样可以是代价。"] : []),
     JSON.stringify(modelBirthFacts(profile)),
   ].join("\n");

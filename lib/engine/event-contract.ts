@@ -136,8 +136,20 @@ function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"
     motherStatus: boundedText(input.motherStatus, 80),
     children: boundedStrings(input.children),
     friends: boundedStrings(input.friends),
-    conditions: boundedStrings(input.conditions),
+    conditions: playerConditions(input.conditions),
   };
+}
+
+// conditions 是主角本人的健康问题；模型有时会把父母/家人的病写进来
+// （真实样本曾出现“母亲甲状腺术后”进入主角 conditions）。这里做一层安全过滤：
+// 只含家人疾病的输入直接丢弃，混合输入保留主角自己的部分，空数组仍表示清空。
+const FAMILY_CONDITION = /(父亲|母亲|父母|爸爸|妈妈|爷爷|奶奶|外公|外婆|姥姥|姥爷|哥哥|姐姐|弟弟|妹妹)/;
+function playerConditions(value: unknown): string[] | undefined {
+  const values = boundedStrings(value);
+  if (!values || values.length === 0) return values;
+  const filtered = values.filter(condition => !FAMILY_CONDITION.test(condition));
+  if (filtered.length === values.length) return values;
+  return filtered.length > 0 ? filtered : undefined;
 }
 
 function camelToSnake(key: string) {

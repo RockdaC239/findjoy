@@ -39,6 +39,16 @@ describe("engine module boundaries", () => {
   });
 });
 
+it("keeps family illnesses out of the protagonist's conditions", () => {
+  const base = { timePassed: 1, story: "你五岁，母亲做了一次手术，家里把换车的钱留了下来，晚饭后她仍需按时吃药。", event: { type: "family" as const, title: "母亲手术", importance: 0.7 }, choices: [], objectiveChanges: {} };
+  const familyOnly = normalizeGeneratedEvent({ ...base, objectiveChanges: { conditions: ["母亲甲状腺术后，需长期服药"] } }, false);
+  expect(familyOnly?.objectiveChanges.conditions).toBeUndefined();
+  const mixed = normalizeGeneratedEvent({ ...base, objectiveChanges: { conditions: ["你哮喘", "母亲甲状腺术后，需长期服药"] } }, false);
+  expect(mixed?.objectiveChanges.conditions).toEqual(["你哮喘"]);
+  const cleared = normalizeGeneratedEvent({ ...base, objectiveChanges: { conditions: [] } }, false);
+  expect(cleared?.objectiveChanges.conditions).toEqual([]);
+});
+
 it("preserves grounded ending prose while filtering public copy independently", () => {
   const ending = normalizeEnding({ age: 70, death: "自然离世", facts: { occupation: "维修工", city: "县城", events: 3 },
     highlights: [{ age: 22, title: "留下学手艺" }, { age: 26, title: "保留周末" }], patterns: ["你逐渐留出了自己的时间。"],
