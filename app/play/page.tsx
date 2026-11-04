@@ -14,6 +14,7 @@ import { readStreamedEvent, type StreamedEvent } from "../../lib/stream-event";
 import { buildLifeView, type LifeView } from "../../lib/life-view";
 import type { LifeState } from "../../lib/life";
 import { useAmbientMusic } from "../../lib/use-ambient-music";
+import { MUSIC_UI_ENABLED } from "../../lib/feature-flags";
 import { musicSceneFor } from "../../lib/music-scene";
 import { setMusicEnabledPreference, useMusicEnabledPreference } from "../../lib/music-preference";
 import { getScenarioLabel } from "../../lib/modes/scenario";
@@ -89,6 +90,8 @@ export default function PlayPage() {
   }
 
   function startMusicIfEnabled() {
+    // 音乐未完成时入口隐藏，也不能自动播放，否则玩家没有开关可关。
+    if (!MUSIC_UI_ENABLED) return;
     if (musicEnabled) music.start();
   }
 
@@ -359,7 +362,7 @@ export default function PlayPage() {
         <p className="current-age">{displayAge} 岁</p>
         <div className="topbar-actions"><AccountNav>
           <DeveloperDebugButton />
-          <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />
+          {MUSIC_UI_ENABLED && <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />}
         </AccountNav></div>
       </header>
 

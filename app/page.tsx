@@ -10,6 +10,7 @@ import { ModeLauncher } from "../components/ModeLauncher";
 import { MusicToggle } from "../components/MusicToggle";
 import { buildLifeView, type LifeView } from "../lib/life-view";
 import type { Gender, LifeState } from "../lib/life";
+import { MODEL_SETTINGS_UI_ENABLED, MUSIC_UI_ENABLED } from "../lib/feature-flags";
 import { useAmbientMusic } from "../lib/use-ambient-music";
 import { musicSceneFor } from "../lib/music-scene";
 import { setMusicEnabledPreference, useMusicEnabledPreference } from "../lib/music-preference";
@@ -64,6 +65,7 @@ export default function StartPage() {
   const music = useAmbientMusic(musicSceneFor({ phase: "start" }));
 
   useEffect(() => {
+    if (!MODEL_SETTINGS_UI_ENABLED) return;
     let cancelled = false;
     fetch(`${API_BASE}/api/model-config`)
       .then(async (response) => (await response.json()) as ModelConfigStatus)
@@ -196,12 +198,12 @@ export default function StartPage() {
         <div className="topbar-actions"><AccountNav>
           <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
           <button className="settings-button" onClick={openHistory}>过往人生</button>
-          <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>
-          <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} />
+          {MODEL_SETTINGS_UI_ENABLED && <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>}
+          {MUSIC_UI_ENABLED && <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} />}
         </AccountNav></div>
       </header>
 
-      {showSettings && (
+      {MODEL_SETTINGS_UI_ENABLED && showSettings && (
         <>
         <div className="modal-scrim" onClick={() => setShowSettings(false)} aria-hidden="true" />
         <section className="settings-panel" aria-label="模型设置">
