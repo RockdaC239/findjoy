@@ -39,3 +39,11 @@ it("carries active narrative and recent situations through both context paths", 
     expect(request.turn_task.recent_situations).toContain("先回应已选行动");
   }
 });
+
+it("flags stale childhood facts in adult turns without prescribing a career", () => {
+ const state=createStarterLife({age:33});
+ const task=JSON.parse(buildTranscriptUserContent(state)).turn_task;
+ expect(task.state_gaps).toContain("occupation");
+ expect(task.state_gaps).toContain("education");
+ expect(task.pacing).toContain("跨年");
+});

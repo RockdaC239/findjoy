@@ -22,6 +22,11 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
       eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
     })),
     recent_situations: buildRecentSituationHint(state),
+    state_gaps: [
+      ...(state.basic.age >= 15 && state.career.occupation === "婴儿" ? ["occupation"] : []),
+      ...(state.basic.age >= 7 && state.basic.education === "未开始" ? ["education"] : []),
+    ],
+    pacing: "一次跨年应有与跨度相称的处境变化。先简短回应上一行动，再写阶段进展或新的可行动问题；分花、看照片、递东西等同一小事应在一幕内交代结果，不每年重复追问。物件回响不应占据全部人生。关系之外允许求学、工作、生活能力与世界自然发展，但不强迫玩家离开已选方向。state_gaps指出仍遗留童年默认值的字段，请按本幕实际事实用objectiveChanges更新，不擅自预定职业或编造文凭。",
     priority: "先回应本轮已选行动，呈现人物的具体回应和处境变化；相关旧事尚未有结果时优先推进或结清，不自动另开危机。开局与童年没有选择时只写实际发生的经历，不虚构决定。",
     continuity: "历史选择只说明当时行动，不证明现实人格。允许相似人生问题在资源、责任和关系变化后再出现；避免复演相同困境。收获可以真实留下，不必立即安排惩罚。未选分支不是已发生事实。",
   };
