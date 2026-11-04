@@ -73,3 +73,5 @@
 session14231已exit0，第一局100岁44节点死亡，a-ending.json真实200；完整内容已保存。职业教育仍旧默认，回顾有效生成但存在部分选择/年龄解释误差。重要：服务96894是next dev（父37240），之前build与dev共用.next，需重启本地dev并核实实际模型输入，不能把前面复测当作已确认加载新改动。不要重跑该人生到结局；下一步新独立开局及分支验证。最多3轮调优计数仍为2，先排运行态问题，不为凑数加第3轮。浏览器海报可访问本局review，lifeId在忽略的a-current.json中，别提交ID。
 
 运行确认：已重启原next dev，本次dev exec session84468运行中。新B人生10节点到28岁职业教育正常，之后真实续推session **43410**仍运行，脚本finish-b.mjs(最多35步)，逐文件b-final-next-N.json。目前已到56岁，勿重复启动。UI用space0/p3验收回顾和海报；space0/p1为生成测试，p2是用户网页不要操作/关闭。手机尺寸已恢复桌面。图片下载.data/engine-validation/share-poster.png已检查。新增第3轮回顾evidence对照，commit7649fe3，调优已3/3，不再额外生成策略改动。上一次全量test343通过(在新增最后1项模块测试前)，最终需再全量test并build/typecheck/lint；build应停dev或用隔离输出，不能再共享运行目录造成疑惑。
+
+B续推session43410已exit0，到77岁，b-current更新。接着end-b.mjs最多20步及终点回顾运行session **77618**；最终全量测试session **95878**(final3.log)。等待这些具体句柄，不重开人生。关键未解决：B父亲病情进入玩家conditions、对话/检查跨年过长；已3轮不继续调策略，报告建议暂不生产发布。next-env.d.ts被next dev自动改为.next/dev路径，最终build会改回，勿把它误作用户改动。最终需停dev84468后build，再typecheck/lint；恢复Mock并结束只由本次创建的p1/p3，保护p2用户网页。实测质量审计子任务engine_audit正在只读整理/tmp/findjoy-final-quality-audit.md。
