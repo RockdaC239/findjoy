@@ -252,7 +252,8 @@ h1 { margin:0; font-family:var(--fj-font-display); font-weight:400; font-size:cl
   .script-card { min-height:96px; }
   .foru-form { grid-template-columns:minmax(0, 1fr); gap:12px; }
   .foru-field--full { grid-column:auto; }
-  .topbar--event { grid-template-columns:minmax(0, 1fr) auto auto; gap:6px 10px; }
+  /* 左右两列等宽，年龄列才是页面中轴，不会被左侧模式标签或右侧账户区挤偏。 */
+  .topbar--event { grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr); gap:6px 10px; }
   .topbar--event .event-mode-detail { display:none; }
   .topbar--event .mode-chip { max-width:38vw; }
   .topbar--event .current-age { font-size:clamp(22px, 7vw, 30px); }
