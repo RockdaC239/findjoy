@@ -159,6 +159,22 @@ function camelToSnake(key: string) {
 // 容错解析：response_format json_object 保证语法，但个别供应商可能忽略该参数，
 // 模型也可能输出 Markdown 围栏、在 JSON 前后夹带文字，或被 max_tokens 截断。
 // 依次尝试：原样 → 去围栏 → 截取首个 { 到末尾 }，全部失败才抛错进入重试。
+// 主角年龄是程序可计算事实：模型偶尔把落地年龄写错。生成后按
+// currentAge + timePassed 统一校正第一处“你Y岁”，避免故事与状态年龄分叉。
+const AGE_DIGITS = "零一二三四五六七八九";
+function chineseAge(age: number): string {
+  if (!Number.isInteger(age) || age < 0) return String(age);
+  if (age < 10) return AGE_DIGITS[age];
+  if (age < 20) return `十${age % 10 ? AGE_DIGITS[age % 10] : ""}`;
+  if (age < 100) return `${AGE_DIGITS[Math.floor(age / 10)]}十${age % 10 ? AGE_DIGITS[age % 10] : ""}`;
+  return String(age);
+}
+export function alignProtagonistAge(story: string, landingAge: number): string {
+  const match = story.match(/你\s*([零〇一二两三四五六七八九十百\d]+)\s*岁/);
+  if (!match || match.index === undefined) return story;
+  return `${story.slice(0, match.index)}你${chineseAge(landingAge)}岁${story.slice(match.index + match[0].length)}`;
+}
+
 export function parseGeneratedJson(text: string): unknown {
   const trimmed = text.trim();
   const candidates = [trimmed, trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")];

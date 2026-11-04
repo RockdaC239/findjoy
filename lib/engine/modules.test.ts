@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createStarterLife } from "../life";
 import { prepareEventRequest, buildEndingMessages } from "./context";
-import { normalizeGeneratedEvent, normalizeEnding, serializeTranscriptEvent } from "./event-contract";
+import { alignProtagonistAge, normalizeGeneratedEvent, normalizeEnding, serializeTranscriptEvent } from "./event-contract";
 import { readStreamedEvent } from "./stream-contract";
 import { SCRIPTS } from "../modes/catalog";
 import { scriptToScenario } from "../modes/scenario";
@@ -37,6 +37,12 @@ describe("engine module boundaries", () => {
     expect(JSON.parse(messages[1].content).current_age).toBe(72);
     expect(prepareEventRequest(state, undefined, []).messages[1].content).toContain('"life"');
   });
+});
+
+it("aligns the protagonist's written age with the program-computed landing age", () => {
+  expect(alignProtagonistAge("你五岁，家里换了窗。", 7)).toBe("你七岁，家里换了窗。");
+  expect(alignProtagonistAge("你 5 岁，家里换了窗。", 14)).toBe("你十四岁，家里换了窗。");
+  expect(alignProtagonistAge("这一年家里换了窗。", 7)).toBe("这一年家里换了窗。");
 });
 
 it("keeps family illnesses out of the protagonist's conditions", () => {

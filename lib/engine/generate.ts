@@ -8,7 +8,7 @@ import { getLifeScenario, getScenarioReviewQuestion } from "../modes/scenario";
 import { ModelError } from "./errors";
 import { buildFallbackEvent } from "./fallback";
 import { prepareEventRequest, buildEndingMessages, withRetryCorrection, type TranscriptMessage } from "./context";
-import { parseGeneratedJson, parseWithTruncationRepair, normalizeGeneratedEvent, diagnoseGeneratedEvent, repairGeneratedEvent, diagnoseEnding, normalizeEnding } from "./event-contract";
+import { parseGeneratedJson, parseWithTruncationRepair, normalizeGeneratedEvent, diagnoseGeneratedEvent, repairGeneratedEvent, diagnoseEnding, normalizeEnding, alignProtagonistAge } from "./event-contract";
 
 function num(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
 
@@ -70,6 +70,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       // 剧本/ForU 第一幕必须落在当前年龄；后续节点把节奏收紧到 1~5 年。
       if (openingAtCurrentAge) parsed.timePassed = 0;
       else if (scenario.mode === "script" || scenario.mode === "foru") parsed.timePassed = Math.min(5, Math.max(1, parsed.timePassed));
+      parsed.story = alignProtagonistAge(parsed.story, state.basic.age + parsed.timePassed);
       addUsage(usageRaw);
       const usage: ModelUsage = { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, promptCacheHitTokens: num(usageTotals.prompt_cache_hit_tokens), promptCacheMissTokens: num(usageTotals.prompt_cache_miss_tokens) };
       return { ...parsed, usage };
@@ -94,6 +95,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const fallback = buildFallbackEvent(state, choice, scenario.mode === "normal" ? parseAvoidStorylines(state.flags.avoidStorylines) : [], scenario);
   if (openingAtCurrentAge) fallback.timePassed = 0;
   else if (scenario.mode === "script" || scenario.mode === "foru") fallback.timePassed = Math.min(5, Math.max(1, fallback.timePassed));
+  fallback.story = alignProtagonistAge(fallback.story, state.basic.age + fallback.timePassed);
   return { ...fallback, usage: { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
 }
 

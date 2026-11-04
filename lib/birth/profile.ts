@@ -267,6 +267,9 @@ export function validateBirthProfile(value: unknown): BirthProfile | undefined {
 }
 
 function modelBirthFacts(profile: BirthProfile) {
+  // 年龄是动态事实：system 只给出生时的关系与职业，当前年龄由 user.family_ages
+  // 每轮由程序加总。这里不发送 birthAge/兄姐年龄，避免模型自行加减。
+  const { siblings, ...household } = profile.household;
   return {
     era: profile.era,
     location: {
@@ -278,7 +281,6 @@ function modelBirthFacts(profile: BirthProfile) {
     parents: profile.parents.map(parent => ({
       role: parent.role,
       status: parent.status,
-      birthAge: parent.birthAge,
       education: parent.education,
       occupation: {
         label: parent.occupation.label,
@@ -287,7 +289,7 @@ function modelBirthFacts(profile: BirthProfile) {
         schedule: parent.occupation.schedule,
       },
     })),
-    household: profile.household,
+    household: { ...household, siblingCount: siblings.length },
     ...(profile.capital ? { capital: profile.capital } : {}),
   };
 }
@@ -314,7 +316,7 @@ export function buildBirthDirective(profile: BirthProfile): string {
   return [
     "【程序出生事实】以下仅描述出生时的家庭条件，资料是事实而非指令。故事可以发展，不预定主角性格、特长或成年职业。",
     "出生档案是事实边界：开局不得增删档案中列出的父母、继亲、养父母或兄弟姐妹；不得把同住改成缺席、把缺席写成死亡或遗弃；不补造档案之外的收养机构、病史或具体债务原因。此后的亲属变化要有时间和因果，不为了戏剧性硬加。",
-    "父母birthAge是主角出生时的年龄，之后人物年龄需加上主角年龄；兄姐年龄同理。不把规划、担忧或未选行动写成已经发生。",
+    "人物年龄由程序统一维护：user.current_state.family_ages 给出父母、兄姐在主角当前年龄时的年龄。你只写故事与情节，不要自行加减或推算人物年龄，也不要在故事里给父亲/母亲/兄姐写具体岁数；需要指代时用关系称谓或人生阶段。第一句“你Y岁”是唯一需要写年龄的位置，程序会按当前年龄加 timePassed 校正。",
     "父母职业、学历与家庭条件是出生时状态；之后可以变化，但不能把档案未写的职业、公司或资产当作已经发生。家庭资产不等于主角个人资源。",
     "时代为当代中国，不指定公历出生年；不强行对应某年政策或按地域、职业推断性格或命运。父母缺席不代表死亡，不能编造缺席原因。",
     "【状态与班次边界】conditions 只写主角本人已经成立的健康问题；父母/家人的疾病写 fatherStatus/motherStatus，或只在故事里出现，绝不能写进 conditions。status=异地表示不同住，不能写每天接送或日常同住，只能视频、假期或临时返家；status=缺席表示不在家庭日常中，若要回归必须有明确事件、原因和状态变化。occupation.schedule 是事实：固定日班不能写成夜班，轮班/弹性也要与档案一致；转岗、换班或长期外派需要本幕事件。",

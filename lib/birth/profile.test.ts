@@ -115,7 +115,9 @@ describe("conditional birth household", () => {
     const profile = rollBirthProfile(seeded(6), options);
     const directive = buildBirthDirective(profile);
     expect(directive).toContain("出生时");
-    expect(directive).toContain("加上主角年龄");
+    expect(directive).toContain("family_ages");
+    expect(directive).toContain("不要自行加减");
+    expect(directive).not.toContain("birthAge");
     expect(directive).toContain("不预定");
     expect(directive).toContain("事实边界");
     expect(directive).toContain("conditions 只写主角本人");

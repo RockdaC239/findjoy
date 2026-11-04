@@ -1,3 +1,4 @@
+import { familyAges } from "../birth/ages";
 import { flagsToBackground } from "../background";
 import { buildRecentSituationHint, leftStorylines, parseAvoidStorylines, type StorylineGuards } from "../storyline";
 import { buildScenarioReviewDirective, buildThemeTurnHint, getLifeScenario } from "../modes/scenario";
@@ -65,6 +66,7 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
       relationships: state.relationships,
       flags: state.flags,
       dead: state.dead,
+      family_ages: familyAges(state.birth, state.basic.age) ?? null,
     },
     // 出生档案由系统提示词中的【程序出生事实】承载；每轮用户消息不重复发送，
     // 避免同一份出生资料在系统前缀与每轮 user 中各出现一次。
@@ -105,6 +107,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
     relationships: state.relationships,
     flags: state.flags,
     dead: state.dead,
+    family_ages: familyAges(state.birth, state.basic.age) ?? null,
   };
   // 出生档案固定在 system 的【程序出生事实】中，避免每轮 user 重复携带。
   payload.narrative = state.narrative ?? null;
@@ -198,6 +201,7 @@ export function buildEndingMessages(state: LifeState): NextEventMessage[] {
     major_memories: state.majorMemories,
     behavioral_summary: state.psychology.behaviorPatterns,
     current_age: state.basic.age,
+    family_ages: familyAges(state.birth, state.basic.age) ?? null,
     death_cause: state.flags.deathCause ?? "natural",
   });
   const evidenceRule = "回顾中涉及你选择了什么、发生在哪个年龄时，以decision_evidence中的action与age为准。历史choices是当时可选项，不代表选择；后续consequence只能说明下一事件，不能把其年龄移到前一决定。引用具体选择时evidenceEventIds必须包含相应eventId。不要把普通叙述或未选行动写成玩家决定。";
