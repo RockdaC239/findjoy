@@ -15,8 +15,10 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
-  const mock = readDeveloperMode(request.headers.get("cookie")).mock;
-  if (mock && !await isDeveloper(user)) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
+  const developerMode = readDeveloperMode(request.headers.get("cookie"));
+  const developer = developerMode.enabled && await isDeveloper(user);
+  const mock = developerMode.mock;
+  if (mock && !developer) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
   const { id } = await params;
   const state = await lifeStore.get(id, user.id);
   if (!state) return NextResponse.json({ error: "人生不存在" }, { status: 404 });
@@ -28,7 +30,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
   const body = await readJsonObject(request);
   let lease;
   let admission: string | undefined;
-  try { admission=await acquireGeneration(user.id); lease=await lifeGeneration.begin(id,user.id); }
+  try { admission=await acquireGeneration(user.id, Date.now(), { skipRateLimit: developer }); lease=await lifeGeneration.begin(id,user.id); }
   catch(error) {
     if(admission)await releaseGeneration(admission);
     if(error instanceof CommerceError)return NextResponse.json({error:error.message,code:error.code},{status:error.status,headers:{"Retry-After":"5"}});

@@ -16,6 +16,14 @@ it("enforces global and per-user limits across concurrent admissions",async()=>{
  await releaseGeneration(same);
  expect(await acquireGeneration("one-user",1004)).toBeTypeOf("string");
 });
+it("lets the developer bypass only the per-user generation rate limit",async()=>{
+ vi.stubEnv("FINDJOY_GENERATION_MAX_CONCURRENT","4");
+ for(let i=0;i<20;i++){const token=await acquireGeneration("developer-rate",1000);await releaseGeneration(token);}
+ await expect(acquireGeneration("developer-rate",1000)).rejects.toMatchObject({status:429});
+ const token=await acquireGeneration("developer-rate",1000,{skipRateLimit:true});
+ expect(token).toBeTypeOf("string");
+ await releaseGeneration(token);
+});
 it("fences expired workers, reclaims abandoned slots and supports pausing new work",async()=>{
  vi.stubEnv("FINDJOY_GENERATION_MAX_CONCURRENT","1");
  const old=await acquireGeneration("alice",1000);

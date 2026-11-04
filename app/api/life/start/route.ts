@@ -22,8 +22,10 @@ export const POST = withApiGuard(async (request: Request) => {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "请先登录", code: "UNAUTHENTICATED" }, { status: 401 });
   if (!hasSameOrigin(request, appOrigin())) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
-  const mock = readDeveloperMode(request.headers.get("cookie")).mock;
-  if (mock && !await isDeveloper(user)) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
+  const developerMode = readDeveloperMode(request.headers.get("cookie"));
+  const developer = developerMode.enabled && await isDeveloper(user);
+  const mock = developerMode.mock;
+  if (mock && !developer) return NextResponse.json({ error: "没有调试权限" }, { status: 403 });
   const input = await readJsonObject(request);
   if (!isLaunchModeAvailable(input.mode ?? "normal")) {
     return NextResponse.json({ error: "当前仅开放普通模式，其他玩法敬请期待", code: "MODE_UNAVAILABLE" }, { status: 403 });
@@ -44,7 +46,7 @@ export const POST = withApiGuard(async (request: Request) => {
   try {
     operation=await commerceStore.findOperation(user.id,key,requestHash);
     if (!operation) {
-      admission=await acquireGeneration(user.id);
+      admission=await acquireGeneration(user.id, Date.now(), { skipRateLimit: developer });
       const usesBackground=selection.mode === "normal" || selection.mode === "theme";
       const recentAvoid=usesBackground ? await lifeStore.recentBackgroundAvoid(6,user.id) : undefined;
       const recentStorylines=selection.mode === "normal" ? await lifeStore.recentStorylines(6,3,user.id) : [];

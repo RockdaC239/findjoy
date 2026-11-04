@@ -3,7 +3,12 @@ import { query, withTransaction } from "./database";
 import { CommerceError } from "./commerce-store";
 import { takeRateLimit } from "./rate-limit";
 
-export async function acquireGeneration(userId: string,now=Date.now()): Promise<string> {
+export interface GenerationAdmissionOptions {
+  /** 调试账号可跳过每分钟生成次数限制；全局并发/单用户并发仍生效。 */
+  skipRateLimit?: boolean;
+}
+
+export async function acquireGeneration(userId: string,now=Date.now(),options: GenerationAdmissionOptions={}): Promise<string> {
   const enabled=process.env.FINDJOY_GENERATION_ENABLED ?? "true";
   const max=Number(process.env.FINDJOY_GENERATION_MAX_CONCURRENT ?? 4);
   if (enabled!=="true" || !Number.isInteger(max) || max<1 || max>20) {
@@ -15,7 +20,7 @@ export async function acquireGeneration(userId: string,now=Date.now()): Promise<
     const counts=(await query("SELECT count(*)::integer AS total,count(*) FILTER (WHERE user_id=$1)::integer AS own FROM joy_generation_admissions", [userId])).rows[0];
     if (counts.own) throw new CommerceError("USER_GENERATION_BUSY","你已有故事正在生成，请稍后恢复进度",429);
     if (counts.total>=max) throw new CommerceError("GENERATION_BUSY","体验人数较多，请稍后重试",503);
-    if (!await takeRateLimit(userId,"generation",20,60000,now)) throw new CommerceError("GENERATION_RATE_LIMIT","操作频繁，请稍后重试",429);
+    if (!options.skipRateLimit && !await takeRateLimit(userId,"generation",20,60000,now)) throw new CommerceError("GENERATION_RATE_LIMIT","操作频繁，请稍后重试",429);
     const token=randomUUID();
     // 模型最多 3 次、每次 60 秒；10 分钟租约留出保存余量，超期提交另行拒绝。
     await query("INSERT INTO joy_generation_admissions VALUES ($1,$2,$3)", [token,userId,now+600000]);
