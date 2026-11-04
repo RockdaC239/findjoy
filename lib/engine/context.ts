@@ -23,7 +23,7 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
     })),
     recent_situations: buildRecentSituationHint(state),
     state_gaps: [
-      ...(state.basic.age >= 15 && state.career.occupation === "婴儿" ? ["occupation"] : []),
+      ...(state.basic.age >= 15 && state.career?.occupation === "婴儿" ? ["occupation"] : []),
       ...(state.basic.age >= 7 && state.basic.education === "未开始" ? ["education"] : []),
     ],
     pacing: "一次跨年应有与跨度相称的处境变化。先简短回应上一行动，再写阶段进展或新的可行动问题；分花、看照片、递东西等同一小事应在一幕内交代结果，不每年重复追问。物件回响不应占据全部人生。关系之外允许求学、工作、生活能力与世界自然发展，但不强迫玩家离开已选方向。state_gaps指出仍遗留童年默认值的字段，请按本幕实际事实用objectiveChanges更新，不擅自预定职业或编造文凭。",
