@@ -5,6 +5,7 @@ import { buildBirthDirective, validateBirthProfile } from "./profile";
 export interface SimulationOptions { live: boolean; count: number; seed: number; output: string; delayMs: number }
 export interface SimulationManifest { live: boolean; count: number; seed: number; model: string; fingerprint: string }
 export interface BirthStartSnapshot {
+  lifespan?: number;
   basic: LifeState["basic"];
   career: LifeState["career"];
   finance: LifeState["finance"];

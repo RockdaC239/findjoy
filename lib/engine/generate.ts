@@ -6,6 +6,7 @@ import { DEATH_CAUSE_LABEL } from "../life";
 import { parseAvoidStorylines } from "../storyline";
 import { getLifeScenario, getScenarioReviewQuestion } from "../modes/scenario";
 import { ModelError } from "./errors";
+import { enforceLifespan } from "../lifespan";
 import { buildFallbackEvent } from "./fallback";
 import { prepareEventRequest, buildEndingMessages, withRetryCorrection, type TranscriptMessage } from "./context";
 import { parseGeneratedJson, parseWithTruncationRepair, normalizeGeneratedEvent, diagnoseGeneratedEvent, repairGeneratedEvent, diagnoseEnding, normalizeEnding, alignProtagonistAge } from "./event-contract";
@@ -70,6 +71,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       // 剧本/ForU 第一幕必须落在当前年龄；后续节点把节奏收紧到 1~5 年。
       if (openingAtCurrentAge) parsed.timePassed = 0;
       else if (scenario.mode === "script" || scenario.mode === "foru") parsed.timePassed = Math.min(5, Math.max(1, parsed.timePassed));
+      parsed = enforceLifespan(parsed, state);
       parsed.story = alignProtagonistAge(parsed.story, state.basic.age + parsed.timePassed);
       addUsage(usageRaw);
       const usage: ModelUsage = { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, promptCacheHitTokens: num(usageTotals.prompt_cache_hit_tokens), promptCacheMissTokens: num(usageTotals.prompt_cache_miss_tokens) };
@@ -95,8 +97,9 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const fallback = buildFallbackEvent(state, choice, scenario.mode === "normal" ? parseAvoidStorylines(state.flags.avoidStorylines) : [], scenario);
   if (openingAtCurrentAge) fallback.timePassed = 0;
   else if (scenario.mode === "script" || scenario.mode === "foru") fallback.timePassed = Math.min(5, Math.max(1, fallback.timePassed));
-  fallback.story = alignProtagonistAge(fallback.story, state.basic.age + fallback.timePassed);
-  return { ...fallback, usage: { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
+  const limitedFallback = enforceLifespan(fallback, state);
+  limitedFallback.story = alignProtagonistAge(limitedFallback.story, state.basic.age + limitedFallback.timePassed);
+  return { ...limitedFallback, usage: { promptTokens: num(usageTotals.prompt_tokens), completionTokens: num(usageTotals.completion_tokens), totalTokens: num(usageTotals.total_tokens), estimatedCostUsd: num(usageTotals.prompt_tokens) / 1_000_000 * config.inputCostPerMillion + num(usageTotals.completion_tokens) / 1_000_000 * config.outputCostPerMillion, provider: baseUrl, model, fallbackReason: lastFailureReason || lastError.message } };
 }
 
 export async function generateNextEvent(state: LifeState, choice?: LifeChoice, requestConfig?: Partial<ModelConfig>): Promise<NextEvent> {

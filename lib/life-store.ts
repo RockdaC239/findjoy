@@ -1,4 +1,5 @@
 import { validateBirthProfile } from "./birth/profile";
+import { rollLifespan } from "./lifespan";
 import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 import { flagsToBackground, type BackgroundAvoid } from "./background";
@@ -28,6 +29,10 @@ export const lifeStore = {
     if (!row) return null;
     try {
       const state = JSON.parse(row.state) as LifeState;
+      if (state.lifespan === undefined && (state.scenario?.mode === "normal" || state.scenario?.mode === "theme")) {
+        // 旧普通/主题存档没有寿命上限：只补一个保守上限，避免把 90～100 岁当成常规。
+        state.lifespan = Math.max(state.basic.age + 1, Math.min(90, rollLifespan()));
+      }
       if (!state.birth) return state;
       // 存档中的出生档案重新过一遍目录校验，防止损坏/伪造的字段直接进入提示词。
       const birth = validateBirthProfile(state.birth);

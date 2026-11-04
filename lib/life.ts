@@ -15,6 +15,8 @@ export interface LifeBasics {
 export interface LifeState {
   /** 出生时已确认的背景，旧存档可缺省，迁居不会改写出生地。 */
   birth?: BirthProfile;
+  /** 程序维护的寿命上限；普通/主题新人生写入，旧存档可缺省。 */
+  lifespan?: number;
   lifeId: string;
   basic: LifeBasics;
   career: { occupation: string; companyType: string; incomeYearly: number; careerStage: string };

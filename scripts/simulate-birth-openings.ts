@@ -72,6 +72,7 @@ async function main() {
     if (options.live && index > 1 && options.delayMs > 0) await new Promise(resolve => setTimeout(resolve, options.delayMs));
     const state = createStartLife(plan, index % 2 ? "female" : "male");
     const startState: BirthStartSnapshot = {
+      lifespan: state.lifespan,
       basic: state.basic,
       career: state.career,
       finance: state.finance,

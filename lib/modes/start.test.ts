@@ -83,6 +83,8 @@ describe("resolveStartPlan", () => {
     expect(normal.startAge).toBe(0);
     expect(normal.openingAtCurrentAge).toBe(false);
     expect(normal.background).toBeTruthy();
+    expect(normal.lifespan).toBeGreaterThanOrEqual(60);
+    expect(normal.lifespan).toBeLessThanOrEqual(99);
 
     const theme = resolveStartPlan({ mode: "theme", theme: "love" }, { random: () => 0.1 });
     expect(theme.scenario).toEqual({ mode: "theme", theme: "love" });
@@ -94,6 +96,7 @@ describe("resolveStartPlan", () => {
     expect(script.startAge).toBe(18);
     expect(script.openingAtCurrentAge).toBe(true);
     expect(script.background).toBeUndefined();
+    expect(script.lifespan).toBeUndefined();
     expect(script.scenario).toMatchObject({ mode: "script", title: "顶替" });
 
     const foru = resolveStartPlan({ mode: "foru", brief: foruBrief });
@@ -101,6 +104,7 @@ describe("resolveStartPlan", () => {
     expect(foru.openingAtCurrentAge).toBe(true);
     expect(foru.scenario).toMatchObject({ mode: "foru", brief: { age: 29 } });
     expect(foru.background).toBeUndefined();
+    expect(foru.lifespan).toBeUndefined();
   });
 });
 
@@ -111,6 +115,7 @@ describe("createStartLife", () => {
     const plan = normalPlan();
     const state = createStartLife(plan, gender, { recentStorylines: ["sports", "arts"] });
     expect(state.basic.age).toBe(0);
+    expect(state.lifespan).toBe(plan.lifespan);
     expect(state.scenario).toEqual({ mode: "normal" });
     expect(state.flags.avoidStorylines).toBe("sports,arts");
     expect(state.finance.cash).toBeGreaterThan(0);

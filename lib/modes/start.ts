@@ -1,5 +1,6 @@
 import { rollBirthProfile, type BirthProfile } from "../birth/profile";
 import { sampleBirthLocation } from "../birth/locations";
+import { rollLifespan } from "../lifespan";
 import {
   backgroundToFinance,
   backgroundToFlags,
@@ -67,6 +68,8 @@ export function parseStartLifeRequest(input: unknown): ParsedStartRequest {
 
 export interface StartPlan {
   birth?: BirthProfile;
+  /** 普通/主题的个体寿命上限；剧本/ForU 不设。 */
+  lifespan?: number;
   scenario: LifeScenario;
   startAge: number;
   openingAtCurrentAge: boolean;
@@ -125,6 +128,7 @@ export function resolveStartPlan(selection: StartSelection, options: StartPlanOp
     });
     return {
       birth,
+      lifespan: rollLifespan(random),
       scenario:
         selection.mode === "theme"
           ? { mode: "theme", theme: selection.theme }
@@ -227,6 +231,7 @@ export function createStartLife(plan: StartPlan, gender: Gender, options: Create
     }
     return {
       ...starter,
+      ...(plan.lifespan ? { lifespan: plan.lifespan } : {}),
       ...(birth ? { birth, relationships: { ...starter.relationships, parents: {
         status: birth.parents.map(parent => `${parent.role}：${parent.status}`).join("；"),
       } } } : {}),
