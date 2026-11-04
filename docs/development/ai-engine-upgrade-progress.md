@@ -71,3 +71,5 @@
 第1轮复测session25992已exit0，到79岁后429正常停止；.data/engine-validation/a-current.json已更新。分支对照session32406已exit0，结果branch-check.json。第二轮修正职业嵌套解析和字段示例，提交5c8c516、13cd1cf，67项相关测试通过。当前真实续推与自动回顾脚本运行session_id **14231**，使用resume-a-r2.mjs，继续先轮询该句柄。报告已记录实测不足，调优轮次2/3。尚未通过完整效果验收，仍不能complete。
 
 session14231已exit0，第一局100岁44节点死亡，a-ending.json真实200；完整内容已保存。职业教育仍旧默认，回顾有效生成但存在部分选择/年龄解释误差。重要：服务96894是next dev（父37240），之前build与dev共用.next，需重启本地dev并核实实际模型输入，不能把前面复测当作已确认加载新改动。不要重跑该人生到结局；下一步新独立开局及分支验证。最多3轮调优计数仍为2，先排运行态问题，不为凑数加第3轮。浏览器海报可访问本局review，lifeId在忽略的a-current.json中，别提交ID。
+
+运行确认：已重启原next dev，本次dev exec session84468运行中。新B人生10节点到28岁职业教育正常，之后真实续推session **43410**仍运行，脚本finish-b.mjs(最多35步)，逐文件b-final-next-N.json。目前已到56岁，勿重复启动。UI用space0/p3验收回顾和海报；space0/p1为生成测试，p2是用户网页不要操作/关闭。手机尺寸已恢复桌面。图片下载.data/engine-validation/share-poster.png已检查。新增第3轮回顾evidence对照，commit7649fe3，调优已3/3，不再额外生成策略改动。上一次全量test343通过(在新增最后1项模块测试前)，最终需再全量test并build/typecheck/lint；build应停dev或用隔离输出，不能再共享运行目录造成疑惑。
