@@ -10,8 +10,10 @@ Owner 当前单人创业，时间优先投入营销和产品迭代。技术选�
 
 ## 生产发布约束
 
-- 分支约定：日常开发在 `test`，开发提交及未完成功能不直接进入 `main`。Owner 明确确认发布范围后，再将已验收内容从 `test` 合并到 `main`，push `main` 触发 GitHub Actions 部署。创建或 push `test` 不代表授权发布；不得手动触发测试分支的生产部署。
-
+- 分支约定：**所有开发只在 `test` 上提交**，包括功能、修复、文档和设计资产；不要直接在 `main` 上提交。未完成或未验收的功能不进入 `main`。
+- 发布节奏：**先在 `test` 上开发、联调、验收完成，再合并到 `main`**。Owner 明确确认发布范围后才执行发布；创建或 push `test` 不代表授权发布，不得手动触发测试分支的生产部署。
+- 发布方式：保持历史线性。`git switch test && git push origin test` → `git switch main && git pull` → `git merge --ff-only test` → `git push origin main`（push `main` 触发 GitHub Actions 部署）。不要用普通 merge 生成 merge commit；`--ff-only` 失败说明 `main` 上有独立提交，先停下来查明来源，确认后再变基或重置成线性，再发布。
+- 提交前先确认当前分支（`git branch --show-current`）；误提交到 `main` 时立即把提交移到 `test` 并让 `main` 回到 `origin/main`，不要顺带把无关改动发布出去。
 - 开发、提交代码、测试支付或配置测试金额，不代表获得生产发布授权。未开发完成的功能不得为联调而发布到生产。
 - 生产发布必须由 Owner 明确指定发布范围，并通过 GitHub push 触发仓库现有 GitHub Actions 流程；不得用 SSH 手动同步源码、切换服务目录或环境文件、重启服务来绕过发布流程。
 - 测试默认在本地进行；需要公网回调时先准备本地穿透或独立测试环境，不得擅自替换生产版本。涉及共享域名与 nginx 时，同时保护 FindFire 路由。
