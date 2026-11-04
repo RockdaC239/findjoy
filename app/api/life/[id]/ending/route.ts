@@ -7,7 +7,7 @@ import { CommerceError } from "../../../../../lib/commerce-store";
 import { currentUser, appOrigin } from "../../../../../lib/auth";
 import { hasSameOrigin } from "../../../../../lib/auth-policy";
 import { NextResponse } from "next/server";
-import { generateEnding, sanitizeModelConfig } from "../../../../../lib/model-adapter";
+import { generateEnding, sanitizeModelConfig, resolveModelConfig } from "../../../../../lib/model-adapter";
 import { lifeStore } from "../../../../../lib/life-store";
 import { readJsonObject, withApiGuard } from "../../../../../lib/api-request";
 
@@ -35,7 +35,25 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
     return NextResponse.json({error:"服务暂时不可用，请稍后重试"},{status:503});
   }
   try {
-    const ending = mockEnding ? mockLifeEnding(state) : await generateEnding(state, sanitizeModelConfig(body.modelConfig));
+    const requestConfig = sanitizeModelConfig(body.modelConfig);
+    const config = mockEnding ? undefined : resolveModelConfig(requestConfig);
+    const totals = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, prompt_cache_hit_tokens: 0, prompt_cache_miss_tokens: 0 };
+    const ending = mockEnding ? mockLifeEnding(state) : await generateEnding(state, requestConfig, raw => {
+      for (const key of Object.keys(totals) as Array<keyof typeof totals>) {
+        const value = raw[key];
+        if (typeof value === "number" && Number.isFinite(value) && value >= 0) totals[key] += value;
+      }
+    });
+    if (config) ending.usage = {
+      promptTokens: totals.prompt_tokens,
+      completionTokens: totals.completion_tokens,
+      totalTokens: totals.total_tokens,
+      promptCacheHitTokens: totals.prompt_cache_hit_tokens,
+      promptCacheMissTokens: totals.prompt_cache_miss_tokens,
+      estimatedCostUsd: (totals.prompt_tokens * config.inputCostPerMillion + totals.completion_tokens * config.outputCostPerMillion) / 1_000_000,
+      provider: config.baseUrl,
+      model: config.model,
+    };
     await commitGeneration(admission!, () => lifeGeneration.saveEnding(lease,ending));
     return NextResponse.json({ ending });
   } catch {

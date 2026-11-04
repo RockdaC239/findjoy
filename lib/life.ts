@@ -171,6 +171,7 @@ export const DEATH_CAUSE_LABEL: Record<string, string> = {
 
 export interface LifeEndingHighlight { age: number; title: string }
 export interface LifeEnding {
+  usage?: ModelUsage;
   reflection?: string;
   shareLines?: string[];
   evidenceEventIds?: string[];

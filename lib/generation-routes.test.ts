@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks=vi.hoisted(()=>({currentUser:vi.fn(),stream:vi.fn(),ending:vi.fn()}));
 vi.mock("./auth",()=>({currentUser:mocks.currentUser,appOrigin:()=>"https://findfire.club"}));
-vi.mock("./model-adapter",async(importOriginal)=>({...await importOriginal<typeof import("./model-adapter")>(),streamNextEvent:mocks.stream,generateEnding:mocks.ending}));
+vi.mock("./model-adapter",async(importOriginal)=>({...await importOriginal<typeof import("./model-adapter")>(),streamNextEvent:mocks.stream,generateEnding:mocks.ending,resolveModelConfig:()=>({apiKey:"synthetic-key",providerId:"test",baseUrl:"https://model.invalid/v1",model:"test-model",inputCostPerMillion:1,outputCostPerMillion:2})}));
 import { setupTestPostgres } from "./test-postgres";
 import * as capacity from "./generation-capacity";
 import { acquireGeneration, releaseGeneration } from "./generation-capacity";
 import { commerceStore } from "./commerce-store";
 import { lifeStore } from "./life-store";
-import { createStarterLife } from "./life";
+import { createStarterLife, buildEnding } from "./life";
+import { lifeGeneration } from "./life-generation";
 import { buildFallbackEvent } from "./model-adapter";
 import { POST as start } from "../app/api/life/start/route";
 import { POST as next } from "../app/api/life/[id]/next/route";
@@ -65,4 +66,23 @@ it("preserves an uncertain opening key when the database cannot confirm recovery
  const response=await start(request());const text=await response.text();
  expect(text).toContain("START_UNCONFIRMED");expect(text).not.toContain("START_FAILED");
  expect(await commerceStore.balance("alice")).toEqual({available:20,held:20});
+});
+
+it("persists ending usage across failed and successful attempts and replays it without new model work", async () => {
+ const life=createStarterLife({age:82});life.dead=true;await lifeStore.set(life,"alice");
+ mocks.ending.mockImplementation(async (_state,_config,onUsage)=>{
+   onUsage({prompt_tokens:100,completion_tokens:20,total_tokens:120,prompt_cache_hit_tokens:30});
+   onUsage({prompt_tokens:120,completion_tokens:40,total_tokens:160,prompt_cache_miss_tokens:80});
+   onUsage({prompt_tokens:-99,completion_tokens:NaN,total_tokens:Infinity});
+   return buildEnding(life);
+ });
+ const params={params:Promise.resolve({id:life.lifeId})};
+ const response=await ending(request(),params);expect(response.status).toBe(200);
+ const result=(await response.json()).ending;
+ expect(result.usage).toMatchObject({promptTokens:220,completionTokens:60,totalTokens:280,promptCacheHitTokens:30,promptCacheMissTokens:80,model:"test-model",provider:"https://model.invalid/v1"});
+ expect(result.usage.estimatedCostUsd).toBeCloseTo(0.00034);
+ expect(JSON.stringify(result)).not.toContain("synthetic-key");
+ expect(await lifeGeneration.getEnding(life.lifeId,"alice")).toEqual(result);
+ const replay=await ending(request(),params);expect((await replay.json()).ending).toEqual(result);
+ expect(mocks.ending).toHaveBeenCalledTimes(1);
 });
