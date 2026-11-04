@@ -6,6 +6,7 @@ import { AccountNav } from "./AccountNav";
 import { useRouter } from "next/navigation";
 import { BrandLogo } from "./BrandLogo";
 import { LifeReview } from "./LifeReview";
+import { ReviewShare } from "./ReviewShare";
 import type { LifeView } from "../lib/life-view";
 import { parseReview, type Review } from "../lib/review";
 import { API_BASE } from "../lib/life-session";
@@ -68,7 +69,7 @@ export function ReviewView({ lifeId, view, onStatus }: { lifeId: string; view: L
       </header>
 
       {review ? (
-        <LifeReview review={review} />
+        <LifeReview review={review}><ReviewShare key={lifeId} review={review} /></LifeReview>
       ) : (
         <section className={styles.review} aria-live="polite">
           <p className="eyebrow">A LIFE REMEMBERED</p>

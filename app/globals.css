@@ -435,3 +435,23 @@ button.credit-pill:focus-visible { outline:2px solid var(--orange); outline-offs
 }
 
 .mode-card:disabled { opacity:.45; cursor:not-allowed; background:var(--soft); }
+
+.review-share-invite { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin:0 0 24px; color:var(--fj-color-accent-readable); font-size:14px; }
+.review-share-arrow { width:40px; height:32px; flex-shrink:0; }
+.review-share-trigger { display:grid; place-items:center; width:48px; height:48px; flex-shrink:0; border:1px solid var(--fj-color-border); border-radius:12px; background:var(--fj-color-surface); color:var(--fj-color-brand); }
+.review-share-trigger:hover { border-color:var(--fj-color-brand); }
+.review-share-trigger svg,.review-share-close svg,.review-share-save svg { width:20px; height:20px; }
+.review-share-dialog { width:min(540px,calc(100% - 32px)); max-width:none; max-height:calc(100dvh - 32px); padding:0; border:0; border-radius:0; color:var(--fj-color-text-inverse); background:transparent; box-shadow:none; }
+.review-share-dialog::backdrop { background:color-mix(in srgb,var(--fj-color-text) 80%,transparent); }
+.review-share-art { position:relative; width:min(100%,calc((100dvh - 160px) / 1.5)); margin:0 auto; }
+.review-share-preview { display:block; width:100%; height:auto; }
+.review-share-loading { aspect-ratio:2 / 3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:48px 24px; text-align:center; background:var(--fj-color-brand); color:var(--fj-color-text-inverse); }
+.review-share-loading p { margin:0; }
+.review-share-loading button { background:transparent; color:inherit; border:1px solid currentColor; border-radius:12px; padding:12px 20px; min-height:48px; }
+.review-share-close { position:absolute; top:0; right:0; display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; border-radius:0; background:color-mix(in srgb,var(--fj-color-text) 24%,transparent); color:var(--fj-color-text-inverse); }
+.review-share-close:hover { background:color-mix(in srgb,var(--fj-color-text) 50%,transparent); }
+.review-share-actions { padding:24px 0 env(safe-area-inset-bottom,0px); }
+.review-share-save { width:fit-content; min-width:200px; min-height:48px; margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--fj-color-text-inverse); border-radius:999px; background:transparent; color:var(--fj-color-text-inverse); text-decoration:none; font-size:16px; }
+.review-share-save:hover { background:color-mix(in srgb,var(--fj-color-text-inverse) 16%,transparent); }
+.review-share-save:disabled { opacity:.7; cursor:wait; }
+.review-share-trigger:focus-visible,.review-share-close:focus-visible,.review-share-save:focus-visible,.review-share-loading button:focus-visible { outline:2px solid var(--fj-color-focus); outline-offset:3px; }
