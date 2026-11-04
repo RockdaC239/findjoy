@@ -66,6 +66,8 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
       flags: state.flags,
       dead: state.dead,
     },
+    // 出生档案由系统提示词中的【程序出生事实】承载；每轮用户消息不重复发送，
+    // 避免同一份出生资料在系统前缀与每轮 user 中各出现一次。
     narrative: state.narrative ?? null,
     current_choice: choice ?? null,
     turn_task: buildTurnTask(state, choice),
@@ -104,6 +106,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
     flags: state.flags,
     dead: state.dead,
   };
+  // 出生档案固定在 system 的【程序出生事实】中，避免每轮 user 重复携带。
   payload.narrative = state.narrative ?? null;
   payload.current_choice = choice ?? null;
   payload.turn_task = buildTurnTask(state, choice);
@@ -166,6 +169,7 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
     return avoidStorylines.length > 0 || left.length > 0 ? { avoidStorylines, leftStorylines: left } : undefined;
   })();
   const systemPrompt = buildSystemPrompt(expectChoices, {
+    birth: state.birth,
     background: scenario.mode === "script" || scenario.mode === "foru" ? undefined : flagsToBackground(state.flags),
     transitioning: expectChoices && state.basic.age < CHILDHOOD_BOUNDARY && !openingAtCurrentAge,
     avoidAxis,

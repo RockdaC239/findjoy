@@ -1,3 +1,4 @@
+import { createStartLife, resolveStartPlan } from "./modes/start";
 import { setupTestPostgres } from "./test-postgres";
 setupTestPostgres();
 import { describe, expect, it } from "vitest";
@@ -121,4 +122,14 @@ it("scopes history and life access to the authenticated owner, excluding legacy 
   expect((await lifeStore.listSummaries("alice")).map(life => life.lifeId)).toEqual([alice.lifeId]);
   await expect(async () => (await lifeStore.set({...alice, basic: {...alice.basic, city: "不应保存"}}, "bob"))).rejects.toThrow();
   expect((await lifeStore.get(alice.lifeId, "alice"))?.basic.city).toBe(alice.basic.city);
+});
+
+it("restores birth facts and collects only their recent region and parent jobs", async () => {
+ const state=createStartLife(resolveStartPlan({mode:"normal"},{random:()=>0.37}),"female");
+ await lifeStore.set(state,"birth-owner");
+ expect((await lifeStore.get(state.lifeId,"birth-owner"))?.birth).toEqual(state.birth);
+ const recent=await lifeStore.recentBackgroundAvoid(6,"birth-owner");
+ expect(recent.provinceCodes).toContain(state.birth!.location.provinceCode);
+ expect(recent.occupationIds).toEqual(expect.arrayContaining(state.birth!.parents.map(parent=>parent.occupation.id)));
+ expect((await lifeStore.recentBackgroundAvoid(6,"other-owner")).provinceCodes).toEqual([]);
 });

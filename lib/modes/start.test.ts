@@ -177,3 +177,18 @@ describe("zero-time opening", () => {
     expect(advanced.basic.age).toBe(30);
   });
 });
+
+it("persists contemporary birth facts and uses their real location instead of the legacy city pool", () => {
+  const plan=resolveStartPlan({mode:"normal"},{random:()=>0.42});
+  expect(plan.birth?.era).toBe("当代中国");
+  expect(plan.birth?.parents.length).toBeGreaterThan(0);
+  expect(plan.background?.opportunity).toBeUndefined();
+  const state=createStartLife(plan,"female");
+  expect(state.birth).toEqual(plan.birth);
+  expect(state.basic.city).toContain(plan.birth!.location.city);
+  expect(state.basic.city).toContain(plan.birth!.location.county);
+  expect(state.basic.age).toBe(0);
+  expect(state.career.occupation).toBe("婴儿");
+  expect(state.relationships.parents.status).toBeTruthy();
+  expect(state.finance.housing).toBe(plan.birth!.household.housing);
+});

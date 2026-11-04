@@ -1,3 +1,4 @@
+import type { BirthProfile } from "./birth/profile";
 import { applyNarrative, resolveNarrativeReferences, type NarrativeState, type NarrativeUpdate } from "./engine/narrative";
 import type { LifeScenario } from "./modes/types";
 
@@ -12,6 +13,8 @@ export interface LifeBasics {
 }
 
 export interface LifeState {
+  /** 出生时已确认的背景，旧存档可缺省，迁居不会改写出生地。 */
+  birth?: BirthProfile;
   lifeId: string;
   basic: LifeBasics;
   career: { occupation: string; companyType: string; incomeYearly: number; careerStage: string };

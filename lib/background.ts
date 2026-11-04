@@ -31,12 +31,12 @@ export interface LifeBackground {
 
 // 概率权重：经济/结构参考现实分布（普通与小康为主，大富稀有；双亲完整为主，单亲/留守/隔代/收养为少数）；
 // 事件基调四等分偏置一点（安稳与机会略高于变故）。
+// avoid 采用软避重：最近用过的取值降权，而不是整类删除。历史实现会在一两局后
+// 把少数派全部过滤掉，逼出单一结构；降权既降低连续重复，也保留现实分布。
+// 系数不能太低：若“双亲完整”也被降得太狠，未被避开的少数派反而会压过它。
 function pickWeighted<T>(random: () => number, entries: Array<[T, number]>, avoid: ReadonlyArray<T> = []): T {
-  let pool = entries;
-  if (avoid.length > 0) {
-    const filtered = entries.filter(([value]) => !avoid.includes(value));
-    if (filtered.length > 0) pool = filtered;
-  }
+  const avoided = new Set(avoid);
+  const pool = entries.map(([value, weight]) => [value, avoided.has(value) ? weight * 0.5 : weight] as [T, number]);
   const total = pool.reduce((sum, [, weight]) => sum + weight, 0);
   let roll = random() * total;
   for (const [value, weight] of pool) {
@@ -48,17 +48,29 @@ function pickWeighted<T>(random: () => number, entries: Array<[T, number]>, avoi
 
 // 新一局开局出身滚动。avoid 传入最近几局已用过的维度取值，
 // 让连续的人生不要总落在同一条线上（例如反复"再婚家庭 + 家庭变故"）。
-// 某维度全部被避开时回落到完整池。
+// 近期取值只降权，不彻底排除；这样不会因为最近六局覆盖了少数派而把分布压成单值。
 export interface BackgroundAvoid {
+  provinceCodes?: readonly string[];
+  occupationIds?: readonly string[];
   economy?: ReadonlyArray<FamilyEconomy>;
   structure?: ReadonlyArray<FamilyStructure>;
   event?: ReadonlyArray<OpeningEventGenre>;
   opportunity?: ReadonlyArray<OpportunitySetting>;
 }
 
-export function rollBackground(random: () => number = Math.random, avoid: BackgroundAvoid = {}): LifeBackground {
+export interface RollBackgroundOptions {
+  /**
+   * 普通/主题人生的出生地点、照护与通勤已由 BirthProfile 生成；
+   * 此时不再额外抽一个可能与出生地矛盾的生活机会环境。旧存档仍可读取。
+   */
+  includeOpportunity?: boolean;
+}
+
+export function rollBackground(random: () => number = Math.random, avoid: BackgroundAvoid = {}, options: RollBackgroundOptions = {}): LifeBackground {
   return {
-    opportunity: pickWeighted(random, OPPORTUNITY_SETTINGS.map(value => [value, 1]), avoid.opportunity),
+    ...(options.includeOpportunity === false
+      ? {}
+      : { opportunity: pickWeighted(random, OPPORTUNITY_SETTINGS.map(value => [value, 1]), avoid.opportunity) }),
     economy: pickWeighted(random, [["拮据", 12], ["普通", 38], ["小康", 32], ["富裕", 14], ["大富", 4]], avoid.economy),
     structure: pickWeighted(random, [["双亲完整", 68], ["单亲", 12], ["再婚家庭", 7], ["留守隔代", 8], ["收养", 5]], avoid.structure),
     event: pickWeighted(random, [["安稳温暖", 30], ["机会降临", 25], ["家庭变故", 25], ["平凡开端", 20]], avoid.event),
@@ -132,5 +144,19 @@ export function buildBackgroundDirective(background: LifeBackground): string {
     `- 家庭结构：${background.structure}——${STRUCTURE_GUIDANCE[background.structure]}。`,
     ...(background.opportunity ? [`- 可接触的生活环境：${background.opportunity}。这是背景，不决定你的职业、天赋或性格；儿童只接触符合年龄的人和事，之后方向由选择发展。`] : []),
     `- 开局事件基调：${background.event}——${EVENT_GUIDANCE[background.event]}。`,
+  ].join("\n");
+}
+
+// 有 BirthProfile 时只保留“开局事件基调”。经济、结构、地点和照护细节已经由
+// 出生事实给出；再发送通用出身档案会与具体父母/住房/兄弟姐妹设定冲突
+// （例如收养被写成孤儿院、双亲完整被写成一方早逝）。
+export function buildOpeningToneDirective(background: LifeBackground): string {
+  const guidance = background.event === "家庭变故"
+    ? "写家庭的一次真实变故：失业、疾病、搬迁、照护压力等；开局不把出生档案中的同住父母改写成离异、缺席或死亡。此后的变化要有时间和因果。"
+    : EVENT_GUIDANCE[background.event];
+  return [
+    "【本局开局事件基调】（只约束故事从哪里开始，不覆盖出生事实）",
+    `- 基调：${background.event}——${guidance}。`,
+    "出生地点、父母角色与数量、同住/异地/缺席状态、职业和家庭条件以【程序出生事实】为准。基调需要家庭变化时，只写不否定出生档案的变化；不补造档案之外的继亲、养父母、已故亲属、收养机构或债务原因。",
   ].join("\n");
 }

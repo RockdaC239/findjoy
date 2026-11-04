@@ -3,6 +3,7 @@ import {
   backgroundToFinance,
   backgroundToFlags,
   buildBackgroundDirective,
+  buildOpeningToneDirective,
   FAMILY_ECONOMY,
   FAMILY_STRUCTURE,
   flagsToBackground,
@@ -79,13 +80,27 @@ describe("life background", () => {
     expect(sawOtherEvent).toBe(true);
   });
 
-  it("rolls a valid fallback when every value of a dimension is avoided", () => {
-    // 某维度全部被避开时回落到完整池，仍返回合法取值。
-    for (let i = 0; i < 50; i++) {
+  it("soft-avoids recent values without forcing the pool down to one option", () => {
+    // 最近六局可能覆盖全部少数派；硬过滤会逼出单一结构，降权应保留基础分布。
+    let majority = 0;
+    const total = 2000;
+    for (let i = 0; i < total; i++) {
+      const bg = rollBackground(seededRandom(i), { structure: ["单亲", "再婚家庭", "留守隔代", "收养"] });
+      if (bg.structure === "双亲完整") majority++;
+    }
+    expect(majority / total).toBeGreaterThan(0.6);
+  });
+
+  it("still returns valid values when every value of a dimension is avoided", () => {
+    let majority = 0;
+    const total = 2000;
+    for (let i = 0; i < total; i++) {
       const bg = rollBackground(seededRandom(i), { structure: [...FAMILY_STRUCTURE], event: [...OPENING_EVENT_GENRES] });
       expect(FAMILY_STRUCTURE).toContain(bg.structure);
       expect(OPENING_EVENT_GENRES).toContain(bg.event);
+      if (bg.structure === "双亲完整") majority++;
     }
+    expect(majority / total).toBeGreaterThan(0.5);
   });
 
   it("builds a directive that covers all three dimensions and no talent", () => {
@@ -108,6 +123,34 @@ describe("life background", () => {
   }
   expect(seen.size).toBe(OPPORTUNITY_SETTINGS.length);
   const avoided = rollBackground(() => 0, { opportunity: [OPPORTUNITY_SETTINGS[0]] });
-  expect(avoided.opportunity).not.toBe(OPPORTUNITY_SETTINGS[0]);
+  expect(OPPORTUNITY_SETTINGS).toContain(avoided.opportunity);
   expect(buildBackgroundDirective(avoided)).toContain("不决定你的职业");
+  let recentlyUsed = 0;
+  let other = 0;
+  for (let i = 0; i < 2000; i++) {
+    const bg = rollBackground(seededRandom(i), { opportunity: [OPPORTUNITY_SETTINGS[0]] });
+    if (bg.opportunity === OPPORTUNITY_SETTINGS[0]) recentlyUsed++;
+    else other++;
+  }
+  expect(recentlyUsed).toBeLessThan(other);
+});
+
+it("can skip the legacy opportunity setting when birth facts already define the environment", () => {
+  const background = rollBackground(() => 0.5, {}, { includeOpportunity: false });
+  expect(background.opportunity).toBeUndefined();
+  expect(FAMILY_ECONOMY).toContain(background.economy);
+  expect(backgroundToFlags(background).bgOpportunity).toBeUndefined();
+});
+
+it("keeps only the opening tone when birth facts are present", () => {
+  const directive = buildOpeningToneDirective({ economy: "大富", structure: "收养", event: "家庭变故", opportunity: OPPORTUNITY_SETTINGS[0] });
+  expect(directive).toContain("【本局开局事件基调】");
+  expect(directive).toContain("家庭变故");
+  expect(directive).toContain("以【程序出生事实】为准");
+  expect(directive).toContain("不把出生档案中的同住父母改写成离异");
+  expect(directive).not.toContain("父母分开或亲人离去");
+  expect(directive).not.toContain("【本局出身档案】");
+  expect(directive).not.toContain("孤儿院");
+  expect(directive).not.toContain(OPPORTUNITY_SETTINGS[0]);
+  expect(directive).not.toContain("可接触的生活环境");
 });

@@ -1,3 +1,4 @@
+import { rollBirthProfile, type BirthProfile } from "../birth/profile";
 import {
   backgroundToFinance,
   backgroundToFlags,
@@ -64,6 +65,7 @@ export function parseStartLifeRequest(input: unknown): ParsedStartRequest {
 }
 
 export interface StartPlan {
+  birth?: BirthProfile;
   scenario: LifeScenario;
   startAge: number;
   openingAtCurrentAge: boolean;
@@ -108,14 +110,23 @@ export function resolveStartPlan(selection: StartSelection, options: StartPlanOp
     if (selection.mode === "theme" && !getTheme(selection.theme)) {
       throw new Error(`Unknown theme: ${selection.theme}`);
     }
+    // 出生地点、照护与通勤由 BirthProfile 生成，不再叠加可能与出生地矛盾的
+    // 旧“生活机会环境”。旧存档仍通过 flagsToBackground 兼容读取。
+    const background = rollBackground(options.random, options.backgroundAvoid, { includeOpportunity: false });
+    const birth = rollBirthProfile(options.random ?? Math.random, {
+      economy: background.economy, structure: background.structure,
+      avoidProvinceCodes: options.backgroundAvoid?.provinceCodes,
+      avoidOccupationIds: options.backgroundAvoid?.occupationIds,
+    });
     return {
+      birth,
       scenario:
         selection.mode === "theme"
           ? { mode: "theme", theme: selection.theme }
           : NORMAL_SCENARIO,
       startAge: 0,
       openingAtCurrentAge: false,
-      background: rollBackground(options.random, options.backgroundAvoid),
+      background,
     };
   }
 
@@ -202,14 +213,19 @@ export function createStartLife(plan: StartPlan, gender: Gender, options: Create
 
   if (scenario.mode === "normal" || scenario.mode === "theme") {
     if (!plan.background) throw new Error("Normal/theme start requires a background");
-    const starter = createStarterLife({ age: 0, gender });
+    const birth = plan.birth;
+    const city = birth ? [...new Set([birth.location.province, birth.location.city, birth.location.county])].join("·") : undefined;
+    const starter = createStarterLife({ age: 0, gender, city });
     const flags = backgroundToFlags(plan.background);
     if (scenario.mode === "normal" && options.recentStorylines?.length) {
       flags.avoidStorylines = options.recentStorylines.join(",");
     }
     return {
       ...starter,
-      finance: { ...starter.finance, ...backgroundToFinance(plan.background) },
+      ...(birth ? { birth, relationships: { ...starter.relationships, parents: {
+        status: birth.parents.map(parent => `${parent.role}：${parent.status}`).join("；"),
+      } } } : {}),
+      finance: { ...starter.finance, ...backgroundToFinance(plan.background), ...(birth ? { housing: birth.household.housing } : {}) },
       flags,
       scenario,
     };

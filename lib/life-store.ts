@@ -1,3 +1,4 @@
+import { validateBirthProfile } from "./birth/profile";
 import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 import { flagsToBackground, type BackgroundAvoid } from "./background";
@@ -25,7 +26,13 @@ export const lifeStore = {
   async get(id: string, userId?: string): Promise<LifeState | null> {
     const row = (await query("SELECT state FROM lives WHERE life_id=$1 AND ($2::text IS NULL OR user_id=$2)", [id,userId ?? null])).rows[0];
     if (!row) return null;
-    try { return JSON.parse(row.state) as LifeState; } catch { return null; }
+    try {
+      const state = JSON.parse(row.state) as LifeState;
+      if (!state.birth) return state;
+      // 存档中的出生档案重新过一遍目录校验，防止损坏/伪造的字段直接进入提示词。
+      const birth = validateBirthProfile(state.birth);
+      return birth ? { ...state, birth } : { ...state, birth: undefined };
+    } catch { return null; }
   },
   async set(state: LifeState, userId?: string): Promise<LifeState> {
     const result = await query(`INSERT INTO lives(life_id,state,updated_at,user_id) VALUES ($1,$2,$3,$4)
@@ -60,6 +67,8 @@ export const lifeStore = {
   },
   async recentBackgroundAvoid(limit = 5, userId?: string): Promise<BackgroundAvoid> {
     const rows = await recentStates(limit,userId);
+    const provinceCodes: string[] = [];
+    const occupationIds: string[] = [];
     const opportunity: NonNullable<BackgroundAvoid["opportunity"]>[number][] = [];
     const economy: string[] = [];
     const structure: string[] = [];
@@ -67,6 +76,11 @@ export const lifeStore = {
     for (const row of rows) {
       let state: LifeState;
       try { state = JSON.parse(row.state) as LifeState; } catch { continue; }
+      const birth = validateBirthProfile(state.birth);
+      if (birth) {
+        if (!provinceCodes.includes(birth.location.provinceCode)) provinceCodes.push(birth.location.provinceCode);
+        for (const parent of birth.parents) if (!occupationIds.includes(parent.occupation.id)) occupationIds.push(parent.occupation.id);
+      }
       const bg = flagsToBackground(state.flags);
       if (!bg) continue;
       if (!economy.includes(bg.economy)) economy.push(bg.economy);
@@ -75,6 +89,7 @@ export const lifeStore = {
       if (bg.opportunity && !opportunity.includes(bg.opportunity)) opportunity.push(bg.opportunity);
     }
     return {
+      provinceCodes, occupationIds,
       opportunity,
       economy: economy as BackgroundAvoid["economy"],
       structure: structure as BackgroundAvoid["structure"],

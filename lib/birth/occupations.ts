@@ -60,6 +60,8 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["企业会计", 2, "受雇", "固定日班", 2],
     ["行政文员", 1, "受雇", "固定日班", 1],
     ["银行柜员", 2, "受雇", "固定日班", 2],
+    ["小微企业经营者", 1, "个体经营", "弹性工时", 4],
+    ["金融分析师", 3, "受雇", "固定日班", 4],
   ] },
   { id: "construction", label: "建筑与维修", weight: 8, roles: [
     ["建筑木工", 0, "受雇", "固定日班", 2],
@@ -72,6 +74,7 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["工程造价员", 2, "受雇", "固定日班", 3],
     ["建筑设计人员", 2, "受雇", "固定日班", 3],
     ["道路养护工", 0, "受雇", "固定日班", 1],
+    ["装修工程承包商", 1, "个体经营", "经常出差", 4],
   ] },
   { id: "food", label: "餐饮与生活服务", weight: 9, roles: [
     ["餐厅服务员", 0, "受雇", "轮班", 1],
@@ -84,6 +87,8 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["酒店前台", 1, "受雇", "轮班", 1],
     ["洗衣店经营者", 0, "个体经营", "弹性工时", 2],
     ["养老护理员", 1, "受雇", "轮班", 2],
+    ["连锁餐饮经营者", 1, "个体经营", "弹性工时", 4],
+    ["餐饮门店管理人员", 2, "受雇", "轮班", 3],
   ] },
   { id: "health", label: "医疗与照护", weight: 8, roles: [
     ["医院导诊员", 1, "受雇", "轮班", 1],
@@ -96,6 +101,7 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["药师", 2, "受雇", "轮班", 2],
     ["医疗设备技术员", 2, "受雇", "经常出差", 3],
     ["社区助老服务员", 1, "受雇", "固定日班", 1],
+    ["药物研发人员", 3, "受雇", "固定日班", 4],
   ] },
   { id: "education", label: "教育与科研", weight: 7, roles: [
     ["小学教师", 2, "受雇", "固定日班", 2],
@@ -108,6 +114,7 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["科研助理", 2, "受雇", "固定日班", 2],
     ["学校食堂员工", 0, "受雇", "固定日班", 1],
     ["图书资料管理员", 2, "受雇", "固定日班", 2],
+    ["高校科研人员", 3, "受雇", "弹性工时", 3],
   ] },
   { id: "digital", label: "数字与平台工作", weight: 7, roles: [
     ["远程软件开发人员", 2, "受雇", "弹性工时", 3],
@@ -120,6 +127,8 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["平台配送员", 0, "灵活就业", "弹性工时", 2],
     ["网络内容审核员", 1, "受雇", "轮班", 2],
     ["人工智能研究员", 3, "受雇", "弹性工时", 4],
+    ["电商企业经营者", 1, "个体经营", "弹性工时", 4],
+    ["高级软件工程师", 3, "受雇", "弹性工时", 4],
   ] },
   { id: "public", label: "公共服务", weight: 7, roles: [
     ["社区事务工作人员", 2, "受雇", "固定日班", 2],
@@ -132,6 +141,7 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["公共场馆保安员", 0, "受雇", "轮班", 1],
     ["社区社会工作者", 2, "受雇", "弹性工时", 2],
     ["基层司法辅助人员", 2, "受雇", "固定日班", 2],
+    ["政策研究人员", 3, "受雇", "固定日班", 3],
   ] },
   { id: "culture", label: "文化体育与媒体", weight: 3, roles: [
     ["地方剧团演员", 1, "受雇", "弹性工时", 2],
@@ -169,17 +179,31 @@ function unitRoll(random: () => number): number {
   return Number.isFinite(value) ? Math.max(0, Math.min(1 - Number.EPSILON, value)) : 0;
 }
 
+// 城乡只调整农林渔业的相对机会，不屏蔽其他行业：城区仍可有都市农业，
+// 但不会像乡村那样成为常见家庭职业。
+function agricultureWeight(settlement: string): number {
+  if (settlement === "乡村") return 1.8;
+  if (settlement === "乡镇") return 1.2;
+  if (settlement === "县城") return 0.7;
+  if (settlement === "城区") return 0.25;
+  return 1;
+}
+
 export function sampleParentOccupation(random: () => number, options: { settlement: string; education: BirthOccupation["education"]; avoidIds?: readonly string[] }): BirthOccupation {
   const level = educationLevels.indexOf(options.education);
   if (level < 0) throw new RangeError("父母教育程度无效");
   const qualified = BIRTH_OCCUPATIONS.filter(role => educationLevels.indexOf(role.education) <= level);
-  const fresh = qualified.filter(role => !options.avoidIds?.includes(role.id));
-  const pool = fresh.length ? fresh : qualified;
+  // 学历高于岗位要求是现实可能，但不应成为默认：优先在“同一档或低一档”的岗位中抽样，
+  // 避免研究生被大量安排成饲养员/分拣员。没有合格岗位时才回落到全部合规岗位。
+  const preferred = qualified.filter(role => level - educationLevels.indexOf(role.education) <= 1);
+  const eligible = preferred.length ? preferred : qualified;
+  const fresh = eligible.filter(role => !options.avoidIds?.includes(role.id));
+  const pool = fresh.length ? fresh : eligible;
   // 先抽行业，再等概率抽该行业的合格角色；权重是编辑覆盖设计，不是现实就业比例。
-  // 乡村只温和增加农林机会，不屏蔽数字工作、公共服务或其他行业。
+  // 乡村增加农林机会，城区降低但不完全排除；数字、公共服务等行业始终可选。
   const available = sectors.map(sector => ({
     roles: pool.filter(role => role.sector === sector.label),
-    weight: sector.weight * (sector.id === "agriculture" && /乡|村/.test(options.settlement) ? 1.5 : 1),
+    weight: sector.weight * (sector.id === "agriculture" ? agricultureWeight(options.settlement) : 1),
   })).filter(sector => sector.roles.length > 0);
   let roll = unitRoll(random) * available.reduce((sum, sector) => sum + sector.weight, 0);
   let selected = available[available.length - 1];

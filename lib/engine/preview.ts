@@ -25,7 +25,6 @@ export function previewMessages(options: PreviewOptions) {
   let state = createStartLife(resolveStartPlan(selection, { random: () => 0.5 }), "female");
   state.lifeId = "prompt-preview-synthetic";
   state.createdAt = "2026-01-01T00:00:00.000Z";
-  if (options.mode === "normal" || options.mode === "theme") state.basic.city = "成都";
   let transcript: TranscriptMessage[] = [];
   let choice;
   if (options.stage !== "opening") {

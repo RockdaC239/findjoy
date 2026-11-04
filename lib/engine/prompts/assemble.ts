@@ -1,7 +1,8 @@
+import { buildBirthDirective, type BirthProfile } from "../../birth/profile";
 import { OUTPUT_EXAMPLES } from "../output-format";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { buildBackgroundDirective, type LifeBackground } from "../../background";
+import { buildBackgroundDirective, buildOpeningToneDirective, type LifeBackground } from "../../background";
 import { buildStorylinePromptHint, type StorylineGuards } from "../../storyline";
 import { buildOpeningDirective, buildScenarioDirective } from "../../modes/scenario";
 import type { LifeScenario } from "../../modes/types";
@@ -27,6 +28,7 @@ export const ENDING_SYSTEM_PROMPT = readPrompt("ending");
 // transitioning=true 表示"成年后的第一个决策节点"（14 岁迈入 15+），追加专属指令：
 // 时间已过去、写落地年龄的你、严禁复述上一条童年事件——修"14 岁节点内容在 18 岁重生成"。
 export interface SystemPromptOptions {
+  birth?: BirthProfile;
   background?: LifeBackground;
   transitioning?: boolean;
   avoidAxis?: string | null;
@@ -42,6 +44,7 @@ export interface SystemPromptOptions {
 export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptOptions = {}): string {
   const {
     background,
+    birth,
     transitioning = false,
     avoidAxis,
     storylineGuards,
@@ -53,7 +56,11 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
   const eraHint = scenario?.mode === "normal" || scenario?.mode === "theme"
     ? "【当代生活背景】本局以当代中国为社会与生活背景。按现代的就业形态、住房、教育、交通、医疗、通信及家庭安排组织处境，不默认写成八九十年代或上世纪的生活。乡村、维修铺、制造业和老社区仍然存在，要写出它们当代的生活方式，不能一律怀旧；移动支付、网络交流等也不必每幕强塞。不要把地区或职业简化成落后/富裕的刻板印象。未提供具体公历年份时不自行钉死出生年份，不凭空预测未来重大技术或制度；用年龄推进人生，避免靠收音机、旧信件等意象把整局拉回旧时代。"
     : "";
-  const profile = background ? buildBackgroundDirective(background) : "";
+  const profile = background
+    ? birth
+      ? buildOpeningToneDirective(background)
+      : buildBackgroundDirective(background)
+    : "";
   const scenarioDirective = scenario ? buildScenarioDirective(scenario) : "";
   // 近期价值课题用于防止复演，允许处境变化后的自然延续。
   const axisHint = expectChoices && avoidAxis
@@ -66,7 +73,7 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
   const transitionHint = transitioning
     ? "【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。"
     : "";
-  const suffixes = [eraHint, profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint].filter(
+  const suffixes = [eraHint, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint].filter(
     (part): part is string => Boolean(part && part.trim()),
   );
   return suffixes.length > 0 ? `${base}\n\n${suffixes.join("\n\n")}` : base;

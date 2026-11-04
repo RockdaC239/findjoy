@@ -1,4 +1,5 @@
 import { SCRIPTS } from "../../modes/catalog";
+import { rollBirthProfile } from "../../birth/profile";
 import { scriptToScenario } from "../../modes/scenario";
 import { expect, it } from "vitest";
 import { createHash } from "node:crypto";
@@ -25,4 +26,17 @@ it("anchors ordinary and theme lives in contemporary China without overriding au
     }
   }
   expect(buildSystemPrompt(true, { scenario: scriptToScenario(SCRIPTS[0]) })).not.toContain("【当代生活背景】");
+});
+
+it("uses concrete birth facts instead of the generic family background once a birth profile exists", () => {
+  const birth = rollBirthProfile(() => 0.5, { economy: "普通", structure: "收养" });
+  const background = { economy: "普通" as const, structure: "收养" as const, event: "家庭变故" as const };
+  const prompt = buildSystemPrompt(false, { birth, background, scenario: { mode: "normal" } });
+  expect(prompt).toContain("【程序出生事实】");
+  expect(prompt).toContain("【本局开局事件基调】");
+  expect(prompt).not.toContain("【本局出身档案】");
+  expect(prompt).not.toContain("孤儿院");
+  expect(prompt).not.toContain("父母离异后有一方再婚");
+  // 旧存档没有 BirthProfile 时仍沿用原来的出身档案，不能因新链路丢背景。
+  expect(buildSystemPrompt(false, { background, scenario: { mode: "normal" } })).toContain("【本局出身档案】");
 });
