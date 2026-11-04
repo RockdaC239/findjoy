@@ -95,4 +95,4 @@ npm run --silent prompt:preview -- --mode theme --theme love --json
 
 回顾增加可选reflection/shareLines/evidenceEventIds及usage；无有效来源时清除新长文/分享字段并保留旧patterns兼容。引用ID有效并不证明解释准确。回顾保存累计已报告用量，供应商没返回usage仍无法准确计费。生产诊断只输出白名单元数据，避免记录正文。
 
-海报默认只绘制用户选中且经基础过滤的公开短句与品牌，旧回顾没有候选时用品牌文案，不默认复制私密observation和moments。实际质量与未解决风险见[真实验证报告](./ai-engine-upgrade-validation-2026-11-04.md)，本次没有生产发布。
+海报绘制用户选中且经基础过滤的公开短句、至多三个跨度最大的重要节点（`review.moments`）与品牌；短句没有候选时用品牌文案，不绘制完整 observation 或 question。2026-11-04 Owner 确认节点可以作为分享内容，分享前预览即用户确认；旧回顾没有 moments 时只显示短句。实际质量与未解决风险见[真实验证报告](./ai-engine-upgrade-validation-2026-11-04.md)，本次没有生产发布。

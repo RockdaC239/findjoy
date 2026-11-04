@@ -23,6 +23,30 @@ export function fitPosterLines(text: string, width: number, maxLines: number, me
   return lines;
 }
 
+export interface PosterMoment {
+  age: string;
+  text: string;
+}
+
+function splitPosterMoment(moment: string): PosterMoment {
+  const match = moment.match(/^(\d{1,3})\s*岁[，,]\s*(.+)$/u);
+  if (match) return { age: `${match[1]} 岁`, text: match[2]!.replace(/。$/u, "").trim() };
+  const later = moment.match(/^(往后|后来|晚年)\s*[，,]\s*(.+)$/u);
+  if (later) return { age: later[1]!, text: later[2]!.replace(/。$/u, "").trim() };
+  return { age: "往后", text: moment.replace(/。$/u, "").trim() };
+}
+
+// 海报只取三个跨度最大的节点：早年、人生中段、晚年；不把整份回顾塞进图片。
+export function selectPosterMoments(moments: string[] | undefined, limit = 3): PosterMoment[] {
+  const all = (moments ?? []).map((moment) => moment.trim()).filter(Boolean);
+  if (!all.length) return [];
+  const count = Math.min(limit, all.length);
+  const indexes = count === 1
+    ? [0]
+    : Array.from({ length: count }, (_, index) => Math.round(index * (all.length - 1) / (count - 1)));
+  return [...new Set(indexes)].map((index) => splitPosterMoment(all[index]!)).slice(0, limit);
+}
+
 async function loadImage(path: string): Promise<HTMLImageElement> {
   const image = new Image();
   image.src = `${API_BASE}/${path}`;
@@ -50,8 +74,9 @@ export async function createSharePoster(review: Review, selectedLine?: string): 
   const drawText = (value: string, x: number, y: number, size: number, ink: string, width: number, lines = 1, lineHeight = size * 1.5, family = sans, weight = 400) => {
     context.font = `${weight} ${size}px ${family}`;
     context.fillStyle = ink;
-    fitPosterLines(value, width, lines, (text) => context.measureText(text).width)
-      .forEach((text, index) => context.fillText(text, x, y + index * lineHeight));
+    const fitted = fitPosterLines(value, width, lines, (text) => context.measureText(text).width);
+    fitted.forEach((text, index) => context.fillText(text, x, y + index * lineHeight));
+    return fitted;
   };
 
   context.fillStyle = color.brand;
@@ -67,9 +92,19 @@ export async function createSharePoster(review: Review, selectedLine?: string): 
   context.drawImage(logo, 16, 226, 172.8, 59.4);
   const candidates = normalizeShareLines(review.shareLines);
   const line = selectedLine && candidates.includes(selectedLine) ? selectedLine : "人生没有答案，只有选择。";
-  drawText("一段模拟人生，一次新的看见", 52, 306, 12, color.brand, 436);
-  drawText(line, 52, 380, 30, color.text, 436, 4, 42, serif, 600);
-  drawText("如果这是你的一生，你会怎么选？", 52, 590, 18, color.text, 436, 2, 25, serif);
+  const identity = [review.modeLabel, typeof review.age === "number" ? `享年 ${review.age} 岁` : ""].filter(Boolean).join(" · ") || "一段模拟人生";
+  drawText(identity, 52, 300, 11, color.brand, 436);
+  const quoteLines = drawText(line, 52, 330, 30, color.text, 436, 3, 42, serif, 600);
+  const moments = selectPosterMoments(Array.isArray(review.moments) ? review.moments : []);
+  let momentY = 330 + quoteLines.length * 42 + 16;
+  for (const moment of moments) {
+    drawText(moment.age, 52, momentY, 14, color["accent-readable"], 56, 1, 25, sans);
+    drawText(moment.text, 120, momentY, 14, color.text, 368, 1, 25, sans);
+    momentY += 33;
+  }
+  const questionY = Math.max(560, Math.min(590, momentY + 14));
+  drawText("如果这是你的一生", 52, questionY, 18, color.text, 436, 1, 28, serif);
+  drawText("你愿意这样活吗？", 52, questionY + 28, 18, color.text, 436, 1, 28, serif);
 
   context.strokeStyle = color.border;
   context.setLineDash([3, 3]);
