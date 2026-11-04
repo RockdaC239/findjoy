@@ -502,13 +502,14 @@ button.credit-pill:focus-visible { outline:2px solid var(--orange); outline-offs
   .event-tagline { margin-top:12px; font-size:17px; }
   .decision-area { margin-top:16px; padding-top:12px; }
   .choice-cards { gap:8px; }
-  .choice-card { min-height:96px; padding:9px; }
-  .choice-card-front { padding:12px; }
-  .choice-card-front strong { font-size:14px; line-height:1.6; }
-  .choice-card-front b { font-size:17px; }
+  .choice-card { min-height:72px; padding:9px; }
+  .choice-card-front { flex-direction:row; align-items:flex-start; justify-content:flex-start; gap:10px; padding:12px; }
+  .choice-card-front small { flex:none; margin-top:1px; }
+  .choice-card-front strong { flex:1; font-size:14px; line-height:1.5; }
+  .choice-card-front b { display:none; }
   .choice-card-back { font-size:28px; }
   .continue-button,.rebirth-button { position:static; width:max-content; min-width:148px; margin:12px auto 0; padding:10px 22px; box-shadow:none; }
-  .life-event { padding-bottom:20px; }
+  .life-event { padding-bottom:0; }
 
   /* 积分页：单次购买与套餐卡收紧 */
   .plans-main { padding:20px 0 32px; }
