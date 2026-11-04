@@ -496,17 +496,19 @@ button.credit-pill:focus-visible { outline:2px solid var(--orange); outline-offs
 @media (max-width:700px) {
   /* 事件页：顶栏只留年龄与账户；正文、选项按单手阅读收敛 */
   .topbar--event .nav-inline { display:none; }
-  .event-story { min-height:200px; }
-  .event-body { margin-top:14px; font-size:15px; line-height:1.7; }
-  .event-tagline { margin-top:16px; font-size:17px; }
+  .event-story { min-height:160px; }
+  .event-body { margin-top:10px; font-size:15px; line-height:1.7; }
+  .event-body p { margin-bottom:10px; }
+  .event-tagline { margin-top:12px; font-size:17px; }
+  .decision-area { margin-top:16px; padding-top:12px; }
   .choice-cards { gap:8px; }
-  .choice-card { min-height:112px; padding:10px; }
-  .choice-card-front { padding:13px; }
-  .choice-card-front strong { font-size:15px; line-height:1.55; }
-  .choice-card-front b { font-size:18px; }
-  .choice-card-back { font-size:30px; }
-  .continue-button,.rebirth-button { position:static; width:max-content; min-width:148px; margin:14px auto 0; padding:11px 22px; box-shadow:none; }
-  .life-event { padding-bottom:28px; }
+  .choice-card { min-height:96px; padding:9px; }
+  .choice-card-front { padding:12px; }
+  .choice-card-front strong { font-size:14px; line-height:1.6; }
+  .choice-card-front b { font-size:17px; }
+  .choice-card-back { font-size:28px; }
+  .continue-button,.rebirth-button { position:static; width:max-content; min-width:148px; margin:12px auto 0; padding:10px 22px; box-shadow:none; }
+  .life-event { padding-bottom:20px; }
 
   /* 积分页：单次购买与套餐卡收紧 */
   .plans-main { padding:20px 0 32px; }
