@@ -288,13 +288,16 @@ h1 { margin:0; font-family:var(--fj-font-display); font-weight:400; font-size:cl
 .account-notice { padding:14px; background:var(--soft); border-radius:12px; }
 .account-page a:focus-visible,.account-page button:focus-visible { outline:2px solid var(--orange); outline-offset:5px; }
 @media(max-width:767px) {
-  .login-layout { grid-template-columns:1fr; padding:40px 0; gap:30px; min-height:0; }
-  .login-story h1 { font-size:36px; }
-  .login-story .eyebrow { margin-bottom:16px; }
-  .life-lines { height:90px; margin:18px 0; }
-  .life-lines i { top:45px; }
-  .account-lead { font-size:14px; margin-top:16px; }
-  .login-card { border-radius:20px; }
+  /* 手机上登录卡是唯一核心操作：压缩文案区，隐藏装饰性内容，保证卡片整块可见。 */
+  .login-layout { grid-template-columns:1fr; padding:16px 0 32px; gap:18px; min-height:0; }
+  .login-story .eyebrow { margin-bottom:12px; }
+  .login-story h1 { font-size:clamp(26px, 7.2vw, 32px); line-height:1.35; }
+  .account-lead { font-size:14px; line-height:1.7; margin-top:12px; }
+  .life-lines,.login-story-foot,.login-benefits { display:none; }
+  .login-card { border-radius:18px; padding:22px 20px; }
+  .login-card h2 { font-size:22px; margin:14px 0 10px; }
+  .login-card>p { font-size:13px; line-height:1.7; }
+  .login-card .login-note { margin:16px 0 6px; }
   .account-footer { margin-top:12px; }
   .account-page .topbar a { min-height:44px; display:inline-flex; align-items:center; }
 }
