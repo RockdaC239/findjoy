@@ -67,3 +67,5 @@
 正式报告草稿docs/development/ai-engine-upgrade-validation-2026-11-04.md，真实验证/海报浏览器验收/可能微调/恢复浏览器设置尚未完成，目标继续active。
 
 连续脚本session6204已正常exit0：首局到33岁，a-current.json为当前已保存状态，不再轮询该handle。真实发现琐事跨年拖延、职业婴儿/教育未开始，已做第1轮微调（见验证报告），下一步从a-current续推4～6节点验证纠正，并独立新开人生比较。优化轮次1/3，不重复计算工程修复。真实模型配置单价0，报告不能视为免费。待真实终点/回顾/海报浏览器测试及最终复测后才可完成目标。
+
+第1轮复测session25992已exit0，到79岁后429正常停止；.data/engine-validation/a-current.json已更新。分支对照session32406已exit0，结果branch-check.json。第二轮修正职业嵌套解析和字段示例，提交5c8c516、13cd1cf，67项相关测试通过。当前真实续推与自动回顾脚本运行session_id **14231**，使用resume-a-r2.mjs，继续先轮询该句柄。报告已记录实测不足，调优轮次2/3。尚未通过完整效果验收，仍不能complete。
