@@ -115,7 +115,11 @@ export function detectValueAxis(choices: LifeChoice[] | undefined): string | nul
 
 function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"] {
   if (!value || typeof value !== "object") return {};
-  const input = value as Record<string, unknown>;
+  const raw = value as Record<string, unknown>;
+  const nested = (key: string): Record<string, unknown> => raw[key] && typeof raw[key] === "object" && !Array.isArray(raw[key]) ? raw[key] as Record<string, unknown> : {};
+  // 只兼容职业和身份的新值；嵌套财务可能是余额，不能当增量应用。
+  const career = nested("career"), basic = nested("basic");
+  const input: Record<string, unknown> = { occupation: career.occupation, incomeYearly: career.incomeYearly, city: basic.city, education: basic.education, ...raw };
   const pick = <K extends keyof NextEvent["objectiveChanges"]>(key: K) => (typeof input[key] === "number" ? input[key] : typeof input[camelToSnake(key) as K] === "number" ? input[camelToSnake(key) as K] : undefined);
   return {
     incomeYearly: pick("incomeYearly") as number | undefined,

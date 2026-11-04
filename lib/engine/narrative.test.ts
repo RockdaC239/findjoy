@@ -54,3 +54,12 @@ describe("saved narrative continuity", () => {
   });
 
 });
+
+it("accepts provider career nesting without confusing absolute finances with deltas", () => {
+ const event=normalizeGeneratedEvent({...wire,objectiveChanges:{career:{occupation:"社区前台",incomeYearly:60000},basic:{city:"北京",education:"教育经历未详"},finance:{cash:500000}}})!;
+ const state=applyNextEvent(createStarterLife({age:33}),event);
+ expect(state.career.occupation).toBe("社区前台");
+ expect(state.career.incomeYearly).toBe(60000);
+ expect(state.basic.education).toBe("教育经历未详");
+ expect(state.finance.cash).toBe(8000);
+});
