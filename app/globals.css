@@ -538,14 +538,10 @@ button.credit-pill:focus-visible { outline:2px solid var(--orange); outline-offs
   .profile-credit strong { font-size:48px; }
 }
 
-/* 手机端分享弹窗：海报缩小、操作区落在纸白面板上，避免与背后的回顾内容叠在一起。 */
+/* 手机端分享弹窗：保留原来的深色浮层样式，只把海报缩小、只留保存按钮。 */
 @media (max-width:700px) {
-  .review-share-dialog { width:min(100% - 20px, 372px); max-height:calc(100dvh - 24px); overflow-y:auto; padding:10px 10px 0; border-radius:20px; background:var(--paper); color:var(--ink); }
-  .review-share-art { width:100%; border-radius:12px; overflow:hidden; }
-  .review-share-preview { border-radius:12px; }
-  .review-share-close { top:8px; right:8px; width:40px; height:40px; border-radius:8px; }
-  .review-share-actions { padding:12px 2px calc(12px + env(safe-area-inset-bottom,0px)); color:var(--ink); }
-  .review-share-actions p { margin:0 0 10px; color:var(--muted); }
-  .review-share-save { min-height:44px; min-width:180px; padding:10px 22px; border-color:var(--ink); color:var(--ink); font-size:15px; }
-  .review-share-save:hover { background:color-mix(in srgb,var(--ink) 8%,transparent); }
+  .review-share-dialog { width:min(100% - 20px, 372px); max-height:calc(100dvh - 24px); overflow-y:auto; }
+  .review-share-art { width:min(100%, 352px); margin:0 auto; }
+  .review-share-actions { padding:14px 0 calc(16px + env(safe-area-inset-bottom,0px)); }
+  .review-share-save { min-height:44px; font-size:15px; }
 }

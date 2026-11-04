@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { Review } from "../lib/review";
 import { createSharePoster } from "../lib/share-poster";
 import { normalizeShareLines } from "../lib/share-copy";
 
 export function ReviewShare({ review }: { review: Review }) {
-  const choiceId = useId();
   const candidates = normalizeShareLines(review.shareLines);
-  const [selectedLine, setSelectedLine] = useState(candidates[0] ?? "");
+  const selectedLine = candidates[0] ?? "";
   const dialog = useRef<HTMLDialogElement>(null);
   const image = useRef("");
   const generation = useRef(0);
@@ -63,17 +62,6 @@ export function ReviewShare({ review }: { review: Review }) {
         </button>
       </div>
       <div className="review-share-actions">
-        {candidates.length > 0 && <div style={{ margin: "0 auto 16px", maxWidth: "100%" }}>
-          <label htmlFor={choiceId} style={{ display: "block", marginBottom: 8 }}>选择一句想分享的话</label>
-          <select id={choiceId} className="review-share-save" style={{ width: "100%", maxWidth: "100%", minWidth: 0, borderRadius: 12, fontSize: 14, background: "var(--fj-color-surface)", color: "var(--fj-color-text)" }} value={selectedLine} onChange={event => {
-            const line = event.target.value;
-            setSelectedLine(line);
-            void generate(line);
-          }}>
-            {candidates.map((line, index) => <option key={`${index}:${line}`} value={line}>{line}</option>)}
-          </select>
-        </div>}
-        <p style={{ textAlign: "center", fontSize: 12 }}>海报只展示所选短句与品牌文字，不包含人生节点。</p>
         {imageUrl ? <a className="review-share-save" href={imageUrl} download="FindJoy-我的另一种人生.png">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5" /></svg>
           保存图片
