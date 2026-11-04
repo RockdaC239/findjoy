@@ -1,10 +1,17 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-vi.mock("./auth", () => ({ currentUser: async () => null }));
-vi.mock("./commerce-store", () => ({ commerceStore: { expireOperations: async () => {} } }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn() }));
+vi.mock("./auth", () => ({ currentUser: mocks.user }));
+vi.mock("./developer", () => ({ hasDeveloperAccess: mocks.access }));
+vi.mock("./commerce-store", () => ({ commerceStore: { expireOperations: async () => {}, balance: async () => ({ available: 0, held: 0 }) } }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ toString: () => "" }) }));
 import PlansPage from "../app/plans/page";
 
+beforeEach(() => {
+  mocks.user.mockResolvedValue(null);
+  mocks.access.mockResolvedValue(false);
+});
 afterEach(() => vi.unstubAllEnvs());
 
 it("shows two free lives, a purchasable single life and four packs while hiding the recharge self-link", async () => {
@@ -28,4 +35,24 @@ it("shows two free lives, a purchasable single life and four packs while hiding 
   expect(html).toContain('<dialog class="points-usage-dialog"');
   expect(html).not.toContain('class="purchase-notes"');
   for (const price of ["4.95", "3.98", "3.63", "3.33"]) expect(text).toContain(`¥${price}/局`);
+});
+
+it("以登录账号渲染积分余额，且不因普通登录就露出开发者测试套餐", async () => {
+  vi.stubEnv("FINDJOY_PAYMENTS_MODE", "demo");
+  mocks.user.mockResolvedValue({ id: "owner", displayName: "探索者" });
+  const html = renderToStaticMarkup(await PlansPage());
+  expect(html.replace(/<[^>]*>/g, "")).not.toContain("开发者测试支付");
+  expect(html).not.toContain("测试支付 ¥0.01");
+});
+
+it("调试模式开启后才渲染一分钱测试套餐", async () => {
+  vi.stubEnv("FINDJOY_PAYMENTS_MODE", "demo");
+  mocks.user.mockResolvedValue({ id: "owner", displayName: "探索者" });
+  mocks.access.mockResolvedValue(true);
+  const html = renderToStaticMarkup(await PlansPage());
+  const text = html.replace(/<[^>]*>/g, "");
+  expect(mocks.access).toHaveBeenCalledWith({ id: "owner", displayName: "探索者" }, expect.anything());
+  expect(text).toContain("开发者测试支付");
+  expect(text).toContain("仅本人可见 · 20 积分 · 演示模式，不会真实扣款");
+  expect(html).toContain("预览测试订单");
 });

@@ -61,13 +61,17 @@ it("rejects Alipay before creating a new order or retrying an existing payment",
 
 it("authorizes the one-fen product on the server and ignores forged prices and developer flags", async () => {
  const stranger=await identityStore.resolveUser("https://auth.example","test-product-stranger");
- const request=()=>new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":"private-test"},body:JSON.stringify({productId:"developer-test",channel:"WECHAT_H5",amountFen:0,credits:999999,developer:true,phone:"15200297440"})});
+ const request=(cookie?:string)=>new Request("https://findfire.club/findjoy/api/orders",{method:"POST",headers:{origin:"https://findfire.club","Content-Type":"application/json","Idempotency-Key":"private-test",...(cookie?{cookie}:{})},body:JSON.stringify({productId:"developer-test",channel:"WECHAT_H5",amountFen:0,credits:999999,developer:true,phone:"15200297440"})});
  mocks.currentUser.mockResolvedValue(stranger);
- expect((await createOrder(request())).status).toBe(400);
+ expect((await createOrder(request("findjoy_developer=1"))).status).toBe(400);
  expect(await commerceStore.listOrders(stranger.id)).toHaveLength(0);
  const owner=await identityStore.resolveUser("https://auth.example","test-product-owner","owner","+8615200297440");
  mocks.currentUser.mockResolvedValue(owner);
- const response=await createOrder(request());
+ // 只认服务端身份 + 调试模式开关，请求体里伪造的 developer/phone 无效。
+ expect((await createOrder(request())).status).toBe(400);
+ expect((await createOrder(request("findjoy_developer=0"))).status).toBe(400);
+ expect(await commerceStore.listOrders(owner.id)).toHaveLength(0);
+ const response=await createOrder(request("findjoy_developer=1"));
  expect(response.status).toBe(200);
  const orders=await commerceStore.listOrders(owner.id);
  expect(orders).toHaveLength(1);

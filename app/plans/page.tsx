@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { NORMAL_LIFE_POINTS, SIGNUP_POINTS } from "../../lib/points";
 import { PointsUsageDialog } from "../../components/PointsUsageDialog";
 import { AccountShell } from "../../components/AccountShell";
 import { currentUser } from "../../lib/auth";
 import { commerceStore } from "../../lib/commerce-store";
-import { isDeveloper } from "../../lib/developer";
+import { hasDeveloperAccess } from "../../lib/developer";
 import { DEVELOPER_TEST_PRODUCT_ID, formatPrice, products } from "../../lib/products";
 export const metadata={title:"积分充值 · FindJoy 觅乐"};
 
@@ -12,7 +13,8 @@ export default async function PlansPage() {
   const user=await currentUser();
   await commerceStore.expireOperations();
   const balance=user?await commerceStore.balance(user.id):null;
-  const catalog=products({ developer: await isDeveloper(user) });
+  const developer=await hasDeveloperAccess(user, user?(await cookies()).toString():null);
+  const catalog=products({ developer });
   const testProduct = catalog.find(product => product.id === DEVELOPER_TEST_PRODUCT_ID);
   const single=catalog.find(product=>product.id==="single");
   const packs=catalog.filter(product=>product.id!=="single" && product.id!==DEVELOPER_TEST_PRODUCT_ID);

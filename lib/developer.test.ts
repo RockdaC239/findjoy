@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ user: vi.fn() }));
 vi.mock("./auth", () => ({ currentUser: mocks.user, appOrigin: () => "https://findfire.club" }));
 import { identityStore } from "./identity-store";
 import { commerceStore } from "./commerce-store";
-import { isDeveloper } from "./developer";
+import { isDeveloper, hasDeveloperAccess } from "./developer";
 import { GET } from "../app/api/developer/route";
 import { POST } from "../app/api/developer/credits/route";
 beforeEach(() => mocks.user.mockResolvedValue(null));
@@ -17,6 +17,16 @@ it("checks only the verified server account phone, including the country prefix"
   expect(await isDeveloper(owner)).toBe(true);
   expect(await isDeveloper(stranger)).toBe(false);
   expect(await isDeveloper(null)).toBe(false);
+});
+it("只在本人的调试模式开启时才放开开发能力", async () => {
+  const owner = await identityStore.resolveUser("test", "owner", "owner", "+8615200297440");
+  const stranger = await identityStore.resolveUser("test", "stranger", "15200297440");
+  expect(await hasDeveloperAccess(owner, "findjoy_developer=1")).toBe(true);
+  expect(await hasDeveloperAccess(owner, "findjoy_developer=1; findjoy_mock=1")).toBe(true);
+  expect(await hasDeveloperAccess(owner, null)).toBe(false);
+  expect(await hasDeveloperAccess(owner, "findjoy_developer=0")).toBe(false);
+  expect(await hasDeveloperAccess(stranger, "findjoy_developer=1")).toBe(false);
+  expect(await hasDeveloperAccess(null, "findjoy_developer=1")).toBe(false);
 });
 it("rejects guests, other users and cross-site grants", async () => {
   expect((await GET()).status).toBe(401);
