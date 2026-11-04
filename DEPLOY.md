@@ -11,9 +11,13 @@
 | 执行层 | 服务器上的幂等部署脚本 | `deploy/deploy-production.sh` |
 | 服务器初始化 | 一次性脚本 | `scripts/bootstrap-server.sh` |
 
-架构：`GitHub push main` → Actions 跑测试 → rsync 到 `releases/<commit>` → 部署前预检
-→ npm ci + build → 原子切换 `current` 软链 → systemd 守护 `next start` 监听 127.0.0.1:3001
-→ nginx 反代对外 80/443 → 健康检查；失败自动切回上一个 release。
+架构：`GitHub push main` → Actions 跑测试 → rsync 增量同步到常驻镜像 `SERVER_PATH/.deploy/source`
+→ 服务器本地复制到 `releases/<commit>` → 部署前预检 → npm ci + build → 原子切换 `current` 软链
+→ systemd 守护 `next start` 监听 127.0.0.1:3001 → nginx 反代对外 80/443 → 健康检查；
+失败自动切回上一个 release。
+
+只同步运行期需要的文件：`docs/`、`commercialisation/`、`design/` 下除 `tokens/` 以外的素材、
+以及展示页配图 `public/deck/` 都不上传，因此线上 `/showcase` 不显示这些背景图（页面会在图片缺失时隐藏背景）。
 
 ---
 
@@ -192,6 +196,7 @@ openssl s_client -connect findfire.club:443 -servername findfire.club </dev/null
 - 构建、预检或 nginx 配置失败时，`current` 不切换，旧版本继续服务；失败的新目录会被清理。
 - 健康检查失败时，脚本自动把 `current` 切回上一个 release、恢复上一份 `.env` 并重启，保留失败版本供排查。
 - 默认保留最近 3 个 release（`KEEP_RELEASES` 可调），旧目录在成功后清理；`src` 仅作为旧布局的回退目录保留。
+- `SERVER_PATH/.deploy/source` 是 rsync 的常驻镜像，不属于任何 release、不参与回滚；删掉它只会让下次发布退回全量传输。
 - 紧急手动回退须由 Owner 确认范围，只切换到已验证的旧 release：
 
 ```bash
@@ -211,4 +216,5 @@ curl -fsS http://127.0.0.1:3001/findjoy/api/health
 - **端口访问不了**：安全组没放行 80/443；或 nginx 未 reload（看 `sudo nginx -t`）。
 - **better-sqlite3 编译失败**：服务器缺 build-essential/python3，重跑 bootstrap。
 - **服务反复重启**：`sudo journalctl -u findjoy -n 50` 看日志，多为 `.env` 缺 `LLM_API_KEY` 或数据库迁移未执行。
+- **部署卡在"同步代码到服务器"**：GitHub runner 到腾讯云的跨国链路实测约 16 KB/s，全量 9 MB 要 7-9 分钟。正常情况只传变更文件（几秒）；若长期很慢，先确认 `SERVER_PATH/.deploy/source` 是否存在、以及是否又有大文件被加进仓库。
 - **部署停在预检**：按输出逐项修复，常见原因是迁移校验和不一致、运行角色权限过高、最近备份超过 26 小时、未配置异机/告警目标或磁盘不足。不要用跳过预检的方式强行发布。

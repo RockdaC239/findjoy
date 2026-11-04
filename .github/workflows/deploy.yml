@@ -89,9 +89,12 @@ jobs:
           SERVER_PATH: /home/${{ secrets.DEPLOY_USER }}/apps/findjoy
           RELEASE_ID: ${{ steps.release.outputs.id }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
-            "$USER@$HOST" "mkdir -p '$SERVER_PATH/releases/$RELEASE_ID'"
-          rsync -avz --delete \
+          # 先增量同步到常驻镜像目录，再在服务器本地复制到不可变发布目录。
+          # 跨洋链路实测约 16 KB/s，全量 9 MB 要 7-9 分钟；镜像目录跨次复用后只传变更文件。
+          MIRROR="$SERVER_PATH/.deploy/source"
+          SSH_OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=no"
+          ssh $SSH_OPTS "$USER@$HOST" "mkdir -p '$MIRROR' '$SERVER_PATH/releases/$RELEASE_ID'"
+          rsync -az --delete --stats \
             --exclude='.git/' \
             --exclude='node_modules/' \
             --exclude='.next/' \
@@ -102,8 +105,18 @@ jobs:
             --exclude='*.tsbuildinfo' \
             --exclude='.playwright-mcp/' \
             --exclude='.workbuddy/' \
-            -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no" \
-            ./ "$USER@$HOST:$SERVER_PATH/releases/$RELEASE_ID/"
+            --exclude='docs/' \
+            --exclude='commercialisation/' \
+            --exclude='design/brand/' \
+            --exclude='design/references/' \
+            --exclude='design/showcase/' \
+            --exclude='design/share-poster/' \
+            --exclude='design/*.md' \
+            --exclude='public/deck/' \
+            -e "ssh $SSH_OPTS" \
+            ./ "$USER@$HOST:$MIRROR/"
+          ssh $SSH_OPTS "$USER@$HOST" \
+            "rsync -a --delete '$MIRROR/' '$SERVER_PATH/releases/$RELEASE_ID/'"
 
       - name: 执行部署脚本
         env:

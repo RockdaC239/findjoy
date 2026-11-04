@@ -1,8 +1,8 @@
 name: CI
 
+# main 分支的校验由 deploy.yml 承担（同一套 typecheck/test/lint + 构建），
+# 这里只服务 PR 和手动触发，避免每次 push main 跑两遍且因缺少测试库必然失败。
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -17,8 +17,23 @@ jobs:
   verify:
     name: 类型检查 / 测试 / Lint / 构建
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15.19-alpine
+        env:
+          POSTGRES_USER: findjoy_test
+          POSTGRES_PASSWORD: findjoy_test_ci
+          POSTGRES_DB: findjoy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U findjoy_test -d findjoy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      TEST_DATABASE_URL: postgresql://findjoy_test:findjoy_test_ci@127.0.0.1:5432/findjoy_test
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
