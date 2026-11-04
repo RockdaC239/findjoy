@@ -42,11 +42,29 @@ const MIN_PARENT_AGE: Record<BirthParent["education"], number> = {
   大专或本科: 24,
   研究生: 27,
 };
+// 兄姐是“主角出生时已经出生的孩子”。三孩家庭在当代城市家庭中应明显偏少，
+// 乡村可以更多，但不能把“2个兄姐”当成常见默认。
+const SIBLING_COUNT_WEIGHTS: Record<BirthLocation["settlement"], Array<[number, number]>> = {
+  城区: [[0, 78], [1, 19], [2, 3]],
+  县城: [[0, 65], [1, 29], [2, 6]],
+  乡镇: [[0, 55], [1, 36], [2, 9]],
+  乡村: [[0, 45], [1, 40], [2, 15]],
+};
 const pick = <T>(random: () => number, entries: readonly T[]): T => {
   const value = random();
   if (!Number.isFinite(value) || value < 0 || value >= 1) throw new RangeError("出生抽样需要[0,1)随机数");
   return entries[Math.floor(value * entries.length)];
 };
+function weighted<T>(random: () => number, entries: ReadonlyArray<readonly [T, number]>): T {
+  const value = random();
+  if (!Number.isFinite(value) || value < 0 || value >= 1) throw new RangeError("出生抽样需要[0,1)随机数");
+  let roll = value * entries.reduce((sum, [, weight]) => sum + weight, 0);
+  for (const [item, weight] of entries) {
+    roll -= weight;
+    if (roll < 0) return item;
+  }
+  return entries[entries.length - 1][0];
+}
 function education(random: () => number, economy: string): BirthParent["education"] {
   // 编辑探索权重：资源较多时提高高等教育机会，但保留非学历经营路径。
   const pool = economy === "大富" || economy === "富裕"
@@ -89,7 +107,7 @@ export function rollBirthProfile(random: () => number = Math.random, options: Bi
     parents.push(nextParent(absent === 0 ? "继父" : "继母", "同住"));
   }
   const maxSiblingAge = Math.min(12, ...parents.map(item => item.birthAge - 18));
-  const siblingCount = pick(random, [0, 0, 0, 1, 1, 2]);
+  const siblingCount = weighted(random, SIBLING_COUNT_WEIGHTS[location.settlement]);
   const siblingAges = Array.from({ length: maxSiblingAge }, (_, i) => i + 1);
   const siblings: number[] = [];
   for (let i = 0; i < siblingCount && siblingAges.length; i++) {

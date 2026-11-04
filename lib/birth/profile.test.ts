@@ -28,6 +28,13 @@ describe("conditional birth household", () => {
     const [father, mother] = profile.parents;
     expect(validateBirthProfile({ ...profile, parents: [{ ...father, education: "研究生", birthAge: 24 }, { ...mother, education: "义务教育" }] })).toBeUndefined();
   });
+  it("keeps three-child families rare instead of treating two older siblings as common", () => {
+    const profiles = Array.from({ length: 1000 }, (_, i) => rollBirthProfile(seeded(i), options));
+    const counts = [0, 1, 2].map(count => profiles.filter(profile => profile.household.siblings.length === count).length);
+    expect(counts[2] / profiles.length).toBeLessThan(0.12);
+    expect(counts[0]).toBeGreaterThan(counts[1]);
+    expect(counts[1]).toBeGreaterThan(counts[2]);
+  });
   it("represents single, migrant, step and adoptive families without inventing death or institutions", () => {
     const single = rollBirthProfile(seeded(12), { ...options, structure: "单亲" });
     expect(single.parents.filter(parent => parent.status === "同住")).toHaveLength(1);
