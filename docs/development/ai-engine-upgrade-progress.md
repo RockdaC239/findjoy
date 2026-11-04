@@ -1,0 +1,69 @@
+# 人生引擎升级执行记录
+
+状态：实施中，不能视为整体验收完成。真实LLM验证尚未开始，不涉及生产发布。
+
+## 已提交
+
+- `dc591d7`：保存升级设计v0.1/v0.2与资料研究。
+- `1222c3d`：在新旧两种请求上下文中加入当轮写作任务，携带当前行动及最近4次已选行动，强调回应、关系连续性与真实回报。没有新增模型调用或修改保存协议。
+- 行为测试先验证缺少turn_task时失败，实现后相关4文件64项测试通过；`npm run typecheck`、`npm run lint`通过。全量测试和build留待整体变更完成后运行。
+
+## 进行中及待完成
+
+1. 提示词与例子升级：独立任务`upgrade_prompts`正在处理prompts/*.md、assemble.ts、output-format.ts中的示例与基线。
+2. 状态与记忆：补足关系/迁居/教育等事实更新，增加有边界的活跃人物、方向与未完事项；同步协议转换和历史兼容。
+3. 多样性：扩展机会条件，改进跨局处境/冲突去重，保护玩家合理返回旧方向。
+4. 回顾与分享：reflection、shareLines、来源事件ID；校验、保存、展示和公开隐私边界，新旧回顾兼容。
+5. 生成可靠性与成本：错误分类、失败轮费用、生产诊断不记录正文。
+6. 全量test/typecheck/lint/build，再真实LLM验证。使用用户指定的已登录账号，最多按问题微调3轮，不为凑数迭代。
+7. 测试报告：记录实际模型、样本/路径、叙事质量和缺陷、响应/费用、修正轮次和仍未证明的结论。不得仅以单元测试证明沉浸或付费提升。
+
+## 工作区边界
+
+已有app/globals.css、components/ReviewView.tsx与分享相关未提交文件属于开始时已有改动，未提交到本次上下文模块commit。后续如必须接入分享，应先核对差异并只处理授权部分。
+
+浏览器验证空间已经建立：Ego TaskSpace 37（FindJoy engine upgrade validation），p1当前为空白页；尚未确认指定账号会话。继续使用同一space，不另建。已读取ego-browser指南；工具提示有新版本，未升级，不因提示阻断当前任务。
+
+## 续轮进展：生活环境多样性
+
+- 增加12类生活机会环境，作为机会而非预设职业，写入现有flags并恢复为背景指令。
+- recentBackgroundAvoid复用当前用户近期存档，增加机会环境避重；旧存档无该字段仍兼容。
+- 替换开局“比赛/展览获奖”的集中示例，使用托付、工具、生活环境和参与机会。
+- 新行为测试先失败后通过；独立测试库确认可用：本地55439的findjoy_test（不是55438开发库）。相关3文件22项测试通过，typecheck及修改文件ESLint通过。
+- 浏览器提示Ego Lite可更新，但未升级；仍使用space37。未调用真实模型、未进入优化轮次。
+
+## 并行实施与验证会话
+
+- `adddf18`已提交生活机会环境及持久化/近期避重，相关3文件22项测试通过。
+- 子任务`state_memory_upgrade`负责life.ts、event-contract.ts及narrative.ts和测试；`generation_reliability`负责generate/model-client/errors及测试；`upgrade_prompts`仍负责提示词和示例。三个任务文件边界已告知，后续改回顾前等state任务提交，改输出类型前等prompts任务提交。
+- 已通过space37/p1访问http://localhost:3000/findjoy，页面可用且已登录（auth/me 200）。me仅返回id/displayName，尚不能证明是用户指定手机号；后续需通过个人中心/账号接口核实，不凭已登录就断言账号正确。
+- 当前未运行真实LLM，微调轮次仍为0。前一轮数据库测试曾因缺TEST_DATABASE_URL失败；已定位独立测试实例并成功复验，非未解决阻塞。
+
+## 续轮：编剧、记忆、可靠性与回顾契约
+
+已提交：
+- `e117050`：Review解析优先reflection，shareLines独立处理，旧回顾不自动转公开文案；新增normalizeShareLines基本长度/明显敏感词筛选（语义隐私仍需生成要求与预览）。4项测试red→green。
+- `056458d`：人物、方向与事项narrative状态、来源校验、城市/教育/父母/孩子/朋友/病史更新；同一applyNextEvent保存。
+- `900f067`：成人/童年/回顾提示词重写、移除艺术创业示例偏置与机械换轴。
+- `7aecc73`：永久错误不重试、日志不记正文、累计失败轮已知费用、CRLF/EOF流解析、回顾usage回调与证据ID白名单。
+- `7978d33`：output-format接入新事实与narrative类型，context携带活跃记忆及当前城市/教育；路由保存经apply校验的narrative转录；ending契约支持reflection/shareLines/evidenceEventIds，提示词说明字段且更新hash。
+
+最新验证：typecheck通过；独立TEST_DATABASE_URL相关6文件74项测试通过（含生成路由）；修改文件ESLint与diff check通过。全量test/build尚未执行。
+
+仍需完成：
+- 分享UI/海报接入用户选择的shareLines，不能默认公开observation/moments，保护已有未提交UI工作；设计tokens.json与showcase在实际UI改动前补读。
+- 回顾usage回调接入保存/汇总；目前只有接口，不能声称回顾成本已入账。
+- 题材职业硬禁用仍需放松为软提醒，保护玩家返回旧方向；当前只有机会环境增加，未完成整个多样性目标。
+- 增加context narrative快照、状态/转录往返集成覆盖及回顾源ID边界测试；review evidence合法ID不证明语义正确，需真实模型样本审阅。
+- 所有分项tests及完整test/typecheck/lint/build；真实LLM仍未调用，优化轮次0，测试报告尚未开始。
+- Ego space37 p1本地页面已登录；auth/me只返回id/displayName，仍需核实15200297440。不要另建space，不调用生产版本验证未上线变更。
+
+## 2026-11-04恢复后
+
+分项新增提交a90441a、8f99f35、c6d9b8d、93279eb。PG15独立测试库55441下341/341通过；lint/build/typecheck通过。实际账号已由本地会话ID和DB手机只读匹配确认。space37不存在，已接入当前用户space0，新建p1为本地验证页（保留其他网页）。Mock已关，原设置保存.data/engine-validation-settings.json，结束需恢复。
+
+真实测试已开始：首幕文件.data/engine-validation/opening-a.json为真实200完成；当前连续12节点脚本运行handle **exec session_id 6204**（不是functions.wait cell）。继续时先write_stdin轮询6204或核对.data/engine-validation/a-current.json及各a-next-N.json；不要因观察超时重开人生。脚本.data/engine-validation/continue-a.mjs。全量测试session91265已exit0，build session47501已exit0。
+
+正式报告草稿docs/development/ai-engine-upgrade-validation-2026-11-04.md，真实验证/海报浏览器验收/可能微调/恢复浏览器设置尚未完成，目标继续active。
+
+连续脚本session6204已正常exit0：首局到33岁，a-current.json为当前已保存状态，不再轮询该handle。真实发现琐事跨年拖延、职业婴儿/教育未开始，已做第1轮微调（见验证报告），下一步从a-current续推4～6节点验证纠正，并独立新开人生比较。优化轮次1/3，不重复计算工程修复。真实模型配置单价0，报告不能视为免费。待真实终点/回顾/海报浏览器测试及最终复测后才可完成目标。
