@@ -30,8 +30,16 @@ export function parseSimulationArgs(args: string[]): SimulationOptions {
   return { live: values.live, count, seed, output: values.output };
 }
 export function seededRandom(seed: number): () => number {
+  // mulberry32：比裸 LCG 的连续值相关性更弱，避免“抽到大富后下一次随机数总偏小”
+  // 这类伪相关影响稀有开局频率。仍只是本地验证用，生产走 Math.random。
   let current = seed >>> 0;
-  return () => ((current = (Math.imul(current, 1664525) + 1013904223) >>> 0) / 4294967296);
+  return () => {
+    current = (current + 0x6D2B79F5) >>> 0;
+    let value = current;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
 }
 export function compatibleManifest(expected: SimulationManifest, actual: unknown): boolean {
   if (!actual || typeof actual !== "object") return false;
@@ -83,6 +91,7 @@ export function summarizeBirthSamples(samples: BirthSample[]) {
   const valid = profiles.map(profile => validateBirthProfile(profile));
   const locations = profiles.map(profile => record(profile.location));
   const backgrounds = profiles.map(profile => record(profile.background));
+  const capitals = profiles.map(profile => record(profile.capital));
   const parents = profiles.flatMap(parentRows);
   const usages = samples.flatMap(sample => sample.event?.usage ? [sample.event.usage] : []);
   const promptTokens = usages.reduce((sum, usage) => sum + usage.promptTokens, 0);
@@ -119,6 +128,9 @@ export function summarizeBirthSamples(samples: BirthSample[]) {
     provinces: countValues(locations.map(location => location.province)), settlements: countValues(locations.map(location => location.settlement)),
     economies: countValues(backgrounds.map(background => background.economy)),
     structures: countValues(backgrounds.map(background => background.structure)),
+    goldenOpenings: countValues(capitals.map(capital => capital.golden).filter(Boolean)),
+    socialCapitals: countValues(capitals.map(capital => capital.social)),
+    wealthSources: countValues(capitals.map(capital => capital.wealthSource)),
     eventGenres: countValues(backgrounds.map(background => background.event)),
     parentRoles: countValues(parents.map(parent => parent.role)),
     parentStatuses: countValues(parents.map(parent => parent.status)),
@@ -222,6 +234,7 @@ ${JSON.stringify(summary, null, 2)}
     const location = record(profile.location);
     const household = record(profile.household);
     const background = record(profile.background);
+    const capital = record(profile.capital);
     const valid = validateBirthProfile(sample.initial);
     return `
 ## ${String(sample.index).padStart(3, "0")} · ${sample.status}
@@ -246,6 +259,12 @@ ${householdLines(household)}
 - 家庭经济：${text(background.economy)}
 - 家庭结构：${text(background.structure)}
 - 开局事件基调：${text(background.event)}
+
+### 家庭资本
+
+- 稀有开局：${text(capital.golden, "无")}
+- 社会资本：${text(capital.social, "未提供")}
+- 财富来源：${text(capital.wealthSource, "未提供")}
 
 ### 程序写入的开局状态
 

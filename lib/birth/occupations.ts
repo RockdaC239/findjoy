@@ -142,6 +142,7 @@ const sectors: { id: string; label: string; weight: number; roles: Role[] }[] = 
     ["社区社会工作者", 2, "受雇", "弹性工时", 2],
     ["基层司法辅助人员", 2, "受雇", "固定日班", 2],
     ["政策研究人员", 3, "受雇", "固定日班", 3],
+    ["公共事务管理岗位", 2, "受雇", "固定日班", 3],
   ] },
   { id: "culture", label: "文化体育与媒体", weight: 3, roles: [
     ["地方剧团演员", 1, "受雇", "弹性工时", 2],
@@ -174,6 +175,13 @@ export const BIRTH_OCCUPATIONS: BirthOccupation[] = sectors.flatMap(sector => se
   id: `${sector.id}-${index + 1}`, label, sector: sector.label, education: educationLevels[education], employment, schedule, incomeBand,
 })));
 
+// “官二代”不是任意公共服务业岗位都能代表；限定在公共事务/政策/基层治理角色，
+// 避免把社区助老、环卫、电力检修等写成干部家庭。
+export const PUBLIC_CAPITAL_LABELS = [
+  "政策研究人员",
+  "公共事务管理岗位",
+] as const;
+
 function unitRoll(random: () => number): number {
   const value = random();
   return Number.isFinite(value) ? Math.max(0, Math.min(1 - Number.EPSILON, value)) : 0;
@@ -189,10 +197,27 @@ function agricultureWeight(settlement: string): number {
   return 1;
 }
 
-export function sampleParentOccupation(random: () => number, options: { settlement: string; education: BirthOccupation["education"]; avoidIds?: readonly string[] }): BirthOccupation {
+export function sampleParentOccupation(random: () => number, options: {
+  settlement: string;
+  education: BirthOccupation["education"];
+  avoidIds?: readonly string[];
+  employment?: BirthOccupation["employment"];
+  sectorLabel?: string;
+  labels?: readonly string[];
+  minIncomeBand?: number;
+}): BirthOccupation {
   const level = educationLevels.indexOf(options.education);
   if (level < 0) throw new RangeError("父母教育程度无效");
-  const qualified = BIRTH_OCCUPATIONS.filter(role => educationLevels.indexOf(role.education) <= level);
+  const base = BIRTH_OCCUPATIONS.filter(role => educationLevels.indexOf(role.education) <= level
+    // 城区不安排农林渔业角色：避免“北京东城粮食种植户/香港果园经营者”这类地理冲突。
+    && !(options.settlement === "城区" && role.sector === "农林渔业"));
+  const constrained = base.filter(role =>
+    (!options.employment || role.employment === options.employment)
+    && (!options.sectorLabel || role.sector === options.sectorLabel)
+    && (!options.labels || options.labels.includes(role.label))
+    && (options.minIncomeBand === undefined || role.incomeBand >= options.minIncomeBand));
+  // 稀有开局会限定“个体经营/公共服务”；没有符合条件时才回落到普通合格池。
+  const qualified = constrained.length ? constrained : base;
   // 学历高于岗位要求是现实可能，但不应成为默认：优先在“同一档或低一档”的岗位中抽样，
   // 避免研究生被大量安排成饲养员/分拣员。没有合格岗位时才回落到全部合规岗位。
   const preferred = qualified.filter(role => level - educationLevels.indexOf(role.education) <= 1);

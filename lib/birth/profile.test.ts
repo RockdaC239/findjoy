@@ -23,6 +23,36 @@ describe("conditional birth household", () => {
       }
     }
   });
+  it("keeps golden openings rare and makes their family capital coherent", () => {
+    const rich = Array.from({ length: 2000 }, (_, i) => rollBirthProfile(seeded(i), { ...options, economy: "大富" }));
+    const richGolden = rich.filter(profile => profile.capital?.golden === "富二代");
+    expect(richGolden.length / rich.length).toBeGreaterThan(0.22);
+    expect(richGolden.length / rich.length).toBeLessThan(0.38);
+    for (const profile of richGolden) {
+      expect(profile.capital?.wealthSource).toBe("企业经营与资产");
+      expect(profile.parents.some(parent => parent.occupation.employment === "个体经营")).toBe(true);
+      expect(validateBirthProfile(JSON.parse(JSON.stringify(profile)))).toEqual(profile);
+    }
+
+    const affluent = Array.from({ length: 2000 }, (_, i) => rollBirthProfile(seeded(i), { ...options, economy: "富裕" }));
+    const official = affluent.filter(profile => profile.capital?.golden === "官二代");
+    expect(official.length / affluent.length).toBeGreaterThan(0.08);
+    expect(official.length / affluent.length).toBeLessThan(0.16);
+    for (const profile of official) {
+      expect(profile.capital?.social).toBe("体制内");
+      expect(profile.parents.some(parent => parent.occupation.sector === "公共服务")).toBe(true);
+      expect(profile.parents.some(parent => ["政策研究人员", "公共事务管理岗位"].includes(parent.occupation.label))).toBe(true);
+      expect(validateBirthProfile(JSON.parse(JSON.stringify(profile)))).toEqual(profile);
+    }
+    expect(Array.from({ length: 500 }, (_, i) => rollBirthProfile(seeded(i), { ...options, economy: "拮据" })).some(profile => profile.capital?.golden)).toBe(false);
+  });
+  it("marks only rare capital openings and keeps ordinary birth facts free of the golden directive", () => {
+    const rich = Array.from({ length: 500 }, (_, i) => rollBirthProfile(seeded(i), { ...options, economy: "大富" }));
+    const golden = rich.find(profile => profile.capital?.golden === "富二代")!;
+    expect(buildBirthDirective(golden)).toContain("【稀有开局】");
+    const ordinary = rich.find(profile => !profile.capital?.golden)!;
+    expect(buildBirthDirective(ordinary)).not.toContain("【稀有开局】");
+  });
   it("rejects a parent whose age is impossible for their education", () => {
     const profile = rollBirthProfile(seeded(5), options);
     const [father, mother] = profile.parents;

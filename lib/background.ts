@@ -29,11 +29,9 @@ export interface LifeBackground {
   opportunity?: OpportunitySetting;
 }
 
-// 概率权重：经济/结构参考现实分布（普通与小康为主，大富稀有；双亲完整为主，单亲/留守/隔代/收养为少数）；
-// 事件基调四等分偏置一点（安稳与机会略高于变故）。
-// avoid 采用软避重：最近用过的取值降权，而不是整类删除。历史实现会在一两局后
-// 把少数派全部过滤掉，逼出单一结构；降权既降低连续重复，也保留现实分布。
-// 系数不能太低：若“双亲完整”也被降得太狠，未被避开的少数派反而会压过它。
+// 概率权重：经济/结构参考现实分布，但为了让玩家有更多可玩的开局，
+// 富裕+大富合计提到约25%；仍低于“拮据+普通”的45%，也低于“普通”单独的35%。
+// 这是产品调优权重，不是现实收入分布。
 function pickWeighted<T>(random: () => number, entries: Array<[T, number]>, avoid: ReadonlyArray<T> = []): T {
   const avoided = new Set(avoid);
   const pool = entries.map(([value, weight]) => [value, avoided.has(value) ? weight * 0.5 : weight] as [T, number]);
@@ -58,20 +56,34 @@ export interface BackgroundAvoid {
   opportunity?: ReadonlyArray<OpportunitySetting>;
 }
 
+export type Settlement = "城区" | "县城" | "乡镇" | "乡村";
 export interface RollBackgroundOptions {
   /**
    * 普通/主题人生的出生地点、照护与通勤已由 BirthProfile 生成；
    * 此时不再额外抽一个可能与出生地矛盾的生活机会环境。旧存档仍可读取。
    */
   includeOpportunity?: boolean;
+  /** 同一全国权重下再按城乡做轻度经济先验：城市富裕略高，乡村略低。 */
+  settlement?: Settlement;
 }
 
+const BASE_ECONOMY_WEIGHTS: Array<[FamilyEconomy, number]> = [
+  ["拮据", 10], ["普通", 35], ["小康", 30], ["富裕", 20], ["大富", 5],
+];
+const SETTLEMENT_ECONOMY_WEIGHTS: Record<Settlement, Array<[FamilyEconomy, number]>> = {
+  城区: [["拮据", 9], ["普通", 34], ["小康", 28], ["富裕", 24], ["大富", 5]],
+  县城: [["拮据", 11], ["普通", 38], ["小康", 30], ["富裕", 17], ["大富", 4]],
+  乡镇: [["拮据", 12], ["普通", 40], ["小康", 30], ["富裕", 15], ["大富", 3]],
+  乡村: [["拮据", 14], ["普通", 42], ["小康", 30], ["富裕", 12], ["大富", 2]],
+};
+
 export function rollBackground(random: () => number = Math.random, avoid: BackgroundAvoid = {}, options: RollBackgroundOptions = {}): LifeBackground {
+  const economyWeights = options.settlement ? SETTLEMENT_ECONOMY_WEIGHTS[options.settlement] : BASE_ECONOMY_WEIGHTS;
   return {
     ...(options.includeOpportunity === false
       ? {}
       : { opportunity: pickWeighted(random, OPPORTUNITY_SETTINGS.map(value => [value, 1]), avoid.opportunity) }),
-    economy: pickWeighted(random, [["拮据", 12], ["普通", 38], ["小康", 32], ["富裕", 14], ["大富", 4]], avoid.economy),
+    economy: pickWeighted(random, economyWeights, avoid.economy),
     structure: pickWeighted(random, [["双亲完整", 68], ["单亲", 12], ["再婚家庭", 7], ["留守隔代", 8], ["收养", 5]], avoid.structure),
     event: pickWeighted(random, [["安稳温暖", 30], ["机会降临", 25], ["家庭变故", 25], ["平凡开端", 20]], avoid.event),
   };

@@ -45,6 +45,7 @@ describe("synthetic opening simulation", () => {
     expect(report).toContain("出生地点");
     expect(report).toContain("父母（主角出生时）");
     expect(report).toContain("程序写入的开局状态");
+    expect(report).toContain("家庭资本");
     expect(report).toContain("交给模型的出生设定");
     expect(report).toContain("模型请求失败");
     expect(report).toContain("启发式");

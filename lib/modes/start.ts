@@ -1,4 +1,5 @@
 import { rollBirthProfile, type BirthProfile } from "../birth/profile";
+import { sampleBirthLocation } from "../birth/locations";
 import {
   backgroundToFinance,
   backgroundToFlags,
@@ -110,12 +111,16 @@ export function resolveStartPlan(selection: StartSelection, options: StartPlanOp
     if (selection.mode === "theme" && !getTheme(selection.theme)) {
       throw new Error(`Unknown theme: ${selection.theme}`);
     }
+    // 先按城市层级抽地点，再让经济与家庭条件共用同一地点；
+    // 避免“乡村富裕/城区普通”完全由两套独立随机数碰撞出来。
+    const random = options.random ?? Math.random;
+    const location = sampleBirthLocation(random, options.backgroundAvoid?.provinceCodes);
     // 出生地点、照护与通勤由 BirthProfile 生成，不再叠加可能与出生地矛盾的
     // 旧“生活机会环境”。旧存档仍通过 flagsToBackground 兼容读取。
-    const background = rollBackground(options.random, options.backgroundAvoid, { includeOpportunity: false });
-    const birth = rollBirthProfile(options.random ?? Math.random, {
+    const background = rollBackground(random, options.backgroundAvoid, { includeOpportunity: false, settlement: location.settlement });
+    const birth = rollBirthProfile(random, {
       economy: background.economy, structure: background.structure,
-      avoidProvinceCodes: options.backgroundAvoid?.provinceCodes,
+      location,
       avoidOccupationIds: options.backgroundAvoid?.occupationIds,
     });
     return {

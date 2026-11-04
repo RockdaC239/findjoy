@@ -103,6 +103,22 @@ describe("life background", () => {
     expect(majority / total).toBeGreaterThan(0.5);
   });
 
+  it("lowers rich share in rural areas and raises it in cities", () => {
+    const richShare = (settlement: "城区" | "乡村") => {
+      let rich = 0;
+      for (let i = 0; i < 5000; i++) {
+        const bg = rollBackground(seededRandom(i), {}, { settlement, includeOpportunity: false });
+        if (bg.economy === "富裕" || bg.economy === "大富") rich++;
+      }
+      return rich / 5000;
+    };
+    const urban = richShare("城区");
+    const rural = richShare("乡村");
+    expect(urban).toBeGreaterThan(rural);
+    expect(urban).toBeGreaterThan(0.25);
+    expect(rural).toBeLessThan(0.2);
+  });
+
   it("builds a directive that covers all three dimensions and no talent", () => {
     const directive = buildBackgroundDirective({ economy: "富裕", structure: "再婚家庭", event: "平凡开端" });
     expect(directive).toContain("【本局出身档案】");
