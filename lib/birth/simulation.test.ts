@@ -6,8 +6,8 @@ import { parseSimulationArgs, seededRandom, compatibleManifest, renderBirthRepor
 describe("synthetic opening simulation", () => {
   it("requires an explicit live flag and validates count and seed", () => {
     expect(parseSimulationArgs([])).toMatchObject({ live: false, count: 50 });
-    expect(parseSimulationArgs(["--live", "--count", "50", "--seed", "91"])).toMatchObject({ live: true, count: 50, seed: 91 });
-    for (const args of [["--count", "0"], ["--count", "1.2"], ["--seed", "NaN"], ["--seed", "9007199254740993"], ["--wat"]]) expect(() => parseSimulationArgs(args)).toThrow();
+    expect(parseSimulationArgs(["--live", "--count", "50", "--seed", "91", "--delay-ms", "4000"])).toMatchObject({ live: true, count: 50, seed: 91, delayMs: 4000 });
+    for (const args of [["--count", "0"], ["--count", "1.2"], ["--seed", "NaN"], ["--seed", "9007199254740993"], ["--delay-ms", "-1"], ["--wat"]]) expect(() => parseSimulationArgs(args)).toThrow();
   });
   it("replays random draws for a sample independent of previous sample consumption", () => {
     const sequence = (seed: number) => { const rng = seededRandom(seed); return Array.from({ length: 20 }, rng); };

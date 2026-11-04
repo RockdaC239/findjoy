@@ -68,6 +68,8 @@ async function main() {
       console.log(`${index}/${options.count} resume ${sample.status}`);
       continue;
     }
+    // 真实请求顺序执行并留出间隔；DeepSeek 每分钟请求数有限，避免 50 轮在后半段集中撞 429。
+    if (options.live && index > 1 && options.delayMs > 0) await new Promise(resolve => setTimeout(resolve, options.delayMs));
     const state = createStartLife(plan, index % 2 ? "female" : "male");
     const startState: BirthStartSnapshot = {
       basic: state.basic,

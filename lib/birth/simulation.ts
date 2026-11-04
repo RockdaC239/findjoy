@@ -2,7 +2,7 @@ import type { LifeState, NextEvent } from "../life";
 import { parseArgs } from "node:util";
 import { buildBirthDirective, validateBirthProfile } from "./profile";
 
-export interface SimulationOptions { live: boolean; count: number; seed: number; output: string }
+export interface SimulationOptions { live: boolean; count: number; seed: number; output: string; delayMs: number }
 export interface SimulationManifest { live: boolean; count: number; seed: number; model: string; fingerprint: string }
 export interface BirthStartSnapshot {
   basic: LifeState["basic"];
@@ -22,12 +22,14 @@ export function parseSimulationArgs(args: string[]): SimulationOptions {
   const { values } = parseArgs({ args, options: {
     live: { type: "boolean", default: false }, count: { type: "string", default: "50" },
     seed: { type: "string", default: "20261104" }, output: { type: "string", default: ".data/birth-openings-2026-11-04" },
+    "delay-ms": { type: "string", default: "0" },
   } });
-  const count = Number(values.count), seed = Number(values.seed);
+  const count = Number(values.count), seed = Number(values.seed), delayMs = Number(values["delay-ms"]);
   if (!Number.isSafeInteger(count) || count < 1 || count > 1000) throw new Error("count须为1～1000的整数");
   if (!Number.isSafeInteger(seed)) throw new Error("seed须为安全整数");
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 60_000) throw new Error("delay-ms须为0～60000的整数");
   if (!values.output.trim()) throw new Error("output不能为空");
-  return { live: values.live, count, seed, output: values.output };
+  return { live: values.live, count, seed, delayMs, output: values.output };
 }
 export function seededRandom(seed: number): () => number {
   // mulberry32：比裸 LCG 的连续值相关性更弱，避免“抽到大富后下一次随机数总偏小”
@@ -113,7 +115,8 @@ export function summarizeBirthSamples(samples: BirthSample[]) {
     if (event.timePassed < 1 || event.timePassed >= 15) result.push("落地年龄不在童年范围");
     if (event.choices.length) result.push("童年输出了选项");
     if (event.outcome === "death") result.push("童年终点需人工核对合理性");
-    if (event.objectiveChanges.city && event.objectiveChanges.city !== record(record(sample.initial).location).city) result.push("开局城市变更需人工核对迁居依据");
+    const initialCity = record(record(sample.startState).basic).city;
+    if (event.objectiveChanges.city && initialCity && event.objectiveChanges.city !== initialCity) result.push("开局城市变更需人工核对迁居依据");
     return result.map(message => ({ index: sample.index, message }));
   });
   const warnings = [...consistencyWarnings(samples, profiles, valid), ...modelWarnings];
