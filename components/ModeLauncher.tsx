@@ -67,7 +67,6 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
   const currentMode = LIFE_MODES.find((item) => item.id === mode) ?? LIFE_MODES[0];
   const scripts = scriptsForEra(eraId);
   const selectedScript = scripts.find((script) => script.id === scriptId) ?? scripts[0];
-  const selectedTheme = THEMES.find((item) => item.id === theme) ?? THEMES[0];
 
   function selectMode(next: LifeMode) {
     setMode(next);
@@ -112,13 +111,7 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
     onStart({ mode: "foru", brief: validated.brief });
   }
 
-  const cta = mode === "normal"
-    ? "开始普通模式"
-    : mode === "theme"
-      ? `开始${selectedTheme.label}人生`
-      : mode === "script"
-        ? "进入这个剧本"
-        : "生成我的 ForU 模式";
+  const cta = "开始人生";
 
   const note = mode === "normal"
     ? "从 0 岁开始，出身随机。"
@@ -180,6 +173,10 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
             <p className="mode-panel-eyebrow">{currentMode.eyebrow}</p>
             <h2>{currentMode.label}</h2>
           </div>
+          <button type="submit" className="primary-button" disabled={disabled}>
+            <span>{cta}</span>
+            <span aria-hidden="true">→</span>
+          </button>
         </div>
 
         {mode === "normal" ? (
@@ -370,10 +367,6 @@ export function ModeLauncher({ disabled, resumableLife, isResuming, onStart, onR
 
         <div className="mode-start-row">
           <p className="mode-start-note">{note}</p>
-          <button type="submit" className="primary-button" disabled={disabled}>
-            <span>{cta}</span>
-            <span aria-hidden="true">→</span>
-          </button>
         </div>
       </form>
     </section>

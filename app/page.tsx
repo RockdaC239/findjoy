@@ -195,7 +195,7 @@ export default function StartPage() {
     <main className="page page--start">
       <header className="topbar" aria-label="Primary navigation">
         <DeveloperLauncher />
-        <div className="topbar-actions"><AccountNav>
+        <div className="topbar-actions"><AccountNav collapseOnMobile>
           <Link className="settings-button" href="/bookmarks">觅乐书签</Link>
           <button className="settings-button" onClick={openHistory}>过往人生</button>
           {MODEL_SETTINGS_UI_ENABLED && <button className="settings-button" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>模型设置</button>}
