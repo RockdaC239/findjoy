@@ -317,7 +317,7 @@ export default function ShowcaseDeck() {
                     height={1024}
                   />
                 </div>
-                <p className={styles.qrUrl}>http://124.221.235.9/findjoy</p>
+                <p className={styles.qrUrl}>https://findfire.club/findjoy</p>
               </div>
               <p className={styles.qrHint}>手机扫码 · 一局约 20 分钟</p>
             </aside>

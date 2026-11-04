@@ -184,7 +184,7 @@ openssl s_client -connect findfire.club:443 -servername findfire.club </dev/null
 
 ### 6.7 二维码与分享链接
 
-`app/showcase/ShowcaseDeck.tsx` 的链接文案和 `public/findjoy-qr.png` 目前指向 `http://124.221.235.9/findjoy`。强制 HTTPS 后，用 IP 访问的 HTTP 会被 301 到 `https://<IP>`，触发证书不匹配警告；建议把二维码和文案改成 `https://findfire.club/findjoy`。
+`app/showcase/ShowcaseDeck.tsx` 的链接文案和 `public/findjoy-qr.png` 已改为 `https://findfire.club/findjoy`，分享海报也复用同一张二维码。不要再用 IP 地址生成二维码，否则 HTTPS 证书不匹配，手机扫码会先出现安全警告。
 
 ## 发布目录、预检与回滚
 
