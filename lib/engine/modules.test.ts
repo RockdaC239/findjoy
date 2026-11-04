@@ -47,3 +47,11 @@ it("preserves grounded ending prose while filtering public copy independently", 
   expect(ending?.shareLines).toEqual(["留给别人的时间里，也可以有自己。"]);
   expect(ending?.evidenceEventIds).toEqual(["e1", "e2"]);
 });
+
+it("builds ending evidence from actual decisions and the following saved consequence", () => {
+ const state=createStarterLife({age:25});
+ state.history=[{id:"decision",age:22,type:"career",title:"安排周末",story:"周末有人请你接活",importance:0.8,choices:[{id:"A",text:"接活"},{id:"B",text:"留给自己"}],choiceId:"B",choiceText:"留给自己"},{id:"result",age:25,type:"relationship",title:"与朋友骑行",story:"你和朋友开始周末骑行",importance:0.7}];
+ const prompt=JSON.parse(buildEndingMessages(state)[1].content);
+ expect(prompt.decision_evidence).toEqual([{eventId:"decision",age:22,situation:"安排周末",action:"留给自己",consequence:{eventId:"result",age:25,title:"与朋友骑行"}}]);
+ expect(JSON.stringify(prompt.decision_evidence)).not.toContain("接活");
+});

@@ -184,13 +184,20 @@ export function buildEndingMessages(state: LifeState): NextEventMessage[] {
   const prompt = JSON.stringify({
     life_state: state,
     scenario: state.scenario,
+    decision_evidence: state.history.flatMap((event, index) => {
+      if (!event.choiceText) return [];
+      const next = state.history[index + 1];
+      return [{ eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
+        ...(next ? { consequence: { eventId: next.id, age: next.age, title: next.title } } : {}) }];
+    }),
     recent_history: state.history.slice(-12),
     major_memories: state.majorMemories,
     behavioral_summary: state.psychology.behaviorPatterns,
     current_age: state.basic.age,
     death_cause: state.flags.deathCause ?? "natural",
   });
-  const systemPrompt = scenarioReview ? `${ENDING_SYSTEM_PROMPT}\n\n${scenarioReview}` : ENDING_SYSTEM_PROMPT;
+  const evidenceRule = "回顾中涉及你选择了什么、发生在哪个年龄时，以decision_evidence中的action与age为准。历史choices是当时可选项，不代表选择；后续consequence只能说明下一事件，不能把其年龄移到前一决定。引用具体选择时evidenceEventIds必须包含相应eventId。不要把普通叙述或未选行动写成玩家决定。";
+  const systemPrompt = [ENDING_SYSTEM_PROMPT, scenarioReview, evidenceRule].filter(Boolean).join("\n\n");
   const messages = [{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: prompt }];
   return messages;
 }
