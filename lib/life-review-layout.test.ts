@@ -8,6 +8,7 @@ it("keeps every fact, moment, reflection and both equal answers in the vertical 
   const html = renderToStaticMarkup(createElement(LifeReview, { review }));
   for (const text of [...review.facts, ...review.moments, review.observation, review.question]) expect(html).toContain(text);
   expect(html).toContain('id="review-title">你的一生</h1>');
+  expect(html).toMatch(/id="review-facts-title"[^>]*>这一生<\/h2>/);
   expect(html.match(/class="primary-button /g)).toHaveLength(2);
   expect(html).not.toContain("<br");
   expect(html.indexOf("改变方向的时刻")).toBeLessThan(html.indexOf("review-reflection-title"));
