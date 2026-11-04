@@ -3,14 +3,14 @@ import { redirect } from "next/navigation";
 import { BrandLogo } from "../../components/BrandLogo";
 import { currentUser } from "../../lib/auth";
 import { authingConfigured } from "../../lib/authing";
-import { safeReturnTo } from "../../lib/auth-policy";
+import { appPathWithoutBase, safeReturnTo } from "../../lib/auth-policy";
 
 export const metadata = { title: "登录 · FindJoy 觅乐" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string; error?: string }> }) {
   const params = await searchParams;
   const returnTo = safeReturnTo(params.returnTo);
-  if (await currentUser()) redirect(returnTo);
+  if (await currentUser()) redirect(appPathWithoutBase(returnTo));
   const configured = authingConfigured();
   return (
     <div className="page account-page">

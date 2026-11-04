@@ -16,3 +16,15 @@ export function safeReturnTo(value: string | null | undefined): string {
 export function hasSameOrigin(request: Request, appOrigin: string): boolean {
   return request.headers.get("origin") === new URL(appOrigin).origin;
 }
+
+/**
+ * next/navigation 的 redirect() 会自动补 basePath。
+ * returnTo 里已经带了 /findjoy，直接传给 redirect 会变成 /findjoy/findjoy（404）。
+ */
+export function appPathWithoutBase(returnTo: string): string {
+  if (returnTo === BASE) return "/";
+  if (returnTo.startsWith(`${BASE}/`) || returnTo.startsWith(`${BASE}?`) || returnTo.startsWith(`${BASE}#`)) {
+    return returnTo.slice(BASE.length);
+  }
+  return returnTo.startsWith("/") ? returnTo : `/${returnTo}`;
+}
