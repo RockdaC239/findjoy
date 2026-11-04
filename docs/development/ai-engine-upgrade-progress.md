@@ -1,6 +1,6 @@
 # 人生引擎升级执行记录
 
-状态：实施中，不能视为整体验收完成。真实LLM验证尚未开始，不涉及生产发布。
+状态：本次实施与三轮真实验证已收尾，产品质量暂不建议发布。最终结果见 [验证报告](./ai-engine-upgrade-validation-2026-11-04.md)。下文为过程记录，旧“待完成”条目以最终报告结论为准。
 
 ## 已提交
 
@@ -75,3 +75,7 @@ session14231已exit0，第一局100岁44节点死亡，a-ending.json真实200；
 运行确认：已重启原next dev，本次dev exec session84468运行中。新B人生10节点到28岁职业教育正常，之后真实续推session **43410**仍运行，脚本finish-b.mjs(最多35步)，逐文件b-final-next-N.json。目前已到56岁，勿重复启动。UI用space0/p3验收回顾和海报；space0/p1为生成测试，p2是用户网页不要操作/关闭。手机尺寸已恢复桌面。图片下载.data/engine-validation/share-poster.png已检查。新增第3轮回顾evidence对照，commit7649fe3，调优已3/3，不再额外生成策略改动。上一次全量test343通过(在新增最后1项模块测试前)，最终需再全量test并build/typecheck/lint；build应停dev或用隔离输出，不能再共享运行目录造成疑惑。
 
 B续推session43410已exit0，到77岁，b-current更新。接着end-b.mjs最多20步及终点回顾运行session **77618**；最终全量测试session **95878**(final3.log)。等待这些具体句柄，不重开人生。关键未解决：B父亲病情进入玩家conditions、对话/检查跨年过长；已3轮不继续调策略，报告建议暂不生产发布。next-env.d.ts被next dev自动改为.next/dev路径，最终build会改回，勿把它误作用户改动。最终需停dev84468后build，再typecheck/lint；恢复Mock并结束只由本次创建的p1/p3，保护p2用户网页。实测质量审计子任务engine_audit正在只读整理/tmp/findjoy-final-quality-audit.md。
+
+## 最终收尾
+
+B terminal脚本session53840已exit0，到106岁75节点、ending200。A/B回顾、同处境两分支、海报桌面/390px手机切换和下载均实际测试。3轮微调用完，不继续改策略。父亲病情误归玩家、同次谈话跨年、回顾解读仍是质量风险，报告不建议直接生产发布。浏览器原Mock设置已恢复，测试p1/p3关闭，p2原用户页保留；用户空间已finish。
