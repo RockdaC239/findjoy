@@ -91,6 +91,10 @@ jobs:
         run: |
           # 先增量同步到常驻镜像目录，再在服务器本地复制到不可变发布目录。
           # 跨洋链路实测约 16 KB/s，全量 9 MB 要 7-9 分钟；镜像目录跨次复用后只传变更文件。
+          # 图片只同步运行期真正用到的：app/icon.svg、public/findjoy-logo.svg（分享海报水印）、
+          # public/findjoy-qr.png（分享海报/展示页二维码）、public/bookmarks/default.svg（默认封面）、
+          # public/icons/wechat-pay.svg（收银台）。public/authing-brand.css 被 Authing 登录页远程引用，必须保留。
+          # 展示页配图 public/deck/ 与 design/ 素材、docs/ 均不上传。
           MIRROR="$SERVER_PATH/.deploy/source"
           SSH_OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=no"
           ssh $SSH_OPTS "$USER@$HOST" "mkdir -p '$MIRROR' '$SERVER_PATH/releases/$RELEASE_ID'"
