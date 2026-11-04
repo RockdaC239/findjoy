@@ -22,3 +22,8 @@ describe("provider catalog", () => {
     ]);
   });
 });
+
+it("selects the official V4.1 Flash API name by default without labelling CNY prices as USD", () => {
+  expect(resolveProviderModel("deepseek", undefined)).toMatchObject({model:"deepseek-flash",inputCostPerMillion:0,outputCostPerMillion:0});
+  expect(getProvider("deepseek")?.models[0].label).toContain("V4.1");
+});
