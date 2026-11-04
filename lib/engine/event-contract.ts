@@ -1,7 +1,7 @@
 import { normalizeShareLines } from "../share-copy";
 import { boundedText, boundedStrings, normalizeNarrative } from "./narrative";
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, LifeEnding } from "../life";
-import { detectStorylineDomains, storylineLabel, type StorylineGuards } from "../storyline";
+import type { StorylineGuards } from "../storyline";
 // 模型输出在这里转成内部 NextEvent；不要让原始 JSON 直接更新 LifeState。
 import { ModelError } from "./errors";
 
@@ -195,28 +195,12 @@ export function parseWithTruncationRepair(text: string): unknown {
   }
 }
 
-// 从生成的 JSON 里提取"职业载体"主线域：occupation 变化 + career 事件的标题。
-// 只认职业信号，不扫 story/choices——"妈妈住院"的家庭剧情、业余爱好都不会被误判为主线。
-function generatedStorylineDomains(candidate: Record<string, unknown>): string[] {
-  const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
-  const type = event ? normalizeEventType(event.type) : undefined;
-  if (!type || !event) return [];
-  const changes = (candidate.objectiveChanges && typeof candidate.objectiveChanges === "object"
-    ? candidate.objectiveChanges as Record<string, unknown>
-    : candidate.objective_changes && typeof candidate.objective_changes === "object"
-      ? candidate.objective_changes as Record<string, unknown>
-      : {});
-  const texts: string[] = [];
-  if (typeof changes.occupation === "string" && changes.occupation.trim()) texts.push(changes.occupation);
-  if (type === "career" && typeof event.title === "string") texts.push(event.title);
-  return detectStorylineDomains(texts);
-}
-
 // 诊断哪一道契约关卡失败：返回 null 表示通过，否则返回具体原因。
 // expectChoices=false 表示童年阶段，不要求 choices 字段。
 // previousChoices=上一个节点的选项，用于“相邻节点张力轴不得相同”的轮换硬约束。
-// storylineGuards=题材域层防重守卫（跨人生 avoidStorylines / 单局内 leftStorylines）。
-export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, storylineGuards?: StorylineGuards): string | null {
+// 保留storylineGuards调用兼容；职业多样性由生成前软提醒处理，不以关键词否决玩家方向。
+export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, _storylineGuards?: StorylineGuards): string | null {
+  void _storylineGuards;
   if (!value || typeof value !== "object") return "返回内容不是 JSON 对象";
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
@@ -232,16 +216,6 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
     if (currentAxis && previousAxis && currentAxis === previousAxis) {
       return "价值张力轴与上一节点重复（都是\"" + currentAxis + "\"）。相邻节点必须换一条价值轴：上一节点已是\"" + currentAxis + "\"，本次请改用其它张力轴（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要再用\"闯出去/留守/折中\"同套模板。";
     }
-  }
-  // 题材域层防重（第三层硬契约）：跨人生主线与本局已离开方向都不得再进入。
-  const generatedStorylines = generatedStorylineDomains(candidate);
-  if (storylineGuards?.avoidStorylines && storylineGuards.avoidStorylines.length > 0) {
-    const hit = generatedStorylines.find((domain) => storylineGuards!.avoidStorylines!.includes(domain));
-    if (hit) return "题材与最近一局人生主线重复（" + storylineLabel(hit) + "）。最近几局已经走过" + storylineGuards.avoidStorylines.map(storylineLabel).join("、") + "，本局不要再进入这些题材，请换一个完全不同的方向。";
-  }
-  if (storylineGuards?.leftStorylines && storylineGuards.leftStorylines.length > 0) {
-    const hit = generatedStorylines.find((domain) => storylineGuards!.leftStorylines!.includes(domain));
-    if (hit) return "又回到了本局已经离开的方向（" + storylineLabel(hit) + "）。你在这局人生里已经走过" + storylineGuards.leftStorylines.map(storylineLabel).join("、") + "并已离开，不要再回头进入这些题材；可以继续当前职业，也可以转向全新的方向。";
   }
   const texts = [candidate.story, candidate.memory, event.title, ...normalizeChoices(candidate.choices).map((item) => item.text)]
     .filter((item): item is string => typeof item === "string");
@@ -287,7 +261,8 @@ const FILL_CHOICES: Record<string, string[]> = {
 // - choices 不足 2 个 → 自动补齐
 // - 价值张力轴重复 → 接受（轮换改为下一轮提示词预防，见 buildSystemPrompt 的 avoidAxis）
 // 不可修复的问题（核心字段缺失、含姓名指示词）返回 null，仍走重试。
-export function repairGeneratedEvent(value: unknown, expectChoices: boolean, storylineGuards?: StorylineGuards): NextEvent | null {
+export function repairGeneratedEvent(value: unknown, expectChoices: boolean, _storylineGuards?: StorylineGuards): NextEvent | null {
+  void _storylineGuards;
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
@@ -299,11 +274,6 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean, sto
   if (candidate.outcome === "death") return normalizeGeneratedEvent(candidate, false);
   const texts = [candidate.story, candidate.memory, event.title].filter((item): item is string => typeof item === "string");
   if (texts.some(containsNameInstruction)) return null;
-  // 题材冲突不可修复（修复层只解决格式问题）：命中跨局防重或单局内防重的主线 → 返回 null 走重试。
-  if (storylineGuards && ((storylineGuards.avoidStorylines?.length ?? 0) > 0 || (storylineGuards.leftStorylines?.length ?? 0) > 0)) {
-    const hit = generatedStorylineDomains(candidate).find((domain) => (storylineGuards.avoidStorylines?.includes(domain) ?? false) || (storylineGuards.leftStorylines?.includes(domain) ?? false));
-    if (hit) return null;
-  }
   const choices = normalizeChoices(candidate.choices);
   if (expectChoices) {
     const pool = FILL_CHOICES[type] ?? FILL_CHOICES.random;

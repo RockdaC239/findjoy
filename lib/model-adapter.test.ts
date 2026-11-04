@@ -522,12 +522,12 @@ describe("storyline guards (题材域层防重)", () => {
     objectiveChanges: { occupation },
   });
 
-  it("rejects a career direction that repeats a recent life's main storyline (cross-life)", () => {
+  it("accepts a valid career event even when its domain appeared in a recent life", () => {
     const value = careerEvent("运动员", "进省队");
     const reason = diagnoseGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports"] });
-    expect(reason).toContain("体育竞技");
-    expect(normalizeGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports"] })).toBeNull();
-    expect(repairGeneratedEvent(value, true, { avoidStorylines: ["sports"] })).toBeNull();
+    expect(reason).toBeNull();
+    expect(normalizeGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports"] })).not.toBeNull();
+    expect(repairGeneratedEvent(value, true, { avoidStorylines: ["sports"] })).not.toBeNull();
   });
 
   it("accepts a career direction outside the recent storylines", () => {
@@ -536,12 +536,12 @@ describe("storyline guards (题材域层防重)", () => {
     expect(normalizeGeneratedEvent(value, true, undefined, { avoidStorylines: ["sports", "arts"] })).not.toBeNull();
   });
 
-  it("rejects a career that returns to a storyline the life already left (within-life)", () => {
+  it("accepts returning to a previous career without overriding the player", () => {
     const value = careerEvent("画家", "重新拿起画笔");
     const reason = diagnoseGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] });
-    expect(reason).toContain("艺术创作");
-    expect(normalizeGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] })).toBeNull();
-    expect(repairGeneratedEvent(value, true, { leftStorylines: ["arts"] })).toBeNull();
+    expect(reason).toBeNull();
+    expect(normalizeGeneratedEvent(value, true, undefined, { leftStorylines: ["arts"] })).not.toBeNull();
+    expect(repairGeneratedEvent(value, true, { leftStorylines: ["arts"] })).not.toBeNull();
   });
 
   it("accepts continuing the current career domain (not treated as repetition)", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createStarterLife } from "./life";
 import {
   buildStorylinePromptHint,
+  buildRecentSituationHint,
   detectStorylineDomains,
   extractLifeStorylines,
   leftStorylines,
@@ -101,5 +102,18 @@ describe("left storylines (within-life anti-repetition)", () => {
     expect(hint).toContain("体育竞技");
     expect(hint).toContain("【单局内防重】");
     expect(hint).toContain("艺术创作");
+    expect(hint).toContain("玩家明确选择");
+    expect(hint).toContain("相同职业");
   });
+});
+
+it("reminds the writer of recent situations without inventing a semantic repetition verdict", () => {
+  const state = createStarterLife();
+  state.history = Array.from({ length: 6 }, (_, i) => ({ id: `e${i}`, age: i + 20, type: "career", title: `取舍${i}`, story: "s", importance: 0.6, choiceText: `行动${i}` })) as typeof state.history;
+  const hint = buildRecentSituationHint(state);
+  expect(hint).not.toContain("取舍0");
+  expect(hint).toContain("取舍2");
+  expect(hint).toContain("行动5");
+  expect(hint).toContain("只换职业");
+  expect(buildRecentSituationHint(createStarterLife())).toBe("");
 });
