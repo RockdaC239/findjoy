@@ -60,3 +60,22 @@ export function rememberActiveLife(lifeId: string): void {
 export function forgetActiveLife(): void {
   try { localStorage.removeItem(ACTIVE_LIFE_KEY); } catch { /* storage unavailable */ }
 }
+
+const LIFE_SCENE_KEY = "findjoy:life-scene";
+export type LifeScene = "decision" | "farewell" | "review";
+
+export function readLifeScene(lifeId: string, eventId: string): LifeScene | null {
+  try {
+    const value: unknown = JSON.parse(sessionStorage.getItem(LIFE_SCENE_KEY) ?? "null");
+    if (!isRecord(value) || value.lifeId !== lifeId || value.eventId !== eventId) return null;
+    return value.scene === "decision" || value.scene === "farewell" || value.scene === "review" ? value.scene : null;
+  } catch { return null; }
+}
+
+export function rememberLifeScene(lifeId: string, eventId: string, scene: LifeScene): void {
+  try { sessionStorage.setItem(LIFE_SCENE_KEY, JSON.stringify({ lifeId, eventId, scene })); } catch { /* storage unavailable */ }
+}
+
+export function clearLifeScene(): void {
+  try { sessionStorage.removeItem(LIFE_SCENE_KEY); } catch { /* storage unavailable */ }
+}

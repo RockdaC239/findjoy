@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import farewellStyles from "../../components/Farewell.module.css";
 import { DeveloperDebugButton } from "../../components/DeveloperMode";
 import { LifeEventScene } from "../../components/LifeEventScene";
+import { NarrationScene } from "../../components/NarrationScene";
 import { AccountNav } from "../../components/AccountNav";
 import { BrandLogo } from "../../components/BrandLogo";
 import { MusicToggle } from "../../components/MusicToggle";
@@ -27,6 +28,8 @@ import {
   readActiveLifeId,
   readPendingStart,
   rememberActiveLife,
+  readLifeScene,
+  rememberLifeScene,
   type PendingStart,
 } from "../../lib/life-session";
 
@@ -70,6 +73,7 @@ export default function PlayPage() {
   const redirecting = useRef(false);
   const lastError = useRef("");
   const [life, setLife] = useState<LifeView | null>(null);
+  const [decisionEventId, setDecisionEventId] = useState<string | null>(null);
   const [isBooting, setIsBooting] = useState(true);
   const [bootError, setBootError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -96,8 +100,16 @@ export default function PlayPage() {
   }
 
   function receiveLifePayload(payload: unknown) {
-    if (stateFromPayload(payload)?.dead || (isRecord(payload) && payload.ended === true)) setEnteringFarewell(true);
+    const state = stateFromPayload(payload);
+    if (state?.experienceVersion !== 3 && (state?.dead || (isRecord(payload) && payload.ended === true))) setEnteringFarewell(true);
     return payload;
+  }
+
+  function restoreView(state: LifeState) {
+    const view = buildLifeView(state);
+    setLife(view);
+    setDecisionEventId(view.eventId && readLifeScene(view.lifeId, view.eventId) === "decision" ? view.eventId : null);
+    rememberActiveLife(view.lifeId);
   }
 
   async function requestLife(url: string, body?: Record<string, unknown>, idempotencyKey?: string, config?: ModelConfig): Promise<unknown | null> {
@@ -157,7 +169,7 @@ export default function PlayPage() {
             if (typeof token.text === "string") {
               generated += token.text;
               const event = readStreamedEvent(generated);
-              if (event.outcome === "death") setEnteringFarewell(true);
+              if (event.outcome === "death" && life?.experienceVersion !== 3) setEnteringFarewell(true);
               setStreamingEvent(event);
             }
           } else if (message.event === "retry") {
@@ -176,6 +188,17 @@ export default function PlayPage() {
       throw new Error("Life stream ended before completion");
     } catch (error) {
       setEnteringFarewell(false);
+      // 响应丢失时先核对已保存节点，避免把同一选择再次提交给模型。
+      if (life?.lifeId && typeof body?.expectedEventId === "string") {
+        try {
+          const recovered = await fetch(`${API_BASE}/api/life/${encodeURIComponent(life.lifeId)}`, { signal: AbortSignal.timeout(5000) });
+          const state = recovered.ok ? stateFromPayload(await recovered.json()) : null;
+          if (state && state.history.at(-1)?.id !== body.expectedEventId) {
+            setRequestError("");
+            return receiveLifePayload({ state, ended: state.dead });
+          }
+        } catch { /* 保留原错误，用户可手动恢复最新存档。 */ }
+      }
       if (error instanceof DOMException && error.name === "TimeoutError") {
         lastError.current = "本次等待超时，故事可能仍在生成，请重试恢复进度。";
       } else {
@@ -214,8 +237,7 @@ export default function PlayPage() {
         router.replace(`/review/${encodeURIComponent(payload.state.lifeId)}`);
         return;
       }
-      setLife(buildLifeView(payload.state));
-      rememberActiveLife(payload.state.lifeId);
+      restoreView(payload.state);
       startMusicIfEnabled();
     } catch {
       setBootError("恢复这局人生失败，请回到开始页重试。");
@@ -239,6 +261,7 @@ export default function PlayPage() {
       choices: [],
       scenario: preview.scenario,
       dead: false,
+      experienceVersion: 3,
     });
     setIsBooting(false);
     const payload = await requestLife(`${API_BASE}/api/life/start`, { gender: pending.gender, ...pending.selection }, pending.key, config);
@@ -260,9 +283,7 @@ export default function PlayPage() {
       router.replace(`/review/${encodeURIComponent(state.lifeId)}`);
       return;
     }
-    const next = buildLifeView(state);
-    setLife(next);
-    rememberActiveLife(next.lifeId);
+    restoreView(state);
     clearPendingStart();
     startMusicIfEnabled();
   }
@@ -298,6 +319,7 @@ export default function PlayPage() {
   async function choose(choiceId: string) {
     if (!life || isLoading) return;
     const choice = life.choices.find((item) => item.id === choiceId);
+    if (!choice) return;
     startMusicIfEnabled();
     const payload = await requestLife(`${API_BASE}/api/life/${encodeURIComponent(life.lifeId)}/next`, { choice, expectedEventId: life.eventId });
     if (!payload) return;
@@ -308,9 +330,12 @@ export default function PlayPage() {
     }
     const state = stateFromPayload(payload);
     if (!state) return;
-    const next = buildLifeView(state);
-    setLife(next);
-    rememberActiveLife(next.lifeId);
+    if (state.dead) {
+      forgetActiveLife();
+      router.replace(`/review/${encodeURIComponent(state.lifeId)}`);
+      return;
+    }
+    restoreView(state);
   }
 
   async function continueLife() {
@@ -325,9 +350,7 @@ export default function PlayPage() {
     }
     const state = stateFromPayload(payload);
     if (!state) return;
-    const next = buildLifeView(state);
-    setLife(next);
-    rememberActiveLife(next.lifeId);
+    restoreView(state);
   }
 
   if (enteringFarewell) return <main className={farewellStyles.farewell} aria-label="正在进入人生告别" aria-busy="true" />;
@@ -348,6 +371,7 @@ export default function PlayPage() {
   }
 
   const modeMeta = getScenarioLabel(life.scenario);
+  const narrating = life.experienceVersion === 3 && (isLoading || decisionEventId !== life.eventId);
   const displayAge = isLoading && typeof streamingEvent.timePassed === "number"
     ? life.age + streamingEvent.timePassed
     : life.age;
@@ -357,18 +381,29 @@ export default function PlayPage() {
       <header className="topbar topbar--event" aria-label="Primary navigation">
         <div className="event-mode">
           <span className="mode-chip">{modeMeta.label}</span>
-          <span className="event-mode-detail">{modeMeta.detail}{life.city ? ` · ${life.city}` : ""}</span>
+          <span className="event-mode-detail">{modeMeta.detail}{!narrating && life.city ? ` · ${life.city}` : ""}</span>
         </div>
-        <p className="current-age">{displayAge} 岁</p>
+        <p className="current-age">{narrating ? "这一段人生" : `${displayAge} 岁`}</p>
         <div className="topbar-actions"><AccountNav>
           <DeveloperDebugButton />
           {MUSIC_UI_ENABLED && <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />}
         </AccountNav></div>
       </header>
 
-      {requestError && <p className="request-error" role="alert">{requestError}</p>}
+      {requestError && <div className="request-error" role="alert"><p>{requestError}</p><button className="text-button" type="button" onClick={() => loadLife(life.lifeId)}>恢复最新进度</button></div>}
 
-      <LifeEventScene life={life} isLoading={isLoading} streamingEvent={streamingEvent} onChoose={choose} onContinue={continueLife} onExit={() => setShowExitDialog(true)} />
+      {narrating ? <NarrationScene
+        key={isLoading ? "generating" : life.eventId}
+        heading={isLoading ? (life.lifeId ? "日子继续向前" : "你的人生，从这里开始") : `${life.fromAge ?? 0}—${life.age} 岁`}
+        story={isLoading ? streamingEvent.narration ?? "" : life.narration ?? ""}
+        ready={!isLoading && !!life.eventId}
+        onContinue={() => {
+          if (!life.eventId || isLoading) return;
+          rememberLifeScene(life.lifeId, life.eventId, "decision");
+          setDecisionEventId(life.eventId);
+          window.scrollTo({ top: 0, behavior: "instant" });
+        }}
+      /> : <LifeEventScene life={life} isLoading={isLoading} streamingEvent={streamingEvent} onChoose={choose} onContinue={continueLife} onExit={() => setShowExitDialog(true)} />}
 
       {showExitDialog && (
         <div className="gender-modal" role="dialog" aria-modal="true" aria-label="离开当前人生" onClick={(event) => { if (event.target === event.currentTarget) setShowExitDialog(false); }}>

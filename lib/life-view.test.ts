@@ -59,3 +59,29 @@ describe("buildLifeView", () => {
     expect(buildLifeView(state).dead).toBe(true);
   });
 });
+
+it("restores v3 dual texts and previous event age", () => {
+  const state = baseState();
+  Object.assign(state, { experienceVersion: 3 });
+  state.history = [
+    { id: "first", age: 25, type: "career", title: "起点", story: "过去", choices: [], importance: 1 },
+    { id: "last", age: 30, type: "career", title: "现在", story: "下一决策", choices: [], importance: 1, ...{ narration: "这些年" } },
+  ];
+  expect(buildLifeView(state)).toMatchObject({ experienceVersion: 3, narration: "这些年", story: "下一决策", fromAge: 25 });
+  state.history.shift();
+  expect(buildLifeView(state).fromAge).toBe(0);
+});
+
+it("keeps legacy views free of v3 scene fields", () => {
+  const view = buildLifeView(baseState());
+  expect(view).not.toHaveProperty("experienceVersion");
+  expect(view).not.toHaveProperty("narration");
+  expect(view).not.toHaveProperty("fromAge");
+});
+
+it("starts ForU narration at the player's supplied age", () => {
+  const state = baseState();
+  Object.assign(state, { experienceVersion: 3 });
+  state.scenario = { mode: "foru", brief: { age: 30, city: "上海", occupation: "设计师", family: "", relationship: "single", economy: "ordinary", health: "good", housing: "rent", situation: "正在考虑换一份工作", focus: "工作" } };
+  expect(buildLifeView(state).fromAge).toBe(30);
+});

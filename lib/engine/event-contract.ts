@@ -3,6 +3,7 @@ import { boundedText, boundedStrings, normalizeNarrative } from "./narrative";
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, LifeEnding } from "../life";
 import type { StorylineGuards } from "../storyline";
 // 模型输出在这里转成内部 NextEvent；不要让原始 JSON 直接更新 LifeState。
+import { CHILDHOOD_BOUNDARY } from "./phase";
 import { ModelError } from "./errors";
 
 function num(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
@@ -231,13 +232,28 @@ export function parseWithTruncationRepair(text: string): unknown {
 // expectChoices=false 表示童年阶段，不要求 choices 字段。
 // previousChoices=上一个节点的选项，用于“相邻节点张力轴不得相同”的轮换硬约束。
 // 保留storylineGuards调用兼容；职业多样性由生成前软提醒处理，不以关键词否决玩家方向。
-export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, _storylineGuards?: StorylineGuards): string | null {
+export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, _storylineGuards?: StorylineGuards, state?: LifeState): string | null {
   void _storylineGuards;
   if (!value || typeof value !== "object") return "返回内容不是 JSON 对象";
   const candidate = value as Record<string, unknown>;
   const event = candidate.event && typeof candidate.event === "object" ? candidate.event as Record<string, unknown> : null;
   if (!event) return "缺少 event 对象";
-  if (typeof candidate.story !== "string" || !candidate.story.trim()) return "story 缺失或为空";
+  if (state?.experienceVersion === 3) {
+    if (typeof candidate.narration !== "string" || !candidate.narration.trim()) return "narration 缺失或为空";
+    if (containsNameInstruction(candidate.narration)) return "narration 含姓名指示词";
+    if (candidate.outcome !== "continue" && candidate.outcome !== "death") return "outcome 非法";
+    const opening = state.history.length === 0;
+    const fixedOpening = opening && (state.scenario?.mode === "script" || state.scenario?.mode === "foru");
+    const maxTime = opening && !fixedOpening ? CHILDHOOD_BOUNDARY : state.scenario?.mode === "script" || state.scenario?.mode === "foru" ? 5 : 8;
+    if (!Number.isInteger(candidate.timePassed) || Number(candidate.timePassed) < 0 || Number(candidate.timePassed) > maxTime) return "timePassed 非法";
+    if (fixedOpening && candidate.timePassed !== 0) return "起点必须为零时间";
+    if (opening && !fixedOpening && candidate.outcome === "continue" && candidate.timePassed !== CHILDHOOD_BOUNDARY) return "童年开局必须落在决策边界";
+    if (candidate.outcome === "death") {
+      if (candidate.story !== "" || !Array.isArray(candidate.choices) || candidate.choices.length) return "终点不允许决策";
+      if (!["natural", "disease", "accident", "other"].includes(String(candidate.deathCause))) return "deathCause 非法";
+    } else if (!Array.isArray(candidate.choices) || candidate.choices.length < 2 || candidate.choices.length > 3 || candidate.choices.some((item: unknown) => !item || typeof item !== "object" || typeof (item as LifeChoice).id !== "string" || !(item as LifeChoice).id.trim() || typeof (item as LifeChoice).text !== "string" || !(item as LifeChoice).text.trim()) || new Set(candidate.choices.map((item: LifeChoice) => item.id)).size !== candidate.choices.length) return "choices 非法";
+  }
+  if (!(state?.experienceVersion === 3 && candidate.outcome === "death") && (typeof candidate.story !== "string" || !candidate.story.trim())) return "story 缺失或为空";
   if (typeof event.title !== "string" || !event.title.trim()) return "event.title 缺失或为空";
   if (!normalizeEventType(event.type)) return "event.type 非法：" + String(event.type) + "（应为 career/relationship/health/finance/random/family 之一）";
   if (candidate.outcome === "death") return null;
@@ -256,8 +272,8 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
 }
 
 // 严格契约：任何关键字段缺失、类型非法、含姓名指示词或张力轴重复都返回 null，调用方抛错。
-export function normalizeGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, storylineGuards?: StorylineGuards): NextEvent | null {
-  if (diagnoseGeneratedEvent(value, expectChoices, previousChoices, storylineGuards) !== null) return null;
+export function normalizeGeneratedEvent(value: unknown, expectChoices = true, previousChoices?: LifeChoice[] | undefined, storylineGuards?: StorylineGuards, state?: LifeState): NextEvent | null {
+  if (diagnoseGeneratedEvent(value, expectChoices, previousChoices, storylineGuards, state) !== null) return null;
   const candidate = value as Record<string, unknown>;
   const event = candidate.event as Record<string, unknown>;
   const story = (candidate.story as string).trim();
@@ -268,7 +284,8 @@ export function normalizeGeneratedEvent(value: unknown, expectChoices = true, pr
   return {
     outcome: candidate.outcome === "death" ? "death" : "continue",
     deathCause: candidate.outcome === "death" ? normalizeDeathCause(candidate.deathCause) : undefined,
-    timePassed: Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
+    narration: state?.experienceVersion === 3 ? String(candidate.narration).trim() : undefined,
+    timePassed: state?.experienceVersion === 3 ? Number(candidate.timePassed) : Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
     story,
     event: { type, title, importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
     choices,
@@ -293,7 +310,8 @@ const FILL_CHOICES: Record<string, string[]> = {
 // - choices 不足 2 个 → 自动补齐
 // - 价值张力轴重复 → 接受（轮换改为下一轮提示词预防，见 buildSystemPrompt 的 avoidAxis）
 // 不可修复的问题（核心字段缺失、含姓名指示词）返回 null，仍走重试。
-export function repairGeneratedEvent(value: unknown, expectChoices: boolean, _storylineGuards?: StorylineGuards): NextEvent | null {
+export function repairGeneratedEvent(value: unknown, expectChoices: boolean, _storylineGuards?: StorylineGuards, state?: LifeState): NextEvent | null {
+  if (state?.experienceVersion === 3) return normalizeGeneratedEvent(value, expectChoices, undefined, _storylineGuards, state);
   void _storylineGuards;
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
@@ -319,7 +337,8 @@ export function repairGeneratedEvent(value: unknown, expectChoices: boolean, _st
   return {
     outcome: candidate.outcome === "death" ? "death" : "continue",
     deathCause: candidate.outcome === "death" ? normalizeDeathCause(candidate.deathCause) : undefined,
-    timePassed: Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
+    narration: state?.experienceVersion === 3 ? String(candidate.narration).trim() : undefined,
+    timePassed: state?.experienceVersion === 3 ? Number(candidate.timePassed) : Math.max(1, Math.min(8, num(candidate.timePassed) || num(candidate.time_passed) || 1)),
     story: (candidate.story as string).trim(),
     event: { type, title: (event.title as string).trim(), importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
     choices: expectChoices ? choices.slice(0, 3) : [],
@@ -335,6 +354,7 @@ export function serializeTranscriptEvent(event: NextEvent): string {
     ...(event.outcome ? { outcome: event.outcome } : {}),
     ...(event.deathCause ? { deathCause: event.deathCause } : {}),
     timePassed: event.timePassed,
+    ...(event.narration !== undefined ? { narration: event.narration } : {}),
     story: event.story,
     event: event.event,
     choices: event.choices,

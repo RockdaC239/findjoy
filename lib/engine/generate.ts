@@ -52,11 +52,11 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       const generated = parseWithTruncationRepair(generatedText || "{}");
       // 修复优先：先走严格契约；不过则尝试就地修复（补齐选项/接受张力轴重复），
       // 只有不可修复的问题（核心字段缺失、含姓名）才进入重试。
-      let parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards);
+      let parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards, state);
       let reason: string | null = null;
       if (!parsed) {
-        reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards);
-        parsed = repairGeneratedEvent(generated, expectChoices, storylineGuards);
+        reason = diagnoseGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards, state);
+        parsed = repairGeneratedEvent(generated, expectChoices, storylineGuards, state);
       }
       if (!parsed) {
         logModelDiagnostic("event-contract-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, reason: reason ?? "事件契约未通过且无法自动修复", raw: generatedText });
@@ -70,7 +70,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       }
       // 剧本/ForU 第一幕必须落在当前年龄；后续节点把节奏收紧到 1~5 年。
       if (openingAtCurrentAge) parsed.timePassed = 0;
-      else if (scenario.mode === "script" || scenario.mode === "foru") parsed.timePassed = Math.min(5, Math.max(1, parsed.timePassed));
+      else if (state.experienceVersion !== 3 && (scenario.mode === "script" || scenario.mode === "foru")) parsed.timePassed = Math.min(5, Math.max(1, parsed.timePassed));
       parsed = enforceLifespan(parsed, state);
       parsed.story = alignProtagonistAge(parsed.story, state.basic.age + parsed.timePassed);
       addUsage(usageRaw);

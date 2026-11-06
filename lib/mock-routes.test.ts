@@ -7,7 +7,7 @@ vi.mock("./auth", () => ({ currentUser: mocks.user, appOrigin: () => "https://fi
 vi.mock("./model-adapter", async original => ({ ...await original<typeof import("./model-adapter")>(), streamNextEvent: mocks.stream, generateEnding: mocks.ending }));
 import { identityStore } from "./identity-store";
 import { commerceStore } from "./commerce-store";
-import { buildFallbackEvent } from "./model-adapter";
+import { mockLifeEvent } from "./mock-life";
 import { POST as start } from "../app/api/life/start/route";
 import { POST as next } from "../app/api/life/[id]/next/route";
 import { POST as ending } from "../app/api/life/[id]/ending/route";
@@ -28,26 +28,32 @@ beforeEach(async () => {
   mocks.user.mockResolvedValue(await identityStore.resolveUser("test", "owner", "owner", "15200297440"));
   vi.stubEnv("FINDJOY_TRIAL_CREDITS", "40");
 });
-it("uses real routes for exactly three mock chapters and a cached mock review without spending points or calling models", async () => {
+it("uses real routes for a childhood narration, an adult decision and a terminal narration and a cached mock review without spending points or calling models", async () => {
   let life = await state(await start(request()));
   const user = await mocks.user();
   expect(await commerceStore.balance(user.id)).toEqual({ available: 40, held: 0 });
-  expect(life.basic.age).toBe(8);
+  expect(life.experienceVersion).toBe(3);
+  expect(life.basic.age).toBe(15); expect(life.history.at(-1)!.narration).toBeTruthy();
+  expect(life.history.at(-1)!.choices).toHaveLength(2);
   const params = { params: Promise.resolve({ id: life.lifeId }) };
-  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id }), params));
-  expect(life.basic.age).toBe(32); expect(life.history.at(-1)!.choices).toHaveLength(3);
+  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
+  expect(life.dead).toBe(false); expect(life.basic.age).toBe(16);
+  expect(life.history.at(-1)!.narration).toBeTruthy();
+  expect(life.history.at(-1)!.choices).toHaveLength(2);
   life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
   expect(life.dead).toBe(true); expect(life.history).toHaveLength(3);
+  expect(life.history.at(-1)!.narration).toBeTruthy();
+  expect(life.history.at(-1)!.story).toBe("");
   const response = await ending(request(), params);
-  expect(response.status).toBe(200); expect((await response.json()).ending.age).toBe(81);
+  expect(response.status).toBe(200); expect((await response.json()).ending.age).toBe(24);
   expect((await ending(request(), params)).status).toBe(200);
   expect(mocks.stream).not.toHaveBeenCalled(); expect(mocks.ending).not.toHaveBeenCalled();
   expect(await commerceStore.balance(user.id)).toEqual({ available: 40, held: 0 });
 });
 it("restores real model generation when mock is off and charges normal new lives", async () => {
   let life = await state(await start(request()));
-  mocks.stream.mockImplementation(async function* (life: LifeState) { return buildFallbackEvent(life); });
-  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id }, false), { params: Promise.resolve({ id: life.lifeId }) }));
+  mocks.stream.mockImplementation(async function* (life: LifeState) { return mockLifeEvent(life); });
+  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }, false), { params: Promise.resolve({ id: life.lifeId }) }));
   expect(mocks.stream).toHaveBeenCalledTimes(1); expect(life.flags.developerMock).toBe(false);
   await state(await start(request({}, false)));
   expect(mocks.stream).toHaveBeenCalledTimes(2);
@@ -71,10 +77,10 @@ it("persists mode with HTTP-only cookies and exits with mock off", async () => {
 it("keeps a saved Mock ending local even when the Mock switch has since been turned off", async () => {
   let life = await state(await start(request()));
   const params = { params: Promise.resolve({ id: life.lifeId }) };
-  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id }), params));
+  life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
   life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
   const response = await ending(request({}, false), params);
   expect(response.status).toBe(200);
-  expect((await response.json()).ending.age).toBe(81);
+  expect((await response.json()).ending.age).toBe(24);
   expect(mocks.ending).not.toHaveBeenCalled();
 });

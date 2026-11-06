@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AccountAvatar } from "./AccountAvatar";
+import { clearLifeScene } from "../lib/life-session";
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 const AccountUserContext = createContext<{ displayName: string } | null>(null);
@@ -85,7 +86,7 @@ export function AccountNav({ children, showRecharge = true, collapseOnMobile = f
       }}>
         {collapseOnMobile && <div className="account-dropdown-nav">{links}</div>}
         <Link href="/account" onClick={close}>个人中心 <span aria-hidden="true">↗</span></Link>
-        <form action="/findjoy/api/auth/logout" method="post"><button type="submit">退出登录 <span aria-hidden="true">↗</span></button></form>
+        <form action="/findjoy/api/auth/logout" method="post" onSubmit={clearLifeScene}><button type="submit">退出登录 <span aria-hidden="true">↗</span></button></form>
       </div>}
     </div> : <>
       <Link className="settings-button account-login-link" href="/login">登录 / 注册</Link>

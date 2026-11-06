@@ -231,6 +231,7 @@ export function createStartLife(plan: StartPlan, gender: Gender, options: Create
     }
     return {
       ...starter,
+      experienceVersion: 3,
       ...(plan.lifespan ? { lifespan: plan.lifespan } : {}),
       ...(birth ? { birth, relationships: { ...starter.relationships, parents: {
         status: birth.parents.map(parent => `${parent.role}：${parent.status}`).join("；"),
@@ -252,6 +253,7 @@ export function createStartLife(plan: StartPlan, gender: Gender, options: Create
     const finance = scriptFinance(seed);
     return {
       ...starter,
+      experienceVersion: 3,
       career: {
         ...starter.career,
         occupation: seed.occupation,
@@ -279,6 +281,7 @@ export function createStartLife(plan: StartPlan, gender: Gender, options: Create
   const finance = ECONOMY_FINANCE[brief.economy];
   return {
     ...starter,
+      experienceVersion: 3,
     career: {
       ...starter.career,
       occupation: brief.occupation || "未填写",

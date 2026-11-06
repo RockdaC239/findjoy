@@ -244,7 +244,8 @@ export default function StartPage() {
                       <strong>{h.age} 岁</strong> · {h.title}
                       {h.storedAt && <span className="history-event-time">{new Date(h.storedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                     </p>
-                    <p>{h.story}</p>
+                    {h.narration?.split(/\n+/).filter(Boolean).map((paragraph, paragraphIndex) => <p key={paragraphIndex}>{paragraph}</p>)}
+                    {h.story && <p>{h.story}</p>}
                     {h.choices && h.choices.length > 0 && (
                       <p className="history-choices">可选项：{h.choices.map((c) => `${c.id}「${c.text}」`).join("　")}</p>
                     )}

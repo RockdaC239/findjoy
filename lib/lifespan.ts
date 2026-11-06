@@ -1,3 +1,4 @@
+import { ModelError } from "./engine/errors";
 import type { LifeState, NextEvent } from "./life";
 
 /**
@@ -28,13 +29,15 @@ export function enforceLifespan(event: NextEvent, state: LifeState): NextEvent {
   const limit = normalLifespanLimit(state);
   if (!limit) return event;
   const current = state.basic.age;
-  const landing = current + Math.max(1, event.timePassed);
+  const landing = current + Math.max(state.experienceVersion === 3 ? 0 : 1, event.timePassed);
+  // 双幕讲述含多个年龄，不能靠改时间字段把越界经历变成已发生事实。
+  if (state.experienceVersion === 3 && landing > limit) throw new ModelError("讲述超过本局生命终点，请在寿命上限内重新生成");
   if (event.outcome === "death") {
     if (landing <= limit) return event;
-    return { ...event, timePassed: Math.max(1, limit - current) };
+    return { ...event, timePassed: Math.max(state.experienceVersion === 3 ? 0 : 1, limit - current) };
   }
   if (landing < limit) return event;
-  const timePassed = Math.max(1, limit - current);
+  const timePassed = Math.max(state.experienceVersion === 3 ? 0 : 1, limit - current);
   return {
     ...event,
     timePassed,
@@ -42,7 +45,7 @@ export function enforceLifespan(event: NextEvent, state: LifeState): NextEvent {
     deathCause: "age",
     choices: [],
     event: { ...event.event, title: `${limit}岁，生命走到终点`, importance: 1 },
-    story: `${event.story} 这一年，你${limit}岁，在熟悉的生活里安静离世。`,
+    ...(state.experienceVersion === 3 ? { narration: `${event.narration} 这一年，你${limit}岁，在熟悉的生活里安静离世。`, story: "" } : { story: `${event.story} 这一年，你${limit}岁，在熟悉的生活里安静离世。` }),
     memory: `你${limit}岁离世。`,
   };
 }

@@ -9,7 +9,7 @@ import { commerceStore } from "./commerce-store";
 import { lifeStore } from "./life-store";
 import { createStarterLife, buildEnding } from "./life";
 import { lifeGeneration } from "./life-generation";
-import { buildFallbackEvent } from "./model-adapter";
+import { mockLifeEvent } from "./mock-life";
 import { POST as start } from "../app/api/life/start/route";
 import { POST as next } from "../app/api/life/[id]/next/route";
 import { POST as ending } from "../app/api/life/[id]/ending/route";
@@ -31,7 +31,7 @@ it("rejects overloaded start, next and ending before model work and credit reser
 });
 it("continues an admitted opening after cancellation, saves it once and replays it while paused",async()=>{
  let finish!:()=>void;const gate=new Promise<void>(resolve=>{finish=resolve;});
- mocks.stream.mockImplementation(async function*(state){await gate;yield {text:"story"};return buildFallbackEvent(state);});
+ mocks.stream.mockImplementation(async function*(state){await gate;yield {text:"story"};return mockLifeEvent(state);});
  const response=await start(request());const reader=response.body!.getReader();await reader.read();await reader.cancel();
  expect((await query("SELECT count(*)::integer AS n FROM joy_generation_admissions")).rows).toEqual([{n:1}]);
  finish();
@@ -48,7 +48,7 @@ it("releases admission and refunds the opening when generation fails",async()=>{
 });
 
 it("recovers a committed opening when confirmation fails instead of telling the client to discard its key",async()=>{
- mocks.stream.mockImplementation(async function*(state){yield {text:"story"};return buildFallbackEvent(state);});
+ mocks.stream.mockImplementation(async function*(state){yield {text:"story"};return mockLifeEvent(state);});
  const commit=capacity.commitGeneration;
  vi.spyOn(capacity,"commitGeneration").mockImplementationOnce(async (token,work,now)=>{
    await commit(token,work,now);throw new Error("commit reply lost");

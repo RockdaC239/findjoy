@@ -19,6 +19,7 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
   const pending = state.history.at(-1);
   return {
     respond_to: pending && choice && choice.id !== "none" ? { eventId: pending.id, action: choice.text } : null,
+    ...(state.experienceVersion === 3 && state.lifespan ? { lifespan_boundary: { age: state.lifespan, instruction: "落地年龄不能超过该生命终点，讲述不描述此后经历；到达时必须death，无下一决策。" } } : {}),
     recent_decisions: state.history.filter(event => event.choiceText).slice(-4).map(event => ({
       eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
     })),
@@ -159,7 +160,7 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
   const isOpening = state.history.length === 0;
   const openingAtCurrentAge = isOpening && (scenario.mode === "script" || scenario.mode === "foru");
   // 剧本/ForU 从固定年龄/当前年龄开场，不再叠加随机出身档案；普通/主题沿用出身。
-  const expectChoices = openingAtCurrentAge || state.basic.age + 1 >= CHILDHOOD_BOUNDARY;
+  const expectChoices = state.experienceVersion === 3 || openingAtCurrentAge || state.basic.age + 1 >= CHILDHOOD_BOUNDARY;
   // 预防式张力轴轮换：把上一节点的张力轴写进本轮提示词，让模型主动避开（而不是写重复了再重试）
   const previousChoices = lastChoiceNode(state)?.choices;
   const avoidAxis = detectValueAxis(previousChoices);
@@ -175,6 +176,7 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
     return avoidStorylines.length > 0 || left.length > 0 ? { avoidStorylines, leftStorylines: left } : undefined;
   })();
   const systemPrompt = buildSystemPrompt(expectChoices, {
+    experienceVersion: state.experienceVersion,
     birth: state.birth,
     background: scenario.mode === "script" || scenario.mode === "foru" ? undefined : flagsToBackground(state.flags),
     transitioning: expectChoices && state.basic.age < CHILDHOOD_BOUNDARY && !openingAtCurrentAge,
@@ -198,7 +200,7 @@ export function buildEndingMessages(state: LifeState): NextEventMessage[] {
       if (!event.choiceText) return [];
       const next = state.history[index + 1];
       return [{ eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
-        ...(next ? { consequence: { eventId: next.id, age: next.age, title: next.title } } : {}) }];
+        ...(next ? { consequence: { eventId: next.id, age: next.age, title: next.title, ...(next.narration ? { narration: next.narration } : {}) } } : {}) }];
     }),
     recent_history: state.history.slice(-12),
     major_memories: state.majorMemories,

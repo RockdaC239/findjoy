@@ -11,6 +11,7 @@ export interface PreviewOptions {
   theme: ThemeId;
   scriptId?: string;
   legacy: boolean;
+  experienceVersion?: 2 | 3;
 }
 
 // 仅使用合成资料，不读取存档、环境配置或真实 ForU 用户数据。
@@ -23,6 +24,7 @@ export function previewMessages(options: PreviewOptions) {
         ? { mode: "foru", brief: { age: 32, city: "成都", occupation: "教师", family: "与家人同住", relationship: "single", economy: "ordinary", health: "good", housing: "rent", situation: "正在考虑换一份工作（合成样例）", focus: "职业与生活的取舍" } }
         : { mode: "normal" };
   let state = createStartLife(resolveStartPlan(selection, { random: () => 0.5 }), "female");
+  if (options.experienceVersion === 2) delete state.experienceVersion;
   state.lifeId = "prompt-preview-synthetic";
   state.createdAt = "2026-01-01T00:00:00.000Z";
   let transcript: TranscriptMessage[] = [];
@@ -32,6 +34,7 @@ export function previewMessages(options: PreviewOptions) {
     state.career.occupation = "教师";
     const event: NextEvent = {
       timePassed: 0,
+      ...(state.experienceVersion === 3 ? { narration: "你和家人共同度过了忙碌而平静的一周。（合成样例）" } : {}),
       story: "你收到一份外地工作的邀请，家人正等着你一起吃晚饭。（合成样例）",
       event: { type: "career", title: "一封外地工作的邀请", importance: 0.8 },
       choices: [{ id: "A", text: "接受邀请，去新的城市试试" }, { id: "B", text: "留在家人身边，继续现在的工作" }],

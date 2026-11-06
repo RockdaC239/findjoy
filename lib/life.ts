@@ -13,6 +13,7 @@ export interface LifeBasics {
 }
 
 export interface LifeState {
+  experienceVersion?: 3;
   /** 出生时已确认的背景，旧存档可缺省，迁居不会改写出生地。 */
   birth?: BirthProfile;
   /** 程序维护的寿命上限；普通/主题新人生写入，旧存档可缺省。 */
@@ -54,6 +55,7 @@ export interface LifeEvent {
   age: number;
   type: EventType;
   title: string;
+  narration?: string;
   story: string;
   /** 该节点展示给玩家的完整选项（2~3 个）；童年纯叙事节点为空数组。缺失表示旧存档。 */
   choices?: LifeChoice[];
@@ -69,7 +71,7 @@ export interface LifeEvent {
   usage?: ModelUsage;
 }
 export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; occupation: string; partnerStatus: string; city: string; education: string; parentsStatus: string; fatherStatus: string; motherStatus: string; children: string[]; friends: string[]; conditions: string[] }
-export interface NextEvent { narrative?: NarrativeUpdate; outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
+export interface NextEvent { narration?: string; narrative?: NarrativeUpdate; outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
 export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string; promptCacheHitTokens?: number; promptCacheMissTokens?: number }
 
 const cities = ["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"];
@@ -104,8 +106,8 @@ export function applyNextEvent(
   options: { allowZeroTime?: boolean } = {},
 ): LifeState {
   const changes = event.objectiveChanges ?? {};
-  // ForU/剧本的第一幕发生在“当前年龄”，timePassed=0；其余节点仍至少推进 1 年。
-  const rawTimePassed = options.allowZeroTime ? Math.max(0, event.timePassed || 0) : Math.max(1, event.timePassed || 1);
+  // v3 支持同龄回应；旧流程仅 ForU/剧本首幕允许零时间。
+  const rawTimePassed = (options.allowZeroTime || state.experienceVersion === 3) ? Math.max(0, event.timePassed || 0) : Math.max(1, event.timePassed || 1);
   const age = state.basic.age + rawTimePassed;
   const next: LifeState = structuredClone(state);
   next.basic.age = age;
@@ -138,6 +140,7 @@ export function applyNextEvent(
     age,
     type: event.event.type,
     title: event.event.title,
+    narration: event.narration,
     story: event.story,
     choices: event.outcome === "death" ? [] : event.choices ?? [],
     outcome: event.outcome,

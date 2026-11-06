@@ -1,0 +1,21 @@
+.scene {
+  width: 100%;
+  min-height: 70dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--fj-space-10) 0 var(--fj-space-16);
+}
+.content { width: min(100%, var(--fj-layout-story)); overflow-wrap: anywhere; }
+.content h1 { text-align: center; font: 400 var(--fj-typography-title-size)/1.5 var(--fj-typography-family-display); margin: 0 0 var(--fj-space-10); }
+.content h1:focus { outline: none; }
+.story { font-size: var(--fj-typography-body-size); line-height: 1.9; }
+.story p { margin: 0 0 var(--fj-space-6); animation: arrive 900ms ease both; }
+.expanded p { animation: none; }
+.actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: var(--fj-space-6); margin-top: var(--fj-space-10); }
+.actions button { min-height: var(--fj-layout-control); }
+@keyframes arrive { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 600px) {
+  .content h1 { font-size: var(--fj-typography-mobile-title-size); }
+  .story { font-size: 16px; line-height: 1.8; }
+}
+@media (prefers-reduced-motion: reduce) { .story p { animation: none; } }

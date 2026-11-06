@@ -1,5 +1,13 @@
 # 人生 AI 引擎维护约定
 
+## 2026-11-06 两幕体验 v3
+
+新人生使用 `experienceVersion=3`，一次事件生成返回 `narration`（上次选择的结果与生活）及 `story/choices`（下一决策）。普通/主题从 0 岁建状态，一次开局讲述到 15 岁决策入口；后续允许同龄回应。终点只有最后讲述，无下一决策。旧人生继续 v2，不混写协议或重生历史。
+
+新提示词维护于 `prompts/two-scene.md`；`MODEL_OUTPUT_VERSION=3` 表示最新协议，实际分流依赖服务端人生版本。原有 adult/childhood 及基线为旧人生保留，不为新体验修改旧文本。`npm run prompt:preview -- --experience-version 2` 检查 v2；缺省检查 v3，`--legacy` 仍仅控制转录与 history 路径。
+
+讲述与决策同一个 `LifeEvent` 保存，真实选择仍挂上一节点；回顾后果从后一节点的 narration 读取。完整保存后才允许进入下一决策。讲述展示、阅读游标、最终讲述/告别/回顾分工及验收详见[体验优化方案](../product/experience-optimization-v0.1.md)。以下 v2 章节保留为旧流程说明。
+
 引擎保持四种玩法共享结构。2026-11-03 后续更新已增加模型主导的生命终点与告别交互，见下方 v2 说明。
 
 ## 模块与依赖

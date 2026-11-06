@@ -1,3 +1,4 @@
+import { ModelError } from "./errors";
 import type { LifeState, LifeChoice, NextEvent } from "../life";
 import type { LifeScenario } from "../modes/types";
 import { buildScenarioFallbackEvent } from "../modes/scenario";
@@ -22,6 +23,7 @@ export function createBirthBackground(state: LifeState) {
 }
 
 export function buildFallbackEvent(state: LifeState, choice?: LifeChoice, avoidStorylines: string[] = [], scenario?: LifeScenario): NextEvent {
+  if (state.experienceVersion === 3) throw new ModelError("未能生成完整人生经历，请重试；本轮未推进");
   const scenarioFallback = scenario ? buildScenarioFallbackEvent(state, scenario) : null;
   if (scenarioFallback) return scenarioFallback;
   const age = state.basic.age;

@@ -28,4 +28,11 @@ describe("synthetic prompt preview", () => {
     expect(invalid.status).toBe(1);
     expect(invalid.stdout).toBe("");
   });
+  it("can inspect the legacy protocol independently of transcript storage", () => {
+    const command = ["node_modules/vite-node/vite-node.mjs", "scripts/preview-prompts.ts"];
+    const output = execFileSync(process.execPath, [...command, "--experience-version", "2", "--json"], { encoding: "utf8" });
+    expect(JSON.parse(output)).toEqual(previewMessages({ mode: "normal", stage: "opening", theme: "love", legacy: false, experienceVersion: 2 }));
+    const invalid = spawnSync(process.execPath, [...command, "--experience-version", "4"], { encoding: "utf8" });
+    expect(invalid.status).toBe(1);
+  });
 });
