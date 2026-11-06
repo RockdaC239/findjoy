@@ -3,7 +3,7 @@ import { boundedText, boundedStrings, normalizeNarrative } from "./narrative";
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, LifeEnding } from "../life";
 import type { StorylineGuards } from "../storyline";
 // 模型输出在这里转成内部 NextEvent；不要让原始 JSON 直接更新 LifeState。
-import { CHILDHOOD_BOUNDARY } from "./phase";
+import { CHILDHOOD_BOUNDARY, needsOpeningRecovery } from "./phase";
 import { ModelError } from "./errors";
 
 function num(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
@@ -242,12 +242,14 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
     if (typeof candidate.narration !== "string" || !candidate.narration.trim()) return "narration 缺失或为空";
     if (containsNameInstruction(candidate.narration)) return "narration 含姓名指示词";
     if (candidate.outcome !== "continue" && candidate.outcome !== "death") return "outcome 非法";
-    const opening = state.history.length === 0;
+    const recovering = needsOpeningRecovery(state);
+    const opening = state.history.length === 0 || recovering;
     const fixedOpening = opening && (state.scenario?.mode === "script" || state.scenario?.mode === "foru");
-    const maxTime = opening && !fixedOpening ? CHILDHOOD_BOUNDARY : state.scenario?.mode === "script" || state.scenario?.mode === "foru" ? 5 : 8;
+    const openingTime = CHILDHOOD_BOUNDARY - state.basic.age;
+    const maxTime = opening && !fixedOpening ? openingTime : state.scenario?.mode === "script" || state.scenario?.mode === "foru" ? 5 : 8;
     if (!Number.isInteger(candidate.timePassed) || Number(candidate.timePassed) < 0 || Number(candidate.timePassed) > maxTime) return "timePassed 非法";
     if (fixedOpening && candidate.timePassed !== 0) return "起点必须为零时间";
-    if (opening && !fixedOpening && candidate.outcome === "continue" && candidate.timePassed !== CHILDHOOD_BOUNDARY) return "童年开局必须落在决策边界";
+    if (opening && !fixedOpening && candidate.outcome === "continue" && candidate.timePassed !== openingTime) return "童年开局必须落在决策边界";
     if (candidate.outcome === "death") {
       if (candidate.story !== "" || !Array.isArray(candidate.choices) || candidate.choices.length) return "终点不允许决策";
       if (!["natural", "disease", "accident", "other"].includes(String(candidate.deathCause))) return "deathCause 非法";
@@ -362,6 +364,15 @@ export function serializeTranscriptEvent(event: NextEvent): string {
     narrative: event.narrative,
     memory: event.memory,
   });
+}
+
+// 保存入口再次校验，拦住热更新或适配器意外返回的旧协议；age 仅为程序寿命上限内部值。
+export function assertGeneratedEventForState(event: NextEvent, state: LifeState): void {
+  if (state.experienceVersion !== 3) return;
+  const candidate = event.deathCause === "age" ? { ...event, deathCause: "natural" } : event;
+  if (!normalizeGeneratedEvent(candidate, true, undefined, undefined, state)) {
+    throw new ModelError("生成结果与人生版本不一致，本轮未推进");
+  }
 }
 
 // 诊断人生回顾契约失败原因：返回 null 表示通过，否则返回具体原因。

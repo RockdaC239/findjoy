@@ -2,6 +2,22 @@ import { expect, it } from "vitest";
 import { applyNextEvent, createStarterLife } from "./life";
 import { mockLifeEnding, mockLifeEvent } from "./mock-life";
 import { readDeveloperMode } from "./developer-mode";
+import { assertGeneratedEventForState } from "./engine/event-contract";
+
+it("keeps mock recovery and fixed-age mode endings valid at the save boundary", () => {
+  const partial = createStarterLife({ age: 5 });
+  partial.experienceVersion = 3;
+  partial.history = [{ id: "partial", age: 5, type: "family", title: "童年", story: "已有经历", choices: [], importance: 0.7 }];
+  expect(() => assertGeneratedEventForState(mockLifeEvent(partial), partial)).not.toThrow();
+  for (const mode of ["script", "foru"] as const) {
+    const state = createStarterLife({ age: 32 });
+    state.experienceVersion = 3;
+    state.scenario = { ...state.scenario!, mode } as typeof state.scenario;
+    const opened = applyNextEvent(state, mockLifeEvent(state));
+    const next = applyNextEvent(opened, mockLifeEvent(opened, opened.history[0].choices![0]));
+    expect(() => assertGeneratedEventForState(mockLifeEvent(next, next.history[1].choices![0]), next)).not.toThrow();
+  }
+});
 it("runs childhood, a real decision, and farewell in exactly three saved events", () => {
   let state = createStarterLife();
   state = applyNextEvent(state, mockLifeEvent(state));

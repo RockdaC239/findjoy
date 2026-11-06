@@ -6,6 +6,7 @@ import { buildBackgroundDirective, buildOpeningToneDirective, type LifeBackgroun
 import { buildStorylinePromptHint, type StorylineGuards } from "../../storyline";
 import { buildOpeningDirective, buildScenarioDirective } from "../../modes/scenario";
 import type { LifeScenario } from "../../modes/types";
+import { CHILDHOOD_BOUNDARY } from "../phase";
 
 // Markdown 维护叙事，output-format 维护 JSON；审阅标题不发送给模型。
 function readPrompt(name: string): string {
@@ -30,6 +31,7 @@ export const ENDING_SYSTEM_PROMPT = readPrompt("ending");
 // 时间已过去、写落地年龄的你、严禁复述上一条童年事件——修"14 岁节点内容在 18 岁重生成"。
 export interface SystemPromptOptions {
   experienceVersion?: 3;
+  openingRecoveryAge?: number;
   birth?: BirthProfile;
   background?: LifeBackground;
   transitioning?: boolean;
@@ -75,7 +77,10 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
   const transitionHint = transitioning && options.experienceVersion !== 3
     ? "【成年后的第一个决策节点】时间已经过去，你已长大到落地年龄（timePassed 之后的年龄）。写现在的你：新的处境、新的变化、新的细节；严禁复述上一条童年事件的故事或标题。必须给出 2~3 个方向真正不同、有具体立场的选项。"
     : "";
-  const suffixes = [eraHint, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint].filter(
+  const recoveryHint = options.experienceVersion === 3 && options.openingRecoveryAge !== undefined
+    ? `【未完成开篇恢复】本轮从${options.openingRecoveryAge}岁继续讲到${CHILDHOOD_BOUNDARY}岁，已有童年事实必须保留。本轮timePassed=${CHILDHOOD_BOUNDARY - options.openingRecoveryAge}，此为开篇恢复，优先于普通后续轮次的0～8年限制。合理早逝可提前终止；否则给出${CHILDHOOD_BOUNDARY}岁首个决策，不虚构已有选择。`
+    : "";
+  const suffixes = [eraHint, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint, recoveryHint].filter(
     (part): part is string => Boolean(part && part.trim()),
   );
   return suffixes.length > 0 ? `${base}\n\n${suffixes.join("\n\n")}` : base;

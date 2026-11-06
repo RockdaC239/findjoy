@@ -108,7 +108,7 @@ export default function PlayPage() {
   function restoreView(state: LifeState) {
     const view = buildLifeView(state);
     setLife(view);
-    setDecisionEventId(view.eventId && readLifeScene(view.lifeId, view.eventId) === "decision" ? view.eventId : null);
+    setDecisionEventId(!view.openingRecovery && view.eventId && readLifeScene(view.lifeId, view.eventId) === "decision" ? view.eventId : null);
     rememberActiveLife(view.lifeId);
   }
 
@@ -371,7 +371,7 @@ export default function PlayPage() {
   }
 
   const modeMeta = getScenarioLabel(life.scenario);
-  const narrating = life.experienceVersion === 3 && (isLoading || decisionEventId !== life.eventId);
+  const narrating = life.experienceVersion === 3 && (life.openingRecovery || isLoading || decisionEventId !== life.eventId);
   const displayAge = isLoading && typeof streamingEvent.timePassed === "number"
     ? life.age + streamingEvent.timePassed
     : life.age;
@@ -391,14 +391,17 @@ export default function PlayPage() {
       </header>
 
       {requestError && <div className="request-error" role="alert"><p>{requestError}</p><button className="text-button" type="button" onClick={() => loadLife(life.lifeId)}>恢复最新进度</button></div>}
+      {life.openingRecovery && !isLoading && <p className="settings-note" role="status">这局开篇未完整生成。已有经历已保留，可以接着讲完童年。</p>}
 
       {narrating ? <NarrationScene
         key={isLoading ? "generating" : life.eventId}
         heading={isLoading ? (life.lifeId ? "日子继续向前" : "你的人生，从这里开始") : `${life.fromAge ?? 0}—${life.age} 岁`}
         story={isLoading ? streamingEvent.narration ?? "" : life.narration ?? ""}
         ready={!isLoading && !!life.eventId}
+        continueLabel={life.openingRecovery ? "接着讲完童年" : "进入下一幕"}
         onContinue={() => {
           if (!life.eventId || isLoading) return;
+          if (life.openingRecovery) { void continueLife(); return; }
           rememberLifeScene(life.lifeId, life.eventId, "decision");
           setDecisionEventId(life.eventId);
           window.scrollTo({ top: 0, behavior: "instant" });

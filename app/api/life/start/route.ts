@@ -15,6 +15,7 @@ import { createStartLife, parseStartLifeRequest, resolveStartPlan } from "../../
 import { storyStream } from "../../../../lib/story-stream";
 import { acquireGeneration, releaseGeneration, commitGeneration } from "../../../../lib/generation-capacity";
 import { readJsonObject, withApiGuard } from "../../../../lib/api-request";
+import { assertGeneratedEventForState } from "../../../../lib/engine/event-contract";
 
 const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" };
 
@@ -87,6 +88,7 @@ export const POST = withApiGuard(async (request: Request) => {
       }
       // 开局事件以“待定节点”写入 history（含完整选项/时间戳/usage），不丢开局；
       // 剧本/ForU 的第一幕发生在当前年龄，允许 timePassed=0，不凭空加一岁。
+      assertGeneratedEventForState(item.value, generationState);
       const openedState = applyNextEvent(generationState, item.value, undefined, {
           allowZeroTime: openingAtCurrentAge,
         });

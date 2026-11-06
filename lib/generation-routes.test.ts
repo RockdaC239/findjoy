@@ -68,6 +68,37 @@ it("preserves an uncertain opening key when the database cannot confirm recovery
  expect(await commerceStore.balance("alice")).toEqual({available:20,held:20});
 });
 
+it("rejects legacy generation output before saving a version3 opening and refunds its reservation", async () => {
+ mocks.stream.mockImplementation(async function* () {
+   return {timePassed:5,story:"旧版童年",event:{type:"family",title:"童年",importance:0.7},choices:[],objectiveChanges:{}};
+ });
+ const response=await start(request());
+ expect(await response.text()).toContain("START_FAILED");
+ expect(await commerceStore.balance("alice")).toEqual({available:40,held:0});
+ expect((await query("SELECT count(*)::integer AS n FROM lives WHERE state::jsonb->'basic'->>'age'='5'")).rows).toEqual([{n:0}]);
+});
+
+it("resumes a partial opening in place and replaces the mixed transcript without charging again", async () => {
+ const life=createStarterLife({age:5});life.experienceVersion=3;
+ life.history=[{id:"partial",age:5,type:"family",title:"童年",story:"已有的童年经历",choices:[],importance:0.7}];
+ await lifeStore.set(life,"alice");
+ await lifeStore.setTranscript(life.lifeId,[{role:"assistant",content:'{"story":"旧协议童年"}'}]);
+ mocks.stream.mockImplementation(async function*(){return {
+  outcome:"continue",timePassed:10,narration:"这十年你继续长大。",story:"十五岁的一件事。",
+  event:{type:"family",title:"新的决定",importance:0.7},choices:[{id:"A",text:"和家人谈谈"},{id:"B",text:"先想一想"}],objectiveChanges:{},
+ };});
+ const response=await next(request({expectedEventId:"partial"}),{params:Promise.resolve({id:life.lifeId})});
+ expect(await response.text()).toContain("event: complete");
+ const saved=(await lifeStore.get(life.lifeId,"alice"))!;
+ expect(saved.basic.age).toBe(15);expect(saved.history).toHaveLength(2);
+ expect(saved.history[0]).toEqual(life.history[0]);
+ const transcript=(await lifeStore.getTranscript(life.lifeId))!;
+ expect(transcript).toHaveLength(2);
+ expect(JSON.parse(transcript[0].content).history[0].story).toBe("已有的童年经历");
+ expect(JSON.parse(transcript[1].content).narration).toBe("这十年你继续长大。");
+ expect(await commerceStore.balance("alice")).toEqual({available:0,held:0});
+});
+
 it("persists ending usage across failed and successful attempts and replays it without new model work", async () => {
  const life=createStarterLife({age:82});life.dead=true;await lifeStore.set(life,"alice");
  mocks.ending.mockImplementation(async (_state,_config,onUsage)=>{

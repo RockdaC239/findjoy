@@ -1,6 +1,7 @@
 import type { LifeState, LifeChoice, EventType } from "./life";
 import { getLifeScenario, NORMAL_SCENARIO } from "./modes/scenario";
 import type { LifeScenario } from "./modes/types";
+import { needsOpeningRecovery } from "./engine/phase";
 
 // 前端「断点恢复」：从已持久化的 LifeState 重建当前要展示的事件节点。
 // 服务器每步都把整局状态存入 PostgreSQL，玩家刷新/关页后再进来，
@@ -8,6 +9,7 @@ import type { LifeScenario } from "./modes/types";
 export interface LifeView {
   lifeId: string;
   experienceVersion?: 3;
+  openingRecovery?: boolean;
   narration?: string;
   fromAge?: number;
   eventId?: string;
@@ -57,7 +59,8 @@ export function buildLifeView(state: LifeState | null | undefined): LifeView {
     eventId: last?.id,
     ...(state.experienceVersion === 3 ? {
       experienceVersion: 3,
-      narration: text(last?.narration),
+      narration: text(last?.narration) || (needsOpeningRecovery(state) ? text(last?.story) : ""),
+      ...(needsOpeningRecovery(state) ? { openingRecovery: true } : {}),
       fromAge: state.history.at(-2)?.age ?? startAge,
     } : {}),
     age: typeof state.basic?.age === "number" ? state.basic.age : 0,

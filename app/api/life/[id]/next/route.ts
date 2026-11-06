@@ -12,6 +12,8 @@ import { lifeStore } from "../../../../../lib/life-store";
 import { storyStream } from "../../../../../lib/story-stream";
 import { acquireGeneration, releaseGeneration, commitGeneration } from "../../../../../lib/generation-capacity";
 import { readJsonObject, withApiGuard } from "../../../../../lib/api-request";
+import { needsOpeningRecovery } from "../../../../../lib/engine/phase";
+import { assertGeneratedEventForState } from "../../../../../lib/engine/event-contract";
 
 const streamHeaders = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" };
 
@@ -54,7 +56,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
       await releaseGeneration(admission);
       return NextResponse.json({state:latestState,ended:latestState?.dead});
     }
-    transcript=await lifeStore.getTranscript(id);
+    transcript=needsOpeningRecovery(state) ? [] : await lifeStore.getTranscript(id);
   } catch(error) {
     if (lease) await lifeGeneration.release(lease).catch(() => {});
     if (admission) await releaseGeneration(admission);
@@ -80,10 +82,11 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
       }
       // 选择可能为空（童年纯叙事节点）。applyNextEvent 会把真实选择挂到给出它的节点上，
       // 新节点以待定状态入列；不选择则不补齐任何 choiceText。
+      assertGeneratedEventForState(item.value, state);
       const nextState = applyNextEvent(state, item.value, choiceForModel);
       if (!mock) nextState.flags.developerMock = false;
       if (transcript) {
-        transcript.push({ role: "user", content: buildTranscriptUserContent(state, choiceForModel, false) });
+        transcript.push({ role: "user", content: buildTranscriptUserContent(state, choiceForModel, transcript.length === 0) });
         transcript.push({ role: "assistant", content: serializeTranscriptEvent({ ...item.value, narrative: nextState.history.at(-1)?.narrative }) });
 
       }

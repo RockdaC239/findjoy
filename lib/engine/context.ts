@@ -4,7 +4,7 @@ import { buildRecentSituationHint, leftStorylines, parseAvoidStorylines, type St
 import { buildScenarioReviewDirective, buildThemeTurnHint, getLifeScenario } from "../modes/scenario";
 import { detectValueAxis, lastChoiceNode } from "./event-contract";
 import { buildSystemPrompt, ENDING_SYSTEM_PROMPT } from "./prompts/assemble";
-import { CHILDHOOD_BOUNDARY } from "./phase";
+import { CHILDHOOD_BOUNDARY, needsOpeningRecovery } from "./phase";
 import type { LifeState, LifeChoice } from "../life";
 
 // 持久化的对话转录：每轮请求 = [system, ...转录, user(本轮)]，纯追加式。
@@ -18,6 +18,10 @@ export interface TranscriptMessage {
 function buildTurnTask(state: LifeState, choice?: LifeChoice) {
   const pending = state.history.at(-1);
   return {
+    ...(needsOpeningRecovery(state) ? { opening_recovery: {
+      from_age: state.basic.age, to_age: CHILDHOOD_BOUNDARY, timePassed: CHILDHOOD_BOUNDARY - state.basic.age,
+      instruction: "已有童年经历是真实历史，不重写、不删除、不虚构玩家选择。接着讲述当前年龄到决策边界的成长，narration非空，story与choices给出边界年龄的首个决策。timePassed使用本字段指定跨度；合理早逝除外。",
+    } } : {}),
     respond_to: pending && choice && choice.id !== "none" ? { eventId: pending.id, action: choice.text } : null,
     ...(state.experienceVersion === 3 && state.lifespan ? { lifespan_boundary: { age: state.lifespan, instruction: "落地年龄不能超过该生命终点，讲述不描述此后经历；到达时必须death，无下一决策。" } } : {}),
     recent_decisions: state.history.filter(event => event.choiceText).slice(-4).map(event => ({
@@ -99,6 +103,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
       internal_conflicts: state.psychology.internalConflicts,
     };
     payload.major_memories = state.majorMemories;
+    if (state.history.length) payload.history = state.history;
   }
   payload.current_state = {
     age: state.basic.age,
@@ -177,6 +182,7 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
   })();
   const systemPrompt = buildSystemPrompt(expectChoices, {
     experienceVersion: state.experienceVersion,
+    openingRecoveryAge: needsOpeningRecovery(state) ? state.basic.age : undefined,
     birth: state.birth,
     background: scenario.mode === "script" || scenario.mode === "foru" ? undefined : flagsToBackground(state.flags),
     transitioning: expectChoices && state.basic.age < CHILDHOOD_BOUNDARY && !openingAtCurrentAge,

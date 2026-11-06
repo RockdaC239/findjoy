@@ -85,3 +85,11 @@ it("starts ForU narration at the player's supplied age", () => {
   state.scenario = { mode: "foru", brief: { age: 30, city: "上海", occupation: "设计师", family: "", relationship: "single", economy: "ordinary", health: "good", housing: "rent", situation: "正在考虑换一份工作", focus: "工作" } };
   expect(buildLifeView(state).fromAge).toBe(30);
 });
+
+it("offers recovery instead of an empty decision for a mixed-version childhood opening", () => {
+  const state = baseState();
+  state.experienceVersion = 3;
+  state.basic.age = 5;
+  state.history = [{ id: "partial", age: 5, type: "family", title: "童年", story: "已有的童年经历", choices: [], importance: 0.7 }];
+  expect(buildLifeView(state)).toMatchObject({ openingRecovery: true, narration: "已有的童年经历" });
+});
