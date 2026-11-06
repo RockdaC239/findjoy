@@ -7,6 +7,7 @@ import farewellStyles from "../../components/Farewell.module.css";
 import { DeveloperDebugButton } from "../../components/DeveloperMode";
 import { LifeEventScene } from "../../components/LifeEventScene";
 import { NarrationScene } from "../../components/NarrationScene";
+import { CHILDHOOD_BOUNDARY } from "../../lib/engine/phase";
 import { AccountNav } from "../../components/AccountNav";
 import { BrandLogo } from "../../components/BrandLogo";
 import { MusicToggle } from "../../components/MusicToggle";
@@ -74,6 +75,7 @@ export default function PlayPage() {
   const lastError = useRef("");
   const [life, setLife] = useState<LifeView | null>(null);
   const [decisionEventId, setDecisionEventId] = useState<string | null>(null);
+  const [narrationAttempt, setNarrationAttempt] = useState(0);
   const [isBooting, setIsBooting] = useState(true);
   const [bootError, setBootError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -101,6 +103,11 @@ export default function PlayPage() {
 
   function receiveLifePayload(payload: unknown) {
     const state = stateFromPayload(payload);
+    if (redirecting.current) {
+      if (state && !state.dead) rememberActiveLife(state.lifeId);
+      return null;
+    }
+    if (state && !state.dead) restoreView(state);
     if (state?.experienceVersion !== 3 && (state?.dead || (isRecord(payload) && payload.ended === true))) setEnteringFarewell(true);
     return payload;
   }
@@ -113,6 +120,7 @@ export default function PlayPage() {
   }
 
   async function requestLife(url: string, body?: Record<string, unknown>, idempotencyKey?: string, config?: ModelConfig): Promise<unknown | null> {
+    setNarrationAttempt(value => value + 1);
     setIsLoading(true);
     setRequestError("");
     setStreamingEvent({ story: "", title: "", choices: [] });
@@ -125,13 +133,13 @@ export default function PlayPage() {
         body: JSON.stringify({ ...(body ?? {}), modelConfig: config ?? modelConfig }),
       });
       if (response.status === 401) {
+        if (!redirecting.current) router.replace(`/login?returnTo=${encodeURIComponent(LOGIN_RETURN_TO)}`);
         redirecting.current = true;
-        router.replace(`/login?returnTo=${encodeURIComponent(LOGIN_RETURN_TO)}`);
         return null;
       }
       if (response.status === 402) {
+        if (!redirecting.current) router.replace("/plans");
         redirecting.current = true;
-        router.replace("/plans");
         return null;
       }
       if (!response.ok) {
@@ -173,6 +181,7 @@ export default function PlayPage() {
               setStreamingEvent(event);
             }
           } else if (message.event === "retry") {
+            setNarrationAttempt(value => value + 1);
             generated = "";
             setEnteringFarewell(false);
             setStreamingEvent({ story: "", title: "", choices: [] });
@@ -283,7 +292,6 @@ export default function PlayPage() {
       router.replace(`/review/${encodeURIComponent(state.lifeId)}`);
       return;
     }
-    restoreView(state);
     clearPendingStart();
     startMusicIfEnabled();
   }
@@ -335,7 +343,6 @@ export default function PlayPage() {
       router.replace(`/review/${encodeURIComponent(state.lifeId)}`);
       return;
     }
-    restoreView(state);
   }
 
   async function continueLife() {
@@ -350,7 +357,6 @@ export default function PlayPage() {
     }
     const state = stateFromPayload(payload);
     if (!state) return;
-    restoreView(state);
   }
 
   if (enteringFarewell) return <main className={farewellStyles.farewell} aria-label="正在进入人生告别" aria-busy="true" />;
@@ -372,6 +378,8 @@ export default function PlayPage() {
 
   const modeMeta = getScenarioLabel(life.scenario);
   const narrating = life.experienceVersion === 3 && (life.openingRecovery || isLoading || decisionEventId !== life.eventId);
+  const opening = narrating && (life.scenario.mode === "normal" || life.scenario.mode === "theme")
+    && (isLoading ? !life.lifeId || life.openingRecovery : (life.fromAge ?? life.age) < CHILDHOOD_BOUNDARY && life.age <= CHILDHOOD_BOUNDARY);
   const displayAge = isLoading && typeof streamingEvent.timePassed === "number"
     ? life.age + streamingEvent.timePassed
     : life.age;
@@ -383,7 +391,7 @@ export default function PlayPage() {
           <span className="mode-chip">{modeMeta.label}</span>
           <span className="event-mode-detail">{modeMeta.detail}{!narrating && life.city ? ` · ${life.city}` : ""}</span>
         </div>
-        <p className="current-age">{narrating ? "这一段人生" : `${displayAge} 岁`}</p>
+        <p className="current-age">{opening ? "开篇" : narrating ? "这一段人生" : `${displayAge} 岁`}</p>
         <div className="topbar-actions"><AccountNav>
           <DeveloperDebugButton />
           {MUSIC_UI_ENABLED && <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />}
@@ -394,11 +402,12 @@ export default function PlayPage() {
       {life.openingRecovery && !isLoading && <p className="settings-note" role="status">这局开篇未完整生成。已有经历已保留，可以接着讲完童年。</p>}
 
       {narrating ? <NarrationScene
-        key={isLoading ? "generating" : life.eventId}
-        heading={isLoading ? (life.lifeId ? "日子继续向前" : "你的人生，从这里开始") : `${life.fromAge ?? 0}—${life.age} 岁`}
+        key={narrationAttempt}
+        heading={opening ? undefined : isLoading ? "日子继续向前" : `${life.fromAge ?? 0}—${life.age} 岁`}
         story={isLoading ? streamingEvent.narration ?? "" : life.narration ?? ""}
         ready={!isLoading && !!life.eventId}
         continueLabel={life.openingRecovery ? "接着讲完童年" : "进入下一幕"}
+        onExit={() => setShowExitDialog(true)}
         onContinue={() => {
           if (!life.eventId || isLoading) return;
           if (life.openingRecovery) { void continueLife(); return; }
@@ -412,10 +421,10 @@ export default function PlayPage() {
         <div className="gender-modal" role="dialog" aria-modal="true" aria-label="离开当前人生" onClick={(event) => { if (event.target === event.currentTarget) setShowExitDialog(false); }}>
           <div className="gender-modal-card life-exit-card">
             <h2>离开当前人生？</h2>
-            <p>进度已保存，可随时继续。</p>
+            <p>{isLoading ? "故事仍在生成，离开后可从主页恢复进度。" : "进度已保存，可随时继续。"}</p>
             <div className="exit-actions">
               <button className="primary-button" type="button" onClick={() => setShowExitDialog(false)}>继续当前人生</button>
-              <button className="text-button" type="button" onClick={() => router.push("/")}>离开</button>
+              <button className="text-button" type="button" onClick={() => { redirecting.current = true; router.push("/"); }}>离开</button>
             </div>
           </div>
         </div>

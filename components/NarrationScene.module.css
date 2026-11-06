@@ -12,7 +12,8 @@
 .story p { margin: 0 0 var(--fj-space-6); animation: arrive 900ms ease both; }
 .expanded p { animation: none; }
 .actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: var(--fj-space-6); margin-top: var(--fj-space-10); }
-.actions button { min-height: var(--fj-layout-control); }
+.actions button, .actions a { min-height: var(--fj-layout-control); }
+.actions a { display: inline-flex; align-items: center; }
 @keyframes arrive { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 600px) {
   .content h1 { font-size: var(--fj-typography-mobile-title-size); }

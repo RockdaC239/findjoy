@@ -5,6 +5,15 @@ import { expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import baseline from "../prompt-baseline.json";
 import { buildSystemPrompt, ENDING_SYSTEM_PROMPT } from "./assemble";
+
+it("applies the childhood opening treatment only to new ordinary openings and their recovery", () => {
+  const base = { experienceVersion: 3 as const, scenario: { mode: "normal" as const } };
+  expect(buildSystemPrompt(true, { ...base, isOpening: true })).toContain("【童年开篇写法】");
+  expect(buildSystemPrompt(true, { ...base, openingRecoveryAge: 5 })).toContain("【童年开篇写法】");
+  expect(buildSystemPrompt(true, base)).not.toContain("【童年开篇写法】");
+  expect(buildSystemPrompt(true, { scenario: base.scenario, isOpening: true })).not.toContain("【童年开篇写法】");
+  expect(buildSystemPrompt(true, { ...base, scenario: scriptToScenario(SCRIPTS[0]), isOpening: true })).not.toContain("【童年开篇写法】");
+});
 it("matches the reviewed childhood, adult and ending prompt baseline", () => {
   expect([buildSystemPrompt(false), buildSystemPrompt(true), ENDING_SYSTEM_PROMPT].map(prompt => createHash("sha256").update(prompt).digest("hex"))).toEqual(baseline);
   expect(ENDING_SYSTEM_PROMPT).toContain('"highlights"');

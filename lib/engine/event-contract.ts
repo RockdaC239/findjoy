@@ -1,3 +1,5 @@
+import { renderPrompt } from "./prompts/template";
+import retry from "./prompts/retry.json";
 import { normalizeShareLines } from "../share-copy";
 import { boundedText, boundedStrings, normalizeNarrative } from "./narrative";
 import type { LifeState, LifeChoice, LifeEvent, NextEvent, LifeEnding } from "../life";
@@ -264,7 +266,7 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
     const currentAxis = detectValueAxis(normalizeChoices(candidate.choices));
     const previousAxis = detectValueAxis(previousChoices);
     if (currentAxis && previousAxis && currentAxis === previousAxis) {
-      return "价值张力轴与上一节点重复（都是\"" + currentAxis + "\"）。相邻节点必须换一条价值轴：上一节点已是\"" + currentAxis + "\"，本次请改用其它张力轴（如理性/感性、服从/反叛、短利/长利、向内/向外、守成/创新、独行/合作、名声/自由、合群/独立、逃避/面对等），不要再用\"闯出去/留守/折中\"同套模板。";
+      return renderPrompt(retry.valueAxis, { axis: currentAxis });
     }
   }
   const texts = [candidate.story, candidate.memory, event.title, ...normalizeChoices(candidate.choices).map((item) => item.text)]
@@ -420,8 +422,8 @@ export function normalizeEnding(value: unknown): LifeEnding | null {
 }
 
 
-export const EVENT_RETRY_GUIDANCE = "字段严格按契约（camelCase，story 在前、event 在后，event.type 只用英文枚举 career/relationship/health/finance/random/family，choices 每项含 id 和非空 text）。";
-export const ENDING_RETRY_GUIDANCE = "age 为数字，death 为字符串，facts 含 occupation/city/events，highlights 4-8 条（每项含 age 和 title），patterns 1-3 句，全程不含姓名。";
+export const EVENT_RETRY_GUIDANCE = retry.EVENT_RETRY_GUIDANCE;
+export const ENDING_RETRY_GUIDANCE = retry.ENDING_RETRY_GUIDANCE;
 
 function normalizeDeathCause(value: unknown): NonNullable<NextEvent["deathCause"]> {
   return value === "natural" || value === "disease" || value === "accident" ? value : "other";

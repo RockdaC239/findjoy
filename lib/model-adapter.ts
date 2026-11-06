@@ -1,4 +1,4 @@
-// 兼容已有调用方；实现按职责放在 engine/，提示词请编辑 engine/prompts/*.md。
+// 兼容已有调用方；实现按职责放在 engine/，提示词内容请编辑 engine/prompts/ 中的 Markdown/JSON，职责见该目录 README。
 export * from "./engine/generate";
 export * from "./engine/event-contract";
 export * from "./engine/context";

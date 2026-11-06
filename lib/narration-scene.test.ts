@@ -20,6 +20,15 @@ it("shows the saved consequences as paragraphs with a local next-scene action an
   expect(html).not.toContain("disabled");
 });
 
+it("can present the opening without a second heading or age label", () => {
+  const html = renderToStaticMarkup(createElement(NarrationScene, {
+    story: "开篇正文。", ready: true, onContinue: () => {},
+  }));
+  expect(html).toContain('aria-label="开篇讲述"');
+  expect(html).not.toContain("<h1");
+  expect(html).not.toContain("narration-title");
+});
+
 it("does not let a partial uncommitted narration advance to another scene", () => {
   const html = renderToStaticMarkup(createElement(NarrationScene, {
     heading: "这一段日子", story: "结果仍在展开", ready: false, onContinue: () => {},
@@ -27,6 +36,16 @@ it("does not let a partial uncommitted narration advance to another scene", () =
   expect(html).toContain('aria-busy="true"');
   expect(html).toContain("disabled");
   expect(html).toContain("正在生成");
+  expect(html).toContain('href="/"');
+  expect(html).toContain("返回主页");
+});
+
+it("keeps the exit action usable while narration is generating", () => {
+  const html = renderToStaticMarkup(createElement(NarrationScene, {
+    heading: "这一段日子", story: "", ready: false, onContinue: () => {}, onExit: () => {},
+  }));
+  expect(html).toMatch(/<button[^>]*type="button"[^>]*>返回主页<\/button>/);
+  expect(html).not.toMatch(/<button[^>]*disabled[^>]*>返回主页<\/button>/);
 });
 
 it("keeps the final narration visible before farewell even when the life has already ended", () => {
@@ -43,4 +62,5 @@ it("keeps the final narration visible before farewell even when the life has alr
   expect(html).toContain("最后那年，你终于收到了远方的回信。");
   expect(html).toContain("走向告别");
   expect(html).not.toContain("THE LAST CHAPTER");
+  expect(html).toContain("返回主页");
 });

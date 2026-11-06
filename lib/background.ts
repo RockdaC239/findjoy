@@ -1,3 +1,5 @@
+import prompt from "./engine/prompts/background.json";
+import { renderPrompt } from "./engine/prompts/template";
 // 出身档案：开局随机生成的三维家庭底色（家庭经济 × 家庭结构 × 开局事件）。
 // 由 start 路由掷出并写入 state.flags，决定初始经济状态，并作为本局系统提示词的固定后缀。
 // 三维正交，5 × 5 × 4 = 100 种组合，覆盖大多数人生的开局底色；
@@ -125,37 +127,20 @@ export function flagsToBackground(flags: Record<string, unknown>): LifeBackgroun
   return { economy: bgEconomy as FamilyEconomy, structure: bgStructure as FamilyStructure, event: bgEvent as OpeningEventGenre, ...(OPPORTUNITY_SETTINGS.includes(flags.bgOpportunity as OpportunitySetting) ? { opportunity: flags.bgOpportunity as OpportunitySetting } : {}) };
 }
 
-export const ECONOMY_GUIDANCE: Record<FamilyEconomy, string> = {
-  拮据: "住房普通甚至逼仄，父母为钱发愁，但家里可以是温暖的",
-  普通: "普通工薪家庭，收支刚好平衡",
-  小康: "父母收入稳定，有车有房，生活宽裕但不奢侈",
-  富裕: "家境优渥，物质不缺，但期待与规矩也随之而来",
-  大富: "家境显赫，物质极尽充裕，童年可能被安排、被保护，也可能被注视",
-};
+export const ECONOMY_GUIDANCE: Record<FamilyEconomy, string> = prompt.ECONOMY_GUIDANCE;
 
-export const STRUCTURE_GUIDANCE: Record<FamilyStructure, string> = {
-  双亲完整: "父母都在身边，婚姻完整；可自然设定独生或有兄弟姐妹",
-  单亲: "由父亲或母亲一人抚养（离异或一方早逝），另一位照实存在或缺席",
-  再婚家庭: "父母离异后有一方再婚，家里有继父/继母，也可能有继兄弟姐妹",
-  留守隔代: "父母在外地打工或常年不在身边，由爷爷奶奶/外公外婆抚养",
-  收养: "被收养长大，或从小在孤儿院/福利院长大",
-};
+export const STRUCTURE_GUIDANCE: Record<FamilyStructure, string> = prompt.STRUCTURE_GUIDANCE;
 
-export const EVENT_GUIDANCE: Record<OpeningEventGenre, string> = {
-  安稳温暖: "写一件温暖的小事或家庭普通决定让生活有了第一次颜色（迎接新成员、搬进更好的住处、一次家庭旅行）；不写危机",
-  机会降临: "写一个机会如何落到你面前：一次被托付的小事、接触新工具、进入新的生活环境、获得学习或参与的机会（机会的类型要多样：学业、手艺、机遇、贵人、平台，不一定要落在体育或艺术赛道上）；开局基调可以明亮一些",
-  家庭变故: "写家庭的一次真实变故：失业、疾病、搬迁、父母分开或亲人离去；这只是多种可能之一，照实写即可，不渲染苦难",
-  平凡开端: "没有大事发生，第一个有分量的决定来自你自己的愿望或好奇（想学一样东西、想交一个朋友、第一次独自出门）",
-};
+export const EVENT_GUIDANCE: Record<OpeningEventGenre, string> = prompt.EVENT_GUIDANCE;
 
 // 追加到本局系统提示词的固定后缀（同局内字节稳定，不破坏 DeepSeek 上下文缓存）。
 export function buildBackgroundDirective(background: LifeBackground): string {
   return [
-    "【本局出身档案】（只约束开局，之后人生自然发展；家庭经济与结构决定初始状态，故事要与之一致）",
-    `- 家庭经济：${background.economy}——${ECONOMY_GUIDANCE[background.economy]}。`,
-    `- 家庭结构：${background.structure}——${STRUCTURE_GUIDANCE[background.structure]}。`,
-    ...(background.opportunity ? [`- 可接触的生活环境：${background.opportunity}。这是背景，不决定你的职业、天赋或性格；儿童只接触符合年龄的人和事，之后方向由选择发展。`] : []),
-    `- 开局事件基调：${background.event}——${EVENT_GUIDANCE[background.event]}。`,
+    prompt.heading,
+    renderPrompt(prompt.economy, { economy: background.economy, guidance: ECONOMY_GUIDANCE[background.economy] }),
+    renderPrompt(prompt.structure, { structure: background.structure, guidance: STRUCTURE_GUIDANCE[background.structure] }),
+    ...(background.opportunity ? [renderPrompt(prompt.opportunity, { opportunity: background.opportunity })] : []),
+    renderPrompt(prompt.event, { event: background.event, guidance: EVENT_GUIDANCE[background.event] }),
   ].join("\n");
 }
 
@@ -164,11 +149,11 @@ export function buildBackgroundDirective(background: LifeBackground): string {
 // （例如收养被写成孤儿院、双亲完整被写成一方早逝）。
 export function buildOpeningToneDirective(background: LifeBackground): string {
   const guidance = background.event === "家庭变故"
-    ? "写家庭的一次真实变故：失业、疾病、搬迁、照护压力等；开局不把出生档案中的同住父母改写成离异、缺席或死亡。此后的变化要有时间和因果。"
+    ? prompt.upheavalGuidance
     : EVENT_GUIDANCE[background.event];
   return [
-    "【本局开局事件基调】（只约束故事从哪里开始，不覆盖出生事实）",
-    `- 基调：${background.event}——${guidance}。`,
-    "出生地点、父母角色与数量、同住/异地/缺席状态、职业和家庭条件以【程序出生事实】为准。基调需要家庭变化时，只写不否定出生档案的变化；不补造档案之外的继亲、养父母、已故亲属、收养机构或债务原因。",
+    prompt.toneHeading,
+    renderPrompt(prompt.tone, { event: background.event, guidance: guidance }),
+    prompt.birthBoundary,
   ].join("\n");
 }

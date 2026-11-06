@@ -1,3 +1,5 @@
+import turn from "./prompts/turn.json";
+import { renderPrompt } from "./prompts/template";
 import { familyAges } from "../birth/ages";
 import { flagsToBackground } from "../background";
 import { buildRecentSituationHint, leftStorylines, parseAvoidStorylines, type StorylineGuards } from "../storyline";
@@ -20,10 +22,10 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
   return {
     ...(needsOpeningRecovery(state) ? { opening_recovery: {
       from_age: state.basic.age, to_age: CHILDHOOD_BOUNDARY, timePassed: CHILDHOOD_BOUNDARY - state.basic.age,
-      instruction: "已有童年经历是真实历史，不重写、不删除、不虚构玩家选择。接着讲述当前年龄到决策边界的成长，narration非空，story与choices给出边界年龄的首个决策。timePassed使用本字段指定跨度；合理早逝除外。",
+      instruction: renderPrompt(turn.openingRecovery),
     } } : {}),
     respond_to: pending && choice && choice.id !== "none" ? { eventId: pending.id, action: choice.text } : null,
-    ...(state.experienceVersion === 3 && state.lifespan ? { lifespan_boundary: { age: state.lifespan, instruction: "落地年龄不能超过该生命终点，讲述不描述此后经历；到达时必须death，无下一决策。" } } : {}),
+    ...(state.experienceVersion === 3 && state.lifespan ? { lifespan_boundary: { age: state.lifespan, instruction: renderPrompt(turn.lifespanBoundary) } } : {}),
     recent_decisions: state.history.filter(event => event.choiceText).slice(-4).map(event => ({
       eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
     })),
@@ -33,11 +35,11 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
       ...(state.basic.age >= 7 && state.basic.education === "未开始" ? ["education"] : []),
     ],
     final_stage: state.lifespan && state.basic.age >= state.lifespan - 2
-      ? { last_year: state.lifespan, instruction: "这是生命最后阶段。本幕必须写到这个年龄的生命终点，outcome=death，choices=[]；不要留下等待玩家操作的悬念，不要继续把时间跳到更老。" }
+      ? { last_year: state.lifespan, instruction: renderPrompt(turn.finalStage) }
       : null,
-    pacing: "一次跨年应有与跨度相称的处境变化。先简短回应上一行动，再写阶段进展或新的可行动问题；分花、看照片、递东西等同一小事应在一幕内交代结果，不每年重复追问。物件回响不应占据全部人生。关系之外允许求学、工作、生活能力与世界自然发展，但不强迫玩家离开已选方向。state_gaps指出仍遗留童年默认值的字段，请按本幕实际事实用objectiveChanges更新，不擅自预定职业或编造文凭。",
-    priority: "先回应本轮已选行动，呈现人物的具体回应和处境变化；相关旧事尚未有结果时优先推进或结清，不自动另开危机。开局与童年没有选择时只写实际发生的经历，不虚构决定。",
-    continuity: "历史选择只说明当时行动，不证明现实人格。允许相似人生问题在资源、责任和关系变化后再出现；避免复演相同困境。收获可以真实留下，不必立即安排惩罚。未选分支不是已发生事实。",
+    pacing: renderPrompt(turn.pacing),
+    priority: renderPrompt(turn.priority),
+    continuity: renderPrompt(turn.continuity),
   };
 }
 
@@ -153,7 +155,7 @@ export function withRetryCorrection(attempt: number, messages: NextEventMessage[
   if (attempt === 1 || !failureReason) return messages;
   return [
     ...messages,
-    { role: "user", content: `你上一轮输出的 JSON 未通过校验：${failureReason}。请直接重新输出一个完全合规的 JSON 对象：不要 Markdown 代码块、不要任何解释或多余文字。${guidance}` },
+    { role: "user", content: renderPrompt(turn.retryCorrection, { failureReason, guidance }) },
   ];
 }
 
@@ -215,7 +217,7 @@ export function buildEndingMessages(state: LifeState): NextEventMessage[] {
     family_ages: familyAges(state.birth, state.basic.age) ?? null,
     death_cause: state.flags.deathCause ?? "natural",
   });
-  const evidenceRule = "回顾中涉及你选择了什么、发生在哪个年龄时，以decision_evidence中的action与age为准。历史choices是当时可选项，不代表选择；后续consequence只能说明下一事件，不能把其年龄移到前一决定。引用具体选择时evidenceEventIds必须包含相应eventId。不要把普通叙述或未选行动写成玩家决定。";
+  const evidenceRule = renderPrompt(turn.evidenceRule);
   const systemPrompt = [ENDING_SYSTEM_PROMPT, scenarioReview, evidenceRule].filter(Boolean).join("\n\n");
   const messages = [{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: prompt }];
   return messages;
