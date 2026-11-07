@@ -85,7 +85,7 @@ it("resumes a partial opening in place and replaces the mixed transcript without
  await lifeStore.setTranscript(life.lifeId,[{role:"assistant",content:'{"story":"旧协议童年"}'}]);
  mocks.stream.mockImplementation(async function*(){return {
   outcome:"continue",timePassed:10,narration:"这十年你继续长大。",story:"十五岁的一件事。",
-  event:{type:"family",title:"新的决定",importance:0.7},choices:[{id:"A",text:"和家人谈谈"},{id:"B",text:"先想一想"}],objectiveChanges:{},
+  event:{type:"family",title:"新的决定",importance:0.7},choices:[{id:"A",text:"和家人谈谈"},{id:"B",text:"先想一想"},{id:"C",text:"先听他们说完"}],objectiveChanges:{},
  };});
  const response=await next(request({expectedEventId:"partial"}),{params:Promise.resolve({id:life.lifeId})});
  expect(await response.text()).toContain("event: complete");

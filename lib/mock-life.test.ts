@@ -50,7 +50,7 @@ it("runs v3 opening, a choice-dependent adult response and terminal narration wi
   expect(state.basic.age).toBe(16);
   expect(state.history[0].choiceId).toBe(firstChoice.id);
   expect(state.history[1].choiceId).toBeUndefined();
-  expect(state.history[1].choices).toHaveLength(2);
+  expect(state.history[1].choices).toHaveLength(3);
   const secondChoice = state.history[1].choices![1];
   state = applyNextEvent(state, mockLifeEvent(state, secondChoice), secondChoice);
   expect(state.basic.age).toBe(24);

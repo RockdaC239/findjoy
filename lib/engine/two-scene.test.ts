@@ -5,7 +5,7 @@ import { prepareEventRequest, buildEndingMessages } from './context';
 import { generateNextEvent } from './generate';
 import { enforceLifespan } from '../lifespan';
 import { createStartLife, resolveStartPlan } from '../modes/start';
-const output = {outcome:'continue' as const,timePassed:0,narration:'你把信寄出，对方回信约好见面。',story:'见面地点需要商量。',event:{type:'relationship',title:'见面',importance:0.7},choices:[{id:'A',text:'去公园'},{id:'B',text:'去书店'}],objectiveChanges:{cash:10}};
+const output = {outcome:'continue' as const,timePassed:0,narration:'你把信寄出，对方回信约好见面。',story:'见面地点需要商量。',event:{type:'relationship',title:'见面',importance:0.7},choices:[{id:'A',text:'去公园'},{id:'B',text:'去书店'},{id:'C',text:'先问清时间，改到周末'}],objectiveChanges:{cash:10}};
 describe('two scene engine',()=>{
  it('recovers a mixed-version childhood opening without discarding the saved experience',()=>{
  const state=createStarterLife({age:5});state.experienceVersion=3;
@@ -23,6 +23,7 @@ describe('two scene engine',()=>{
  it('requires narration for v3 and preserves same-age transcript',()=>{
  const state={...applyNextEvent(createStarterLife({age:24}), {...output, timePassed:1, event:{type:"relationship",title:"信件",importance:0.7}}),experienceVersion:3 as const};
  expect(normalizeGeneratedEvent({...output,narration:undefined},true,undefined,undefined,state)).toBeNull();
+ expect(normalizeGeneratedEvent({...output,choices:output.choices.slice(0,2)},true,undefined,undefined,state)).toBeNull();
  const event=normalizeGeneratedEvent(output,true,undefined,undefined,state)!;
  expect(event.timePassed).toBe(0);
  expect(JSON.parse(serializeTranscriptEvent(event)).narration).toBe(output.narration);

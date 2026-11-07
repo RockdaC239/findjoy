@@ -49,4 +49,6 @@
 
 - [人生 AI 引擎维护约定](development/ai-engine.md)：模块边界、提示词预览、JSON 协议变更与模式扩展。
 
+- [提示词分层设计](development/prompt-layers.md)：craft / two-scene / opening / era / 模式与动态片段的分层、组装顺序和修改指南。
+
 - [个人开发调试工具](development/developer-tools.md)：节点预览、自助积分、私人测试支付及权限边界。

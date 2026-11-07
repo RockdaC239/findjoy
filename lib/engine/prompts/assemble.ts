@@ -1,4 +1,5 @@
 import assembly from "./assembly.json";
+import era from "./era.json";
 import { renderPrompt } from "./template";
 import { buildBirthDirective, type BirthProfile } from "../../birth/profile";
 import { OUTPUT_EXAMPLES } from "../output-format";
@@ -10,7 +11,7 @@ import { buildOpeningDirective, buildScenarioDirective } from "../../modes/scena
 import type { LifeScenario } from "../../modes/types";
 import { CHILDHOOD_BOUNDARY } from "../phase";
 
-// Markdown 维护叙事，JSON 维护片段与示例；TS 只组装，审阅标题不发送给模型。
+// Markdown 维护成篇叙事与阶段指令；JSON 维护可替换片段、时代上下文与示例；TS 只组装，审阅标题不发送给模型。
 function readPrompt(name: string): string {
   return readFileSync(path.join(process.cwd(), "lib/engine/prompts", `${name}.md`), "utf8")
     .replace(/^## .*\n/gm, "")
@@ -21,7 +22,9 @@ function readPrompt(name: string): string {
     });
 }
 
+const CRAFT_PROMPT = readPrompt("craft");
 const TWO_SCENE_SYSTEM_PROMPT = readPrompt("two-scene");
+const V3_SYSTEM_PROMPT = `${CRAFT_PROMPT}\n\n${TWO_SCENE_SYSTEM_PROMPT}`;
 const CHILDHOOD_OPENING_SYSTEM_PROMPT = readPrompt("opening");
 const SYSTEM_PROMPT = readPrompt("adult");
 export const CHILDHOOD_SYSTEM_PROMPT = readPrompt("childhood");
@@ -59,10 +62,14 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
     isOpening = false,
     themeHint,
   } = options;
-  const base = options.experienceVersion === 3 ? TWO_SCENE_SYSTEM_PROMPT : expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
-  const eraHint = scenario?.mode === "normal" || scenario?.mode === "theme"
-    ? renderPrompt(assembly.eraHint)
-    : "";
+  const base = options.experienceVersion === 3 ? V3_SYSTEM_PROMPT : expectChoices ? SYSTEM_PROMPT : CHILDHOOD_SYSTEM_PROMPT;
+  // 时代上下文单独成层：普通/主题使用默认当代；v3 的 ForU 也从当下生活开始；
+  // 剧本的年代由 scenario.directive（mode-catalog 的 eraLabel/eraYears/eraSetting）承载，不能再叠加当代。
+  const eraContext = scenario && (
+    scenario.mode === "normal" ||
+    scenario.mode === "theme" ||
+    (options.experienceVersion === 3 && scenario.mode === "foru")
+  ) ? renderPrompt(era.contemporary) : "";
   const profile = background
     ? birth
       ? buildOpeningToneDirective(background)
@@ -86,7 +93,7 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
   const childhoodOpening = options.experienceVersion === 3
     && (scenario?.mode === "normal" || scenario?.mode === "theme")
     && (isOpening || options.openingRecoveryAge !== undefined) ? CHILDHOOD_OPENING_SYSTEM_PROMPT : "";
-  const suffixes = [eraHint, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint, childhoodOpening, recoveryHint].filter(
+  const suffixes = [eraContext, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint, childhoodOpening, recoveryHint].filter(
     (part): part is string => Boolean(part && part.trim()),
   );
   return suffixes.length > 0 ? `${base}\n\n${suffixes.join("\n\n")}` : base;

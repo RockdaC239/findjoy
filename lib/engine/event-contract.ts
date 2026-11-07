@@ -255,7 +255,7 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
     if (candidate.outcome === "death") {
       if (candidate.story !== "" || !Array.isArray(candidate.choices) || candidate.choices.length) return "终点不允许决策";
       if (!["natural", "disease", "accident", "other"].includes(String(candidate.deathCause))) return "deathCause 非法";
-    } else if (!Array.isArray(candidate.choices) || candidate.choices.length < 2 || candidate.choices.length > 3 || candidate.choices.some((item: unknown) => !item || typeof item !== "object" || typeof (item as LifeChoice).id !== "string" || !(item as LifeChoice).id.trim() || typeof (item as LifeChoice).text !== "string" || !(item as LifeChoice).text.trim()) || new Set(candidate.choices.map((item: LifeChoice) => item.id)).size !== candidate.choices.length) return "choices 非法";
+    } else if (!Array.isArray(candidate.choices) || candidate.choices.length !== 3 || candidate.choices.some((item: unknown) => !item || typeof item !== "object" || typeof (item as LifeChoice).id !== "string" || !(item as LifeChoice).id.trim() || typeof (item as LifeChoice).text !== "string" || !(item as LifeChoice).text.trim()) || new Set(candidate.choices.map((item: LifeChoice) => item.id)).size !== candidate.choices.length) return "choices 必须为 3 项（每项需 id + 非空 text）";
   }
   if (!(state?.experienceVersion === 3 && candidate.outcome === "death") && (typeof candidate.story !== "string" || !candidate.story.trim())) return "story 缺失或为空";
   if (typeof event.title !== "string" || !event.title.trim()) return "event.title 缺失或为空";

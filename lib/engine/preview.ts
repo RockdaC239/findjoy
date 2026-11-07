@@ -37,7 +37,7 @@ export function previewMessages(options: PreviewOptions) {
       ...(state.experienceVersion === 3 ? { narration: "你和家人共同度过了忙碌而平静的一周。（合成样例）" } : {}),
       story: "你收到一份外地工作的邀请，家人正等着你一起吃晚饭。（合成样例）",
       event: { type: "career", title: "一封外地工作的邀请", importance: 0.8 },
-      choices: [{ id: "A", text: "接受邀请，去新的城市试试" }, { id: "B", text: "留在家人身边，继续现在的工作" }],
+      choices: [{ id: "A", text: "接受邀请，去新的城市试试" }, { id: "B", text: "留在家人身边，继续现在的工作" }, { id: "C", text: "先问清对方能给的条件" }],
       objectiveChanges: {}, memory: "你曾在工作机会与熟悉的生活之间犹豫。",
     };
     transcript = [{ role: "user", content: buildTranscriptUserContent(state, undefined, true) }, { role: "assistant", content: serializeTranscriptEvent(event) }];

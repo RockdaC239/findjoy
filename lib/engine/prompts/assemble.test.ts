@@ -37,6 +37,17 @@ it("anchors ordinary and theme lives in contemporary China without overriding au
   expect(buildSystemPrompt(true, { scenario: scriptToScenario(SCRIPTS[0]) })).not.toContain("【当代生活背景】");
 });
 
+it("composes v3 from shared craft, event protocol and exactly one era context", () => {
+  const normal = buildSystemPrompt(true, { experienceVersion: 3, scenario: { mode: "normal" } });
+  expect(normal).toContain("【先说清楚】");
+  expect(normal).toContain("narration必须非空");
+  expect(normal.match(/【当代生活背景】/g)).toHaveLength(1);
+
+  const script = buildSystemPrompt(true, { experienceVersion: 3, scenario: scriptToScenario(SCRIPTS[0]) });
+  expect(script).toContain("【先说清楚】");
+  expect(script).not.toContain("【当代生活背景】");
+});
+
 it("uses concrete birth facts instead of the generic family background once a birth profile exists", () => {
   const birth = rollBirthProfile(() => 0.5, { economy: "普通", structure: "收养" });
   const background = { economy: "普通" as const, structure: "收养" as const, event: "家庭变故" as const };

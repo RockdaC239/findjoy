@@ -34,12 +34,12 @@ it("uses real routes for a childhood narration, an adult decision and a terminal
   expect(await commerceStore.balance(user.id)).toEqual({ available: 40, held: 0 });
   expect(life.experienceVersion).toBe(3);
   expect(life.basic.age).toBe(15); expect(life.history.at(-1)!.narration).toBeTruthy();
-  expect(life.history.at(-1)!.choices).toHaveLength(2);
+  expect(life.history.at(-1)!.choices).toHaveLength(3);
   const params = { params: Promise.resolve({ id: life.lifeId }) };
   life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
   expect(life.dead).toBe(false); expect(life.basic.age).toBe(16);
   expect(life.history.at(-1)!.narration).toBeTruthy();
-  expect(life.history.at(-1)!.choices).toHaveLength(2);
+  expect(life.history.at(-1)!.choices).toHaveLength(3);
   life = await state(await next(request({ expectedEventId: life.history.at(-1)!.id, choice: life.history.at(-1)!.choices![0] }), params));
   expect(life.dead).toBe(true); expect(life.history).toHaveLength(3);
   expect(life.history.at(-1)!.narration).toBeTruthy();
