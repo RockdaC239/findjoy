@@ -392,10 +392,13 @@ export default function PlayPage() {
           <span className="event-mode-detail">{modeMeta.detail}{!narrating && life.city ? ` · ${life.city}` : ""}</span>
         </div>
         <p className="current-age">{opening ? "开篇" : narrating ? "这一段人生" : `${displayAge} 岁`}</p>
-        <div className="topbar-actions"><AccountNav>
-          <DeveloperDebugButton />
-          {MUSIC_UI_ENABLED && <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />}
-        </AccountNav></div>
+        <div className="topbar-actions">
+          <AccountNav showRecharge={false} collapseOnMobile>
+            <Link className="settings-button" href="/">回到主页</Link>
+            <DeveloperDebugButton />
+            {MUSIC_UI_ENABLED && <MusicToggle enabled={musicEnabled} supported={music.supported} onToggle={toggleMusic} compact />}
+          </AccountNav>
+        </div>
       </header>
 
       {requestError && <div className="request-error" role="alert"><p>{requestError}</p><button className="text-button" type="button" onClick={() => loadLife(life.lifeId)}>恢复最新进度</button></div>}
@@ -403,11 +406,9 @@ export default function PlayPage() {
 
       {narrating ? <NarrationScene
         key={narrationAttempt}
-        heading={opening ? undefined : isLoading ? "日子继续向前" : `${life.fromAge ?? 0}—${life.age} 岁`}
         story={isLoading ? streamingEvent.narration ?? "" : life.narration ?? ""}
         ready={!isLoading && !!life.eventId}
         continueLabel={life.openingRecovery ? "接着讲完童年" : "进入下一幕"}
-        onExit={() => setShowExitDialog(true)}
         onContinue={() => {
           if (!life.eventId || isLoading) return;
           if (life.openingRecovery) { void continueLife(); return; }

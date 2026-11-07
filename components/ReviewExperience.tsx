@@ -31,8 +31,7 @@ export function ReviewExperience({ lifeId, view, story, cause }: {
   const status = useCallback((value: { ready: boolean; error: string }) => { setReady(value.ready); setError(value.error); }, []);
   return <>
     {scene === "narration" && <main className={styles.farewell}><NarrationScene
-      heading={`${view.fromAge ?? view.age}—${view.age} 岁`}
-      story={view.narration ?? ""} ready continueLabel="走向告别"
+      story={view.narration ?? ""} ready continueLabel="走向告别" homeHref="/"
       onContinue={() => {
         if (view.eventId) rememberLifeScene(lifeId, view.eventId, "farewell");
         setScene("farewell");

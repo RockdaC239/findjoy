@@ -1,22 +1,47 @@
 .scene {
   width: 100%;
-  min-height: 70dvh;
-  display: grid;
-  place-items: center;
-  padding: var(--fj-space-10) 0 var(--fj-space-16);
+  height: calc(100svh - 160px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--fj-space-6);
 }
-.content { width: min(100%, var(--fj-layout-story)); overflow-wrap: anywhere; }
-.content h1 { text-align: center; font: 400 var(--fj-typography-title-size)/1.5 var(--fj-typography-family-display); margin: 0 0 var(--fj-space-10); }
-.content h1:focus { outline: none; }
-.story { font-size: var(--fj-typography-body-size); line-height: 1.9; }
+.scene:focus { outline: none; }
+/* 固定阅读区：正文逐段出现，整块始终停在阅读区中心，底部按钮不随文字移动。 */
+.content { width: min(100%, var(--fj-layout-story)); height: 100%; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.story {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--fj-space-4);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fj-typography-body-size);
+  line-height: 1.9;
+}
+/* 居中但不裁掉上方：内容放得下时上下留白均分，放不下时从顶部开始滚动。 */
+.storyFlow { margin-block: auto; }
 .story p { margin: 0 0 var(--fj-space-6); animation: arrive 900ms ease both; }
-.expanded p { animation: none; }
-.actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: var(--fj-space-6); margin-top: var(--fj-space-10); }
+.story p:last-child { margin-bottom: 0; }
+.storyFade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+}
+.actions {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fj-space-6);
+  padding: var(--fj-space-6) 0 var(--fj-space-2);
+}
 .actions button, .actions a { min-height: var(--fj-layout-control); }
 .actions a { display: inline-flex; align-items: center; }
 @keyframes arrive { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 600px) {
-  .content h1 { font-size: var(--fj-typography-mobile-title-size); }
   .story { font-size: 16px; line-height: 1.8; }
 }
 @media (prefers-reduced-motion: reduce) { .story p { animation: none; } }

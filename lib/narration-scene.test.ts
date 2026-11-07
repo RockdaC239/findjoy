@@ -8,44 +8,41 @@ import { createStarterLife, applyNextEvent } from "./life";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: () => {} }) }));
 
-it("shows the saved consequences as paragraphs with a local next-scene action and no decisions", () => {
+it("shows the saved consequences as paragraphs with a single local next-scene action", () => {
   const html = renderToStaticMarkup(createElement(NarrationScene, {
-    heading: "15—16 岁", story: "眼前的回应。\n\n日子渐渐变了。", ready: true, onContinue: () => {},
+    story: "眼前的回应。\n\n日子渐渐变了。", ready: true, onContinue: () => {},
   }));
   expect(html).toContain("眼前的回应。");
   expect(html).toContain("日子渐渐变了。");
-  expect(html).toContain("显示全文");
   expect(html).toContain("进入下一幕");
+  expect(html).not.toContain("显示全文");
   expect(html).not.toContain("人生决策");
   expect(html).not.toContain("disabled");
 });
 
-it("can present the opening without a second heading or age label", () => {
+it("presents the narration without an age heading", () => {
   const html = renderToStaticMarkup(createElement(NarrationScene, {
     story: "开篇正文。", ready: true, onContinue: () => {},
   }));
-  expect(html).toContain('aria-label="开篇讲述"');
+  expect(html).toContain('aria-label="讲述"');
   expect(html).not.toContain("<h1");
-  expect(html).not.toContain("narration-title");
+  expect(html).not.toContain("岁");
 });
 
 it("does not let a partial uncommitted narration advance to another scene", () => {
   const html = renderToStaticMarkup(createElement(NarrationScene, {
-    heading: "这一段日子", story: "结果仍在展开", ready: false, onContinue: () => {},
+    story: "结果仍在展开", ready: false, onContinue: () => {},
   }));
   expect(html).toContain('aria-busy="true"');
   expect(html).toContain("disabled");
   expect(html).toContain("正在生成");
-  expect(html).toContain('href="/"');
-  expect(html).toContain("返回主页");
 });
 
-it("keeps the exit action usable while narration is generating", () => {
+it("keeps the optional home link usable while narration is generating", () => {
   const html = renderToStaticMarkup(createElement(NarrationScene, {
-    heading: "这一段日子", story: "", ready: false, onContinue: () => {}, onExit: () => {},
+    story: "", ready: false, onContinue: () => {}, homeHref: "/",
   }));
-  expect(html).toMatch(/<button[^>]*type="button"[^>]*>返回主页<\/button>/);
-  expect(html).not.toMatch(/<button[^>]*disabled[^>]*>返回主页<\/button>/);
+  expect(html).toMatch(/<a[^>]*href="\/"[^>]*>返回主页<\/a>/);
 });
 
 it("keeps the final narration visible before farewell even when the life has already ended", () => {
