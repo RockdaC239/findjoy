@@ -26,12 +26,11 @@ async function state(response: Response): Promise<LifeState> {
 beforeEach(async () => {
   mocks.stream.mockReset(); mocks.ending.mockReset();
   mocks.user.mockResolvedValue(await identityStore.resolveUser("test", "owner", "owner", "15200297440"));
-  vi.stubEnv("FINDJOY_TRIAL_CREDITS", "40");
 });
 it("uses real routes for a childhood narration, an adult decision and a terminal narration and a cached mock review without spending points or calling models", async () => {
   let life = await state(await start(request()));
   const user = await mocks.user();
-  expect(await commerceStore.balance(user.id)).toEqual({ available: 40, held: 0 });
+  expect(await commerceStore.balance(user.id)).toEqual({ available: 100, held: 0 });
   expect(life.experienceVersion).toBe(3);
   expect(life.basic.age).toBe(15); expect(life.history.at(-1)!.narration).toBeTruthy();
   expect(life.history.at(-1)!.choices).toHaveLength(3);
@@ -48,7 +47,7 @@ it("uses real routes for a childhood narration, an adult decision and a terminal
   expect(response.status).toBe(200); expect((await response.json()).ending.age).toBe(24);
   expect((await ending(request(), params)).status).toBe(200);
   expect(mocks.stream).not.toHaveBeenCalled(); expect(mocks.ending).not.toHaveBeenCalled();
-  expect(await commerceStore.balance(user.id)).toEqual({ available: 40, held: 0 });
+  expect(await commerceStore.balance(user.id)).toEqual({ available: 100, held: 0 });
 });
 it("restores real model generation when mock is off and charges normal new lives", async () => {
   let life = await state(await start(request()));
@@ -57,7 +56,7 @@ it("restores real model generation when mock is off and charges normal new lives
   expect(mocks.stream).toHaveBeenCalledTimes(1); expect(life.flags.developerMock).toBe(false);
   await state(await start(request({}, false)));
   expect(mocks.stream).toHaveBeenCalledTimes(2);
-  expect((await commerceStore.balance((await mocks.user()).id)).available).toBe(20);
+  expect((await commerceStore.balance((await mocks.user()).id)).available).toBe(80);
 });
 it("rejects forged mock cookies for ordinary users before generation or billing", async () => {
   mocks.user.mockResolvedValue(await identityStore.resolveUser("test", "ordinary"));

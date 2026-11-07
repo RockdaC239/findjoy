@@ -2,7 +2,8 @@ import { readDeveloperMode } from "../../../../lib/developer-mode";
 import { isDeveloper } from "../../../../lib/developer";
 import { streamMockLifeEvent } from "../../../../lib/mock-life";
 import { isLaunchModeAvailable } from "../../../../lib/modes/catalog";
-import { NORMAL_LIFE_POINTS, SIGNUP_POINTS } from "../../../../lib/points";
+import { NORMAL_LIFE_POINTS } from "../../../../lib/points";
+import { signupCredits } from "../../../../lib/signup";
 import { createHash } from "node:crypto";
 import { commerceStore, CommerceError } from "../../../../lib/commerce-store";
 import { currentUser, appOrigin } from "../../../../lib/auth";
@@ -56,7 +57,7 @@ export const POST = withApiGuard(async (request: Request) => {
       plan=resolveStartPlan(selection,{backgroundAvoid:recentAvoid, recentOpenings, sampleOpening: !mock});
       state=createStartLife(plan,parsed.gender,{recentStorylines});
       if (mock) state.flags.developerMock = true;
-      await commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
+      await commerceStore.grantTrial(user.id, await signupCredits(user.id));
       operation = await commerceStore.beginLife(user.id,key,requestHash,state,Date.now(),mock ? 0 : NORMAL_LIFE_POINTS);
     }
   } catch (error) {

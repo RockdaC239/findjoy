@@ -68,6 +68,20 @@ export const identityStore = {
     return (await getPostgresPool().query("SELECT phone FROM identity_users WHERE user_id=$1", [userId])).rows[0]?.phone ?? null;
   },
 
+  /** 1-based registration order; ties break by user id so the result is stable. */
+  async signupRank(userId: string): Promise<number> {
+    const { rows } = await getPostgresPool().query<{ rank: number }>(`
+      SELECT signup_rank AS rank FROM (
+        SELECT user_id, row_number() OVER (ORDER BY created_at, user_id)::int AS signup_rank
+        FROM identity_users
+      ) ranked WHERE user_id=$1`, [userId]);
+    return rows[0]?.rank ?? 0;
+  },
+
+  async countUsers(): Promise<number> {
+    return (await getPostgresPool().query<{ count: number }>("SELECT count(*)::int AS count FROM identity_users")).rows[0]?.count ?? 0;
+  },
+
   async createSession(userId: string, now = Date.now(), lifetime = SESSION_LIFETIME) {
     const token = randomBytes(32).toString("base64url");
     const expiresAt = now + lifetime;

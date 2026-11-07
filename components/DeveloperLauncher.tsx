@@ -32,6 +32,7 @@ export function DeveloperLauncher() {
       <h2 id="developer-entry-title">开发工具</h2>
       <div className={styles.actions}>
         <button className={`${styles.action} ${styles.primary}`} disabled={dev.busy} onClick={async () => { if (await dev.update({ enabled: !dev.enabled, mock: false })) dialog.current?.close(); }}>{dev.enabled ? "退出调试模式" : "进入调试模式"}</button>
+        <Link className={styles.action} href="/admin" onClick={() => dialog.current?.close()}>进入后台 ↗</Link>
         <Link className={styles.action} href="/showcase" onClick={() => dialog.current?.close()}>进入 Showcase ↗</Link>
         <button className={styles.action} onClick={() => dialog.current?.close()}>关闭</button>
       </div>

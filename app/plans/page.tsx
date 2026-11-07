@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { NORMAL_LIFE_POINTS, SIGNUP_POINTS } from "../../lib/points";
+import { EARLY_SIGNUP_LIMIT, EARLY_SIGNUP_POINTS, NORMAL_LIFE_POINTS, SIGNUP_POINTS } from "../../lib/points";
 import { PointsUsageDialog } from "../../components/PointsUsageDialog";
 import { AccountShell } from "../../components/AccountShell";
 import { currentUser } from "../../lib/auth";
 import { commerceStore } from "../../lib/commerce-store";
+import { identityStore } from "../../lib/identity-store";
 import { hasDeveloperAccess } from "../../lib/developer";
 import { DEVELOPER_TEST_PRODUCT_ID, formatPrice, products } from "../../lib/products";
 export const metadata={title:"积分充值 · FindJoy 觅乐"};
@@ -20,11 +21,14 @@ export default async function PlansPage() {
   const packs=catalog.filter(product=>product.id!=="single" && product.id!==DEVELOPER_TEST_PRODUCT_ID);
   const demo=catalog.every(product=>product.demo);
   const signupPoints=Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS);
+  const promoOpen=(await identityStore.countUsers())<EARLY_SIGNUP_LIMIT;
   const checkoutHref=(id:string)=>user?`/checkout?product=${id}`:`/login?returnTo=${encodeURIComponent(`/findjoy/checkout?product=${id}`)}`;
   return <AccountShell showRecharge={false}>
     <main className="plans-main">
       <section className="plans-heading"><p className="eyebrow">MORE THAN ONE WAY TO LIVE</p><h1>给好奇心，多一点可能</h1>
-      {signupPoints>0&&<p className="account-lead">新用户注册赠送 {signupPoints} 积分，可免费体验 {signupPoints/NORMAL_LIFE_POINTS} 次普通模式。</p>}
+      {promoOpen
+        ? <p className="account-lead">前 {EARLY_SIGNUP_LIMIT} 位新用户注册赠送 {EARLY_SIGNUP_POINTS} 积分，可免费体验 {EARLY_SIGNUP_POINTS/NORMAL_LIFE_POINTS} 次普通模式。</p>
+        : signupPoints>0&&<p className="account-lead">新用户注册赠送 {signupPoints} 积分，可免费体验 {signupPoints/NORMAL_LIFE_POINTS} 次普通模式。</p>}
       <div className="plans-credit-actions">{balance?<div className="credit-pill">我的积分 <strong>{balance.available}</strong> 积分{balance.held>0&&<span> · {balance.held} 积分正在开局</span>}</div>:<Link className="account-back" href="/login?returnTo=%2Ffindjoy%2Fplans">登录，查看我的积分 ↗</Link>}<PointsUsageDialog /></div>
       </section>
       {demo&&<p className="catalog-notice" role="status"><span>体验预览</span> 以下为积分套餐预览，演示模式不会真实扣款或发放积分。</p>}

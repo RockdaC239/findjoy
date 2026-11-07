@@ -24,5 +24,5 @@ it("persists the verified phone during the callback and reads it for the newly i
   const session = await identityStore.getSession(response.cookies.get("findjoy_session")!.value);
   expect(session?.id).toBe(previous.id);
   expect(await identityStore.getPhone(session!.id)).toBe("+8613800000000");
-  expect((await commerceStore.balance(session!.id)).available).toBe(40);
+  expect((await commerceStore.balance(session!.id)).available).toBe(100);
 });

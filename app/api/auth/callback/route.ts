@@ -1,4 +1,4 @@
-import { SIGNUP_POINTS } from "../../../../lib/points";
+import { signupCredits } from "../../../../lib/signup";
 import { commerceStore } from "../../../../lib/commerce-store";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     if (!pending) throw new Error("登录已过期");
     const identity = await authenticateCallback(request, pending);
     const user = await identityStore.resolveUser(identity.issuer, identity.subject, identity.displayName, identity.phone);
-    await commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));
+    await commerceStore.grantTrial(user.id, await signupCredits(user.id));
     const previous = jar.get(SESSION_COOKIE)?.value;
     if (previous) await identityStore.revokeSession(previous);
     const session = await identityStore.createSession(user.id);

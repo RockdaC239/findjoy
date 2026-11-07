@@ -3,9 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { DeveloperModeProvider } from "../components/DeveloperMode";
+import { DeveloperLauncher } from "../components/DeveloperLauncher";
 import { BrandLogo } from "../components/BrandLogo";
 function render(enabled: boolean) {
   return renderToStaticMarkup(createElement(DeveloperModeProvider, { allowed: true, initial: { enabled, mock: false } }, createElement(BrandLogo, { href: "/" })));
+}
+function renderLauncher() {
+  return renderToStaticMarkup(createElement(DeveloperModeProvider, { allowed: true, initial: { enabled: false, mock: false } }, createElement(DeveloperLauncher)));
 }
 it("keeps normal navigation unchanged and adds only the dev marker and debug icon when enabled", () => {
   const normal = render(false);
@@ -19,3 +23,9 @@ it("keeps normal navigation unchanged and adds only the dev marker and debug ico
   expect(dev).not.toContain("页面调试工具");
   expect(dev).not.toContain('role="dialog"');
 });
+it("offers the admin console from the three-tap developer entry", () => {
+  const html = renderLauncher();
+  expect(html).toContain("进入后台");
+  expect(html).toContain('href="/admin"');
+});
+
