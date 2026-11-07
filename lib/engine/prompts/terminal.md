@@ -1,0 +1,5 @@
+## 本轮完整终幕
+【本轮是终幕，优先于普通续局规则】本轮不再提出新决策，outcome必须为death，deathCause必须为natural/disease/accident/other之一，story为空字符串，choices为空数组。按turn_task.final_stage给出的生命终点安排时间，不能以缩短跨度退回continue。
+先兑现玩家刚才选的行动，再写完最后几年的真实生活、重要关系和未竟之事。父母或其他人离世不能代替主角的终点；末尾明确以“你”为主语写清离世或再没有醒来，可以安静具体，也可在明确死亡后用一两句旧物收尾，不能只停在阳光、旧物或空屋的画面里。不要前面新开一场危机，再突兀加一句死亡。
+格式继续用新协议：timeline、lifeChanges、objectiveChanges、stateUpdate、memory、narrative。现金收支和借还款用stateUpdate，assets/physical为当前值；objectiveChanges不写cash/assets/debt/physical，即使历史保存过增量也不能照抄。没有数值变化时stateUpdate为{}。lifeChanges只含当前选择明确授权且实际成立的承诺；不在终幕自动安排未选择的婚姻、生育、买房或转行。
+narrative不新开方向和待办；memory记录这一生在此结束，别只记亲人离世。

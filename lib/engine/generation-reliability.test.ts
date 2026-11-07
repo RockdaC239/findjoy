@@ -55,3 +55,29 @@ it("includes failed contract usage in a later successful event", async () => {
   expect(result.outcome).toBe("death");
   expect(result.usage).toMatchObject({ promptTokens: 20, completionTokens: 10, totalTokens: 30 });
 });
+
+it("retries an unfinished last scene instead of appending a fabricated death", async () => {
+  const state = { ...createStarterLife({ age: 76 }), experienceVersion: 3 as const, lifespan: 81 };
+  state.career.occupation = "退休";
+  state.history = [{ id: "last", age: 76, type: "health", title: "复查", story: "选择观察", importance: 0.7 }];
+  let attempt = 0;
+  mocks.stream.mockImplementation(async function* () {
+    attempt++;
+    yield { text: JSON.stringify({
+      outcome: attempt === 1 ? "continue" : "death", deathCause: "disease", timePassed: attempt === 1 ? 1 : 5,
+      narration: attempt === 1 ? "八十岁复查，医生让你再考虑。" : "你把余下的日子安排妥当，八十一岁在家人陪伴下离世。",
+      story: attempt === 1 ? "下周是否手术？" : "",
+      event: { type: "health", title: "最后的日子", importance: 0.9 },
+      choices: attempt === 1 ? ["观察", "手术", "复查"].map((text, index) => ({ id: String(index), text, requiresFollowUp: false, commitments: [] })) : [],
+      lifeChanges: [], timeline: { resultAge: 77, sceneAge: attempt === 1 ? 77 : 81 }, stateUpdate: {}, objectiveChanges: {},
+    }) };
+  });
+  const event = await generateNextEvent(state);
+  expect(attempt).toBe(2);
+  expect(mocks.stream.mock.calls[1][1].at(-1).content).toContain("完整终幕");
+  expect(mocks.stream.mock.calls[1][1].at(-2)).toMatchObject({ role: "assistant" });
+  expect(mocks.stream.mock.calls[1][1].at(-2).content).toContain("下周是否手术");
+  expect(event.outcome).toBe("death");
+  expect(event.narration).toBe("你把余下的日子安排妥当，八十一岁在家人陪伴下离世。");
+  expect(state.basic.age).toBe(76);
+});

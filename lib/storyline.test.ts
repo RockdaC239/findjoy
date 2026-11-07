@@ -117,3 +117,55 @@ it("reminds the writer of recent situations without inventing a semantic repetit
   expect(hint).toContain("只换职业");
   expect(buildRecentSituationHint(createStarterLife())).toBe("");
 });
+
+describe("career facts versus narrative mentions", () => {
+  it("recognises the repair, manufacturing and construction domains that used to fall through", () => {
+    expect(detectStorylineDomains(["汽修厂技师"])).toContain("repair");
+    expect(detectStorylineDomains(["机械维修工"])).toContain("repair");
+    expect(detectStorylineDomains(["建筑绘图员"])).toContain("construction");
+    expect(detectStorylineDomains(["规划院助理规划师"])).toContain("construction");
+    expect(detectStorylineDomains(["工程造价员"])).toContain("construction");
+    expect(detectStorylineDomains(["软件工程师"])).toEqual(["tech"]);
+    expect(detectStorylineDomains(["中职学生"])).toEqual([]);
+  });
+
+  it("does not infer the protagonist's career from titles about other people", () => {
+    const state = createStarterLife({ age: 26 });
+    state.career.occupation = "规划院助理规划师";
+    state.history = [
+      { id: "1", age: 18, type: "career", title: "老师问你去不去云南调研", story: "s", importance: 0.7, objectiveChanges: {} },
+      { id: "2", age: 24, type: "career", title: "周师傅邀你周末去测绘公司兼职", story: "s", importance: 0.6, objectiveChanges: { occupation: "规划院助理规划师" } },
+    ] as never;
+    expect(extractLifeStorylines(state)).toContain("construction");
+    expect(extractLifeStorylines(state)).not.toContain("education");
+  });
+
+  it("does not count an unaccepted job or a hobby as an established career", () => {
+    const state = createStarterLife({ age: 15 });
+    state.history = [
+      { id: "1", age: 15, type: "career", title: "老板问你要不要去汽修厂当学徒", story: "s", importance: 0.6, objectiveChanges: {} },
+      { id: "2", age: 15, type: "relationship", title: "周末去踢球", story: "s", importance: 0.5, objectiveChanges: {} },
+    ] as never;
+    expect(extractLifeStorylines(state)).toEqual([]);
+  });
+
+  it("keeps historical career domains after the protagonist retires", () => {
+    const state = createStarterLife({ age: 81 });
+    state.career.occupation = "退休";
+    state.history = [
+      { id: "1", age: 23, type: "career", title: "毕业前两条路摆上桌", story: "s", importance: 0.7, objectiveChanges: { occupation: "汽修厂技师" } },
+    ] as never;
+    expect(extractLifeStorylines(state)).toEqual(["repair"]);
+  });
+
+  it("still lets a teacher's own life count as education", () => {
+    const state = createStarterLife({ age: 35 });
+    state.career.occupation = "小学教师";
+    expect(extractLifeStorylines(state)).toEqual(["education"]);
+  });
+});
+
+it("recognises public safety occupations without expanding every job title", () => {
+  expect(detectStorylineDomains(["消防救援人员"])).toContain("government");
+  expect(detectStorylineDomains(["消防员"])).toContain("government");
+});

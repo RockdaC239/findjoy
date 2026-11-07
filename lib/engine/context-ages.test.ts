@@ -27,3 +27,17 @@ describe("program-maintained character ages in model context", () => {
     }
   });
 });
+
+it("projects family ages into each allowed landing age using current death status", () => {
+  const state = createStartLife(resolveStartPlan({ mode: "normal" }, { random: () => 0.42 }), "female");
+  state.basic.age = 67;
+  state.lifespan = 81;
+  state.birth!.parents[1].birthAge = 42;
+  state.relationships.parents.motherStatus = "已故";
+  state.history = [{ id: "past", age: 67, type: "family", title: "之后", story: "新的生活", importance: 0.7 }];
+  const task = JSON.parse(buildTranscriptUserContent(state)).turn_task;
+  expect(task.age_window).toMatchObject({ fromAge: 67, maxSceneAge: 75 });
+  const at71 = task.family_by_scene_age.find((item: { protagonistAge: number }) => item.protagonistAge === 71);
+  expect(at71.members.find((item: { role: string }) => item.role === "母亲")).toMatchObject({ currentAge: 113, status: "已故" });
+  expect(at71.members.find((item: { role: string }) => item.role === "父亲").status).toBeUndefined();
+});

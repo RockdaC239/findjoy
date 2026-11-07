@@ -20,8 +20,11 @@ export const STORYLINE_DOMAINS: StorylineDomain[] = [
   { key: "medical", label: "医疗健康", pattern: /医生|护士|从医|行医|医学院|临床|大夫/ },
   { key: "education", label: "教育", pattern: /教师|老师|教书|教职|执教|师范|培训师|班主任|教授/ },
   { key: "tech", label: "技术研发", pattern: /程序员|软件|工程师|研发|互联网|编程|写代码|开发岗|科技公司|产品经理|技术岗/ },
+  { key: "construction", label: "建筑规划", pattern: /建筑|规划|测绘|土木|施工|设计院|绘图员|造价/ },
+  { key: "manufacturing", label: "生产制造", pattern: /制造|车间|机床|加工|工艺|机械|机电|电工|焊接|装配|质检|产线|生产线/ },
+  { key: "repair", label: "维修技工", pattern: /维修|修理|汽修|修车|机修|钳工|技师|售后|4S/ },
   { key: "finance", label: "财务金融", pattern: /会计|财务|金融|银行|投资|证券|审计|出纳|理财/ },
-  { key: "government", label: "体制公职", pattern: /公务员|体制内|机关|国企|事业单位|政府|干部|警察/ },
+  { key: "government", label: "体制公职", pattern: /公务员|体制内|机关|国企|事业单位|政府|干部|警察|消防|救援/ },
   { key: "media", label: "文字媒体", pattern: /写作|作家|记者|编辑|出版|媒体|编剧|文案|投稿|撰稿/ },
   { key: "service", label: "服务行业", pattern: /服务员|餐饮|外卖|司机|快递|销售|店员|理发|厨师|家政/ },
 ];
@@ -60,45 +63,39 @@ export function parseAvoidStorylines(value: unknown): string[] {
     .filter((item) => valid.has(item));
 }
 
-interface CareerMarker {
-  title?: string;
-  occupation?: string;
-}
-
-// 一局人生里的"职业载体"：career 事件（title）与 occupation 变化（objectiveChanges.occupation）。
-function careerMarkers(state: LifeState): CareerMarker[] {
-  const markers: CareerMarker[] = [];
+// 一局人生里"已成立的职业事实"：只认 occupation 字段，不认事件标题。
+// 标题写的是处境，常带他人身份或尚未接受的机会（"老师问你去不去云南调研"
+// "父亲让你暑假去工地画图"），拿标题判定主角职业会把规划人生误判成教育、
+// 把只去看了一眼车间的人生算成已经入行。父母/邻居/老师的职业也不属于主角。
+function occupationFacts(state: LifeState): string[] {
+  const facts: string[] = [];
   for (const event of state.history) {
-    if (event.type === "career" || event.objectiveChanges?.occupation) {
-      markers.push({ title: event.title, occupation: event.objectiveChanges?.occupation });
-    }
+    const occupation = event.objectiveChanges?.occupation;
+    if (typeof occupation === "string" && occupation.trim() && !facts.includes(occupation)) facts.push(occupation);
   }
-  return markers;
+  return facts;
 }
 
-function markerDomains(marker: CareerMarker): string[] {
-  return detectStorylineDomains([marker.title ?? "", marker.occupation ?? ""]);
-}
-
-// 一局人生的主线域（按出现次数取前 3）：当前职业 + 全部职业载体。
+// 一局人生的主线域（按出现次数取前 3）：当前职业 + 历史职业事实。
 // 用于跨人生防重：最近几局各取主线，新一局开局避开。
+// 已退休/已离职的人生仍保留历史职业主线；从没建立职业的童年人生返回空。
 export function extractLifeStorylines(state: LifeState): string[] {
   const counts = new Map<string, number>();
   const bump = (domains: string[]) => {
     for (const domain of domains) counts.set(domain, (counts.get(domain) ?? 0) + 1);
   };
   bump(detectStorylineDomains([state.career.occupation]));
-  for (const marker of careerMarkers(state)) bump(markerDomains(marker));
+  for (const occupation of occupationFacts(state)) bump(detectStorylineDomains([occupation]));
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([domain]) => domain);
 }
 
 // 本局"已确立且已离开"的主线域（用于单局内防重）。
-// 规则：某域在时间轴上出现过职业载体，且其后出现过不同的域（或当前职业已不在该域），
+// 规则：某域在时间轴上出现过职业事实，且其后出现过不同的域（或当前职业已不在该域），
 // 则视为"已离开"；该信息只用于避免复演旧处境，不禁止重返。当前职业所在域永不视为已离开。
 // 童年埋下的种子（如"进入美术班"）若从未开花成职业、也没有被别的职业接替，不算"已离开"，
 // 允许它自然长成职业方向——防止把"童年埋线→成年实现"这种合理走向误杀。
 export function leftStorylines(state: LifeState): string[] {
-  const entries = careerMarkers(state).map(markerDomains).filter((domains) => domains.length > 0);
+  const entries = occupationFacts(state).map((occupation) => detectStorylineDomains([occupation])).filter((domains) => domains.length > 0);
   const current = detectStorylineDomains([state.career.occupation]);
   const left = new Set<string>();
   for (let i = 0; i < entries.length; i++) {

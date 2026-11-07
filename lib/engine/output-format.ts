@@ -1,4 +1,5 @@
 import examples from "./prompts/examples.json";
+import type { EventStateUpdate, EventTimeline, LifeCommitment } from "./event-facts";
 import type { NarrativeUpdate } from "./narrative";
 import type { EventType, ObjectiveChanges } from "../life";
 
@@ -9,10 +10,13 @@ export interface ModelEventOutput {
   outcome: "continue" | "death";
   deathCause?: "natural" | "disease" | "accident" | "other";
   timePassed: number;
+  lifeChanges?: LifeCommitment[];
+  timeline?: EventTimeline;
+  stateUpdate?: EventStateUpdate;
   narration?: string;
   story: string;
   event: { type: EventType; title: string; importance: number };
-  choices?: Array<{ id: string; text: string }>;
+  choices?: Array<{ id: string; text: string; requiresFollowUp?: boolean; commitments?: LifeCommitment[] }>;
   objectiveChanges: Partial<ObjectiveChanges>;
   narrative?: NarrativeUpdate;
   memory?: string;

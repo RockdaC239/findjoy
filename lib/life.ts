@@ -1,5 +1,7 @@
+import type { EventStateUpdate, EventTimeline, LifeCommitment } from "./engine/event-facts";
 import type { BirthProfile } from "./birth/profile";
-import { applyNarrative, resolveNarrativeReferences, type NarrativeState, type NarrativeUpdate } from "./engine/narrative";
+import type { OpeningPlan } from "./opening-plan";
+import { applyNarrative, resolveNarrativeReferences, settleNarrative, type NarrativeState, type NarrativeUpdate } from "./engine/narrative";
 import type { LifeScenario } from "./modes/types";
 
 export type Gender = "female" | "male" | "nonbinary" | "unspecified";
@@ -16,6 +18,8 @@ export interface LifeState {
   experienceVersion?: 3;
   /** 出生时已确认的背景，旧存档可缺省，迁居不会改写出生地。 */
   birth?: BirthProfile;
+  /** 本局开局创作方向（主要关系/推动力/机制/代价）；旧存档与 Mock 可缺省。 */
+  openingPlan?: OpeningPlan;
   /** 程序维护的寿命上限；普通/主题新人生写入，旧存档可缺省。 */
   lifespan?: number;
   lifeId: string;
@@ -35,7 +39,7 @@ export interface LifeState {
   createdAt: string;
 }
 
-export interface LifeChoice { id: string; text: string }
+export interface LifeChoice { id: string; text: string; requiresFollowUp?: boolean; commitments?: LifeCommitment[] }
 
 // 把客户端送来的选择规整为模型真正给出的选项文案（按 id 匹配待定节点上的选项）。
 // 脚本或异常客户端可能发送与选项无关的文本；模型收到"不属于任何选项"的选择时
@@ -63,6 +67,9 @@ export interface LifeEvent {
   choiceText?: string;
   importance: number;
   memory?: string;
+  lifeChanges?: LifeCommitment[];
+  timeline?: EventTimeline;
+  stateUpdate?: EventStateUpdate;
   objectiveChanges?: Partial<ObjectiveChanges>;
   narrative?: NarrativeUpdate;
   /** 该节点写入时间（UTC ISO），用于逐节点追溯。 */
@@ -70,8 +77,8 @@ export interface LifeEvent {
   /** 生成该节点时的模型调用用量（token/成本/前缀缓存命中），用于追溯与成本审计。 */
   usage?: ModelUsage;
 }
-export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; occupation: string; partnerStatus: string; city: string; education: string; parentsStatus: string; fatherStatus: string; motherStatus: string; children: string[]; friends: string[]; conditions: string[] }
-export interface NextEvent { narration?: string; narrative?: NarrativeUpdate; outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
+export interface ObjectiveChanges { incomeYearly: number; cash: number; assets: number; debt: number; physical: number; housing: string; occupation: string; companyType: string; careerStage: string; partnerStatus: string; city: string; education: string; parentsStatus: string; fatherStatus: string; motherStatus: string; children: string[]; friends: string[]; conditions: string[] }
+export interface NextEvent { lifeChanges?: LifeCommitment[]; timeline?: EventTimeline; stateUpdate?: EventStateUpdate; narration?: string; narrative?: NarrativeUpdate; outcome?: "continue" | "death"; deathCause?: DeathCause; timePassed: number; story: string; event: Pick<LifeEvent, "type" | "title" | "importance">; choices: LifeChoice[]; objectiveChanges: Partial<ObjectiveChanges>; psychologicalObservation?: Record<string, string>; memory?: string; usage?: ModelUsage }
 export interface ModelUsage { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number; provider: string; model: string; fallbackReason?: string; promptCacheHitTokens?: number; promptCacheMissTokens?: number }
 
 const cities = ["深圳", "上海", "北京", "杭州", "成都", "广州", "南京", "武汉", "西安", "重庆", "苏州", "天津"];
@@ -112,12 +119,15 @@ export function applyNextEvent(
   const next: LifeState = structuredClone(state);
   next.basic.age = age;
   if (changes.occupation) next.career.occupation = changes.occupation;
+  if (changes.companyType) next.career.companyType = changes.companyType;
+  if (changes.careerStage) next.career.careerStage = changes.careerStage;
   if (typeof changes.incomeYearly === "number") next.career.incomeYearly = Math.max(0, changes.incomeYearly);
   if (typeof changes.cash === "number") next.finance.cash = Math.max(0, next.finance.cash + changes.cash);
   if (typeof changes.assets === "number") next.finance.assets = Math.max(0, next.finance.assets + changes.assets);
   if (typeof changes.debt === "number") next.finance.debt = Math.max(0, next.finance.debt + changes.debt);
   if (typeof changes.physical === "number") next.health.physical = Math.max(0, Math.min(100, next.health.physical + changes.physical));
   if (changes.partnerStatus) next.relationships.partner.status = changes.partnerStatus;
+  if (changes.housing) next.finance.housing = changes.housing;
   if (changes.city) next.basic.city = changes.city;
   if (changes.education) next.basic.education = changes.education;
   if (changes.children) next.relationships.children = [...changes.children];
@@ -147,6 +157,9 @@ export function applyNextEvent(
     deathCause: event.deathCause,
     importance: event.event.importance,
     memory: event.memory,
+    lifeChanges: event.lifeChanges,
+    timeline: event.timeline,
+    stateUpdate: event.stateUpdate,
     objectiveChanges: changes,
     narrative: event.narrative,
     storedAt: new Date().toISOString(),
@@ -166,6 +179,7 @@ export function applyNextEvent(
     next.dead = true;
     next.flags.deathCause = event.deathCause ?? "other";
   }
+  next.narrative = settleNarrative(next.narrative, next.relationships.parents, next.dead);
   return next;
 }
 

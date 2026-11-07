@@ -82,7 +82,7 @@ export const POST = withApiGuard(async (request: Request, { params }: { params: 
       }
       // 选择可能为空（童年纯叙事节点）。applyNextEvent 会把真实选择挂到给出它的节点上，
       // 新节点以待定状态入列；不选择则不补齐任何 choiceText。
-      assertGeneratedEventForState(item.value, state);
+      assertGeneratedEventForState(item.value, state, choiceForModel);
       const nextState = applyNextEvent(state, item.value, choiceForModel);
       if (!mock) nextState.flags.developerMock = false;
       if (transcript) {

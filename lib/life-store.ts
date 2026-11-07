@@ -4,6 +4,7 @@ import type { LifeState } from "./life";
 import type { TranscriptMessage } from "./model-adapter";
 import { flagsToBackground, type BackgroundAvoid } from "./background";
 import { extractLifeStorylines } from "./storyline";
+import { validateOpeningPlan, type OpeningPlan } from "./opening-plan";
 import { getLifeScenario, getScenarioLabel, getScenarioShortLabel } from "./modes/scenario";
 import type { LifeMode } from "./modes/types";
 import { query, withTransaction, closePostgres } from "./database";
@@ -33,6 +34,10 @@ export const lifeStore = {
         // 旧普通/主题存档没有寿命上限：只补一个保守上限，避免把 90～100 岁当成常规。
         state.lifespan = Math.max(state.basic.age + 1, Math.min(90, rollLifespan()));
       }
+      // 开局方向只保留目录内的 id；损坏或过期目录的字段直接丢弃，不进入提示词。
+      const openingPlan = validateOpeningPlan(state.openingPlan);
+      if (openingPlan) state.openingPlan = openingPlan;
+      else delete state.openingPlan;
       if (!state.birth) return state;
       // 存档中的出生档案重新过一遍目录校验，防止损坏/伪造的字段直接进入提示词。
       const birth = validateBirthProfile(state.birth);
@@ -113,6 +118,22 @@ export const lifeStore = {
       if (seen.length >= maxDomains) break;
     }
     return seen.slice(0, maxDomains);
+  },
+  /**
+   * 最近几局真实开局方向。按用户过滤；开发 Mock 局不算真实体验，
+   * 没有计划的老存档也跳过（不为补标签回读全文或调用模型）。
+   */
+  async recentOpeningPlans(limit = 6, userId?: string): Promise<OpeningPlan[]> {
+    const rows = await recentStates(limit, userId);
+    const plans: OpeningPlan[] = [];
+    for (const row of rows) {
+      let state: LifeState;
+      try { state = JSON.parse(row.state) as LifeState; } catch { continue; }
+      if (state.flags?.developerMock === true) continue;
+      const plan = validateOpeningPlan(state.openingPlan);
+      if (plan) plans.push(plan);
+    }
+    return plans;
   },
   async delete(id: string): Promise<void> {
     await withTransaction(async () => {

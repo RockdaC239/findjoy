@@ -63,3 +63,32 @@ it("accepts provider career nesting without confusing absolute finances with del
  expect(state.basic.education).toBe("教育经历未详");
  expect(state.finance.cash).toBe(8000);
 });
+
+it("removes deceased parents from active people and clears pending tasks at the life endpoint", async () => {
+  const { createStarterLife, applyNextEvent } = await import("../life");
+  const state = createStarterLife({ age: 67 });
+  state.narrative = {
+    version: 1,
+    direction: { content: "安排手术", sourceEventId: "old" },
+    people: [
+      { id: "mother", relation: "母亲", want: "在家住", sharedMemory: "一起回家", sourceEventId: "old" },
+      { id: "aide", relation: "照护阿姨", want: "继续照护", sharedMemory: "一起照护", sourceEventId: "old" },
+    ],
+    threads: [{ id: "operation", content: "下周答复手术", status: "open", sourceEventId: "old" }],
+  };
+  const event: NextEvent = { timePassed: 1, story: "之后的生活", event: { type: "family", title: "告别", importance: 0.8 }, choices: [], objectiveChanges: { motherStatus: "已故" } };
+  const next = applyNextEvent(state, event);
+  expect(next.narrative?.people.map(person => person.id)).toEqual(["aide"]);
+  const terminal = applyNextEvent(next, { ...event, outcome: "death", story: "", narration: "你在熟悉的家中离世。" });
+  expect(terminal.narrative?.threads).toEqual([]);
+  expect(terminal.narrative?.people).toEqual([]);
+  expect(terminal.narrative?.direction).toBeUndefined();
+  expect(state.narrative.people).toHaveLength(2);
+});
+
+it.each(["因病去世", "已于去年去世", "已故（去年）"])("recognizes descriptive parent death status: %s", async status => {
+  const { settleNarrative } = await import("./narrative");
+  const narrative = { version: 1 as const, people: [{ id: "father", relation: "亲生父亲", want: "回家", sharedMemory: "一起吃饭", sourceEventId: "old" }], threads: [] };
+  expect(settleNarrative(narrative, { fatherStatus: status }, false)?.people).toEqual([]);
+  expect(settleNarrative(narrative, { fatherStatus: "尚未去世，仍在医院" }, false)?.people).toHaveLength(1);
+});

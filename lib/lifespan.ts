@@ -37,6 +37,7 @@ export function enforceLifespan(event: NextEvent, state: LifeState): NextEvent {
     return { ...event, timePassed: Math.max(state.experienceVersion === 3 ? 0 : 1, limit - current) };
   }
   if (landing < limit) return event;
+  if (state.experienceVersion === 3) throw new ModelError("到达生命终点必须生成完整终幕，不允许继续事件或新的决策，请以death重新生成");
   const timePassed = Math.max(state.experienceVersion === 3 ? 0 : 1, limit - current);
   return {
     ...event,

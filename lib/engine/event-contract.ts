@@ -7,6 +7,7 @@ import type { StorylineGuards } from "../storyline";
 // 模型输出在这里转成内部 NextEvent；不要让原始 JSON 直接更新 LifeState。
 import { CHILDHOOD_BOUNDARY, needsOpeningRecovery } from "./phase";
 import { ModelError } from "./errors";
+import { objectiveChangesForModel, normalizeCommitments, diagnoseEventFacts, stateUpdateToChanges, type EventStateUpdate, type EventTimeline } from "./event-facts";
 
 function num(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
 
@@ -66,7 +67,7 @@ function normalizeChoices(value: unknown): LifeChoice[] {
       id = letters.find((letter) => !used.has(letter)) ?? `X${choices.length + 1}`;
     }
     used.add(id);
-    choices.push({ id, text });
+    choices.push({ id, text, ...(typeof entry.requiresFollowUp === "boolean" ? { requiresFollowUp: entry.requiresFollowUp } : {}), ...(Array.isArray(entry.commitments) ? { commitments: normalizeCommitments(entry.commitments) ?? [] } : {}) });
     if (choices.length >= 3) break;
   }
   return choices;
@@ -122,7 +123,7 @@ function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"
   const nested = (key: string): Record<string, unknown> => raw[key] && typeof raw[key] === "object" && !Array.isArray(raw[key]) ? raw[key] as Record<string, unknown> : {};
   // 只兼容职业和身份的新值；嵌套财务可能是余额，不能当增量应用。
   const career = nested("career"), basic = nested("basic");
-  const input: Record<string, unknown> = { occupation: career.occupation, incomeYearly: career.incomeYearly, city: basic.city, education: basic.education, ...raw };
+  const input: Record<string, unknown> = { occupation: career.occupation, companyType: career.companyType, careerStage: career.careerStage, incomeYearly: career.incomeYearly, city: basic.city, education: basic.education, ...raw };
   const pick = <K extends keyof NextEvent["objectiveChanges"]>(key: K) => (typeof input[key] === "number" ? input[key] : typeof input[camelToSnake(key) as K] === "number" ? input[camelToSnake(key) as K] : undefined);
   return {
     incomeYearly: pick("incomeYearly") as number | undefined,
@@ -131,9 +132,12 @@ function normalizeObjectiveChanges(value: unknown): NextEvent["objectiveChanges"
     debt: pick("debt") as number | undefined,
     physical: pick("physical") as number | undefined,
     occupation: typeof input.occupation === "string" ? input.occupation : undefined,
+    companyType: boundedText(input.companyType, 80),
+    careerStage: boundedText(input.careerStage, 80),
     partnerStatus: typeof input.partnerStatus === "string" ? input.partnerStatus : undefined,
     city: boundedText(input.city, 80),
     education: boundedText(input.education, 80),
+    housing: boundedText(input.housing, 160),
     parentsStatus: boundedText(input.parentsStatus, 80),
     fatherStatus: boundedText(input.fatherStatus, 80),
     motherStatus: boundedText(input.motherStatus, 80),
@@ -243,6 +247,10 @@ export function diagnoseGeneratedEvent(value: unknown, expectChoices = true, pre
   if (state?.experienceVersion === 3) {
     if (typeof candidate.narration !== "string" || !candidate.narration.trim()) return "narration 缺失或为空";
     if (containsNameInstruction(candidate.narration)) return "narration 含姓名指示词";
+    if (Object.hasOwn(candidate, "stateUpdate") || Object.hasOwn(candidate, "timeline")) {
+      const failure = diagnoseEventFacts(candidate, state);
+      if (failure) return failure;
+    }
     if (candidate.outcome !== "continue" && candidate.outcome !== "death") return "outcome 非法";
     const recovering = needsOpeningRecovery(state);
     const opening = state.history.length === 0 || recovering;
@@ -293,7 +301,13 @@ export function normalizeGeneratedEvent(value: unknown, expectChoices = true, pr
     story,
     event: { type, title, importance: Math.max(0, Math.min(1, num(event?.importance) || 0.6)) },
     choices,
-    objectiveChanges: normalizeObjectiveChanges(candidate.objectiveChanges ?? candidate.objective_changes),
+    ...(candidate.lifeChanges ? { lifeChanges: normalizeCommitments(candidate.lifeChanges) } : {}),
+    ...(candidate.timeline ? { timeline: candidate.timeline as unknown as EventTimeline } : {}),
+    ...(candidate.stateUpdate && state ? { stateUpdate: candidate.stateUpdate as EventStateUpdate } : {}),
+    objectiveChanges: {
+      ...normalizeObjectiveChanges(candidate.objectiveChanges ?? candidate.objective_changes),
+      ...(candidate.stateUpdate && state ? stateUpdateToChanges(candidate.stateUpdate as EventStateUpdate, state) : {}),
+    },
     narrative: normalizeNarrative(candidate.narrative),
     memory: typeof candidate.memory === "string" && candidate.memory.trim() ? candidate.memory.trim() : undefined,
   };
@@ -362,18 +376,26 @@ export function serializeTranscriptEvent(event: NextEvent): string {
     story: event.story,
     event: event.event,
     choices: event.choices,
-    objectiveChanges: event.objectiveChanges,
+    ...(event.lifeChanges ? { lifeChanges: event.lifeChanges } : {}),
+    ...(event.timeline ? { timeline: event.timeline } : {}),
+    ...(event.stateUpdate ? { stateUpdate: event.stateUpdate } : {}),
+    objectiveChanges: objectiveChangesForModel(event.objectiveChanges, Boolean(event.stateUpdate)),
     narrative: event.narrative,
     memory: event.memory,
   });
 }
 
 // 保存入口再次校验，拦住热更新或适配器意外返回的旧协议；age 仅为程序寿命上限内部值。
-export function assertGeneratedEventForState(event: NextEvent, state: LifeState): void {
+export function assertGeneratedEventForState(event: NextEvent, state: LifeState, choice?: LifeChoice): void {
   if (state.experienceVersion !== 3) return;
-  const candidate = event.deathCause === "age" ? { ...event, deathCause: "natural" } : event;
-  if (!normalizeGeneratedEvent(candidate, true, undefined, undefined, state)) {
-    throw new ModelError("生成结果与人生版本不一致，本轮未推进");
+  const serialized = JSON.parse(serializeTranscriptEvent(event));
+  const candidate = event.deathCause === "age" ? { ...serialized, deathCause: "natural" } : serialized;
+  const normalized = normalizeGeneratedEvent(candidate, true, undefined, undefined, state);
+  if (!normalized || (event.stateUpdate && diagnoseEventFacts(candidate, state, choice))) {
+    throw new ModelError("生成结果与人生版本或选择权限不一致，本轮未推进");
+  }
+  if (event.stateUpdate && ["cash", "debt", "assets", "physical"].some(key => normalized.objectiveChanges[key as keyof typeof normalized.objectiveChanges] !== event.objectiveChanges[key as keyof typeof event.objectiveChanges])) {
+    throw new ModelError("生成结果数值与事实不一致，本轮未推进");
   }
 }
 

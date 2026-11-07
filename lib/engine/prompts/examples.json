@@ -12,15 +12,33 @@
     "choices": [
       {
         "id": "A",
-        "text": "具体行动一"
+        "text": "作出长期职业去向的决定",
+        "requiresFollowUp": false,
+        "commitments": [
+          "career"
+        ]
       },
       {
         "id": "B",
-        "text": "具体行动二"
+        "text": "短期了解后再决定去留",
+        "requiresFollowUp": true,
+        "commitments": []
+      },
+      {
+        "id": "C",
+        "text": "维持现有安排",
+        "requiresFollowUp": false,
+        "commitments": []
       }
     ],
     "objectiveChanges": {},
-    "memory": "已经发生的变化"
+    "memory": "已经发生的变化",
+    "timeline": {
+      "resultAge": null,
+      "sceneAge": 0
+    },
+    "stateUpdate": {},
+    "lifeChanges": []
   },
   "adultFormat": {
     "outcome": "continue",

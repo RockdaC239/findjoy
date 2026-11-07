@@ -9,6 +9,7 @@ import {
   type LifeBackground,
 } from "../background";
 import { createStarterLife, type Gender, type LifeState } from "../life";
+import { sampleOpeningPlan, type OpeningPlan } from "../opening-plan";
 import { getScript, getTheme, isThemeId } from "./catalog";
 import { NORMAL_SCENARIO, scriptToScenario, validateForuBrief } from "./scenario";
 import type {
@@ -68,6 +69,8 @@ export function parseStartLifeRequest(input: unknown): ParsedStartRequest {
 
 export interface StartPlan {
   birth?: BirthProfile;
+  /** 普通模式的开局创作方向；主题/剧本/ForU 不写入。 */
+  openingPlan?: OpeningPlan;
   /** 普通/主题的个体寿命上限；剧本/ForU 不设。 */
   lifespan?: number;
   scenario: LifeScenario;
@@ -106,6 +109,10 @@ export function previewStart(selection: StartSelection): StartPreview {
 
 export interface StartPlanOptions {
   backgroundAvoid?: BackgroundAvoid;
+  /** 最近几局的开局方向，用于降低相似组合的概率。只对普通模式生效。 */
+  recentOpenings?: readonly OpeningPlan[];
+  /** Mock/调试开局不抽样，避免开发样本污染真实体验。 */
+  sampleOpening?: boolean;
   random?: () => number;
 }
 
@@ -126,8 +133,13 @@ export function resolveStartPlan(selection: StartSelection, options: StartPlanOp
       location,
       avoidOccupationIds: options.backgroundAvoid?.occupationIds,
     });
+    // 主题模式保留主题意图，不注入随机开局方向；剧本/ForU 不掷出身也不注入。
+    const openingPlan = selection.mode === "normal" && options.sampleOpening !== false
+      ? sampleOpeningPlan(random, options.recentOpenings ?? [])
+      : undefined;
     return {
       birth,
+      ...(openingPlan ? { openingPlan } : {}),
       lifespan: rollLifespan(random),
       scenario:
         selection.mode === "theme"
@@ -233,6 +245,8 @@ export function createStartLife(plan: StartPlan, gender: Gender, options: Create
       ...starter,
       experienceVersion: 3,
       ...(plan.lifespan ? { lifespan: plan.lifespan } : {}),
+      // 开局方向随状态保存：重试、刷新、恢复都复用同一份，不重新抽样。
+      ...(plan.openingPlan ? { openingPlan: plan.openingPlan } : {}),
       ...(birth ? { birth, relationships: { ...starter.relationships, parents: {
         status: birth.parents.map(parent => `${parent.role}：${parent.status}`).join("；"),
       } } } : {}),

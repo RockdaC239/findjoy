@@ -73,3 +73,20 @@ export function applyNarrative(previous: NarrativeState | undefined, update: Nar
   const nextDirection = normalized.direction;
   return { version: 1, direction: nextDirection ?? previous?.direction, people: [...people.values()].slice(-4), threads: [...threads.values()].slice(-3) };
 }
+
+export function isDeceasedStatus(status: string | undefined): boolean {
+  return Boolean(status && /(已故|去世|离世|过世|病故|亡故)/.test(status) && !/(未|没有|尚未).{0,4}(去世|离世|过世|病故|亡故)/.test(status));
+}
+
+export function settleNarrative(state: NarrativeState | undefined, parents: { fatherStatus?: string; motherStatus?: string }, dead: boolean): NarrativeState | undefined {
+  if (!state) return state;
+  return {
+    ...state,
+    direction: dead ? undefined : state.direction,
+    threads: dead ? [] : state.threads,
+    people: dead ? [] : state.people.filter(person => !(
+      (isDeceasedStatus(parents.fatherStatus) && /^(亲生父亲|父亲|爸爸)(?:$|[（(])/.test(person.relation)) ||
+      (isDeceasedStatus(parents.motherStatus) && /^(亲生母亲|母亲|妈妈)(?:$|[（(])/.test(person.relation))
+    )),
+  };
+}

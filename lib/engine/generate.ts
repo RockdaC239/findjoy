@@ -6,6 +6,7 @@ import { DEATH_CAUSE_LABEL } from "../life";
 import { parseAvoidStorylines } from "../storyline";
 import { getLifeScenario, getScenarioReviewQuestion } from "../modes/scenario";
 import { ModelError } from "./errors";
+import { completeEventFacts, diagnoseEventFacts } from "./event-facts";
 import { enforceLifespan } from "../lifespan";
 import { buildFallbackEvent } from "./fallback";
 import { prepareEventRequest, buildEndingMessages, withRetryCorrection, type TranscriptMessage } from "./context";
@@ -31,9 +32,10 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
   const config = resolveModelConfig(requestConfig);
   const { apiKey, baseUrl, model } = config;
   if (!apiKey) throw new ModelError("未配置 API Key，请在模型设置中填写后重试");
-  const { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages } = prepareEventRequest(state, choice, transcript);
+  const { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages, finalStage } = prepareEventRequest(state, choice, transcript);
   let lastError: ModelError = new ModelError("模型请求失败");
   let lastFailureReason = "";
+  let failedOutput = "";
   const usageTotals: Record<string, unknown> = {};
   const addUsage = (raw: Record<string, unknown>) => {
     for (const key of ["prompt_tokens", "completion_tokens", "total_tokens", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"]) usageTotals[key] = num(usageTotals[key]) + Math.max(0, num(raw[key]));
@@ -42,14 +44,19 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
     let generatedText = "";
     let usageRaw: Record<string, unknown> = {};
     try {
-      for await (const chunk of streamModel(config, withRetryCorrection(attempt, messages, lastFailureReason, EVENT_RETRY_GUIDANCE))) {
+      for await (const chunk of streamModel(config, withRetryCorrection(attempt, messages, lastFailureReason, EVENT_RETRY_GUIDANCE, failedOutput))) {
         if (chunk.text !== undefined) {
           generatedText += chunk.text;
           yield { text: chunk.text };
         }
         if (chunk.usage) usageRaw = chunk.usage;
       }
-      const generated = parseWithTruncationRepair(generatedText || "{}");
+      const rawGenerated = parseWithTruncationRepair(generatedText || "{}");
+      const generated = state.experienceVersion === 3 ? completeEventFacts(rawGenerated, state, choice) : rawGenerated;
+      if (state.experienceVersion === 3) {
+        const failure = diagnoseEventFacts(generated, state, choice ?? null);
+        if (failure) throw new ModelError(failure);
+      }
       // 修复优先：先走严格契约；不过则尝试就地修复（补齐选项/接受张力轴重复），
       // 只有不可修复的问题（核心字段缺失、含姓名）才进入重试。
       let parsed = normalizeGeneratedEvent(generated, expectChoices, previousChoices, storylineGuards, state);
@@ -71,6 +78,7 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       // 剧本/ForU 第一幕必须落在当前年龄；后续节点把节奏收紧到 1~5 年。
       if (openingAtCurrentAge) parsed.timePassed = 0;
       else if (state.experienceVersion !== 3 && (scenario.mode === "script" || scenario.mode === "foru")) parsed.timePassed = Math.min(5, Math.max(1, parsed.timePassed));
+      if (state.experienceVersion === 3 && finalStage && parsed.outcome !== "death") throw new ModelError("本轮已进入生命最后阶段，必须生成完整终幕与death，不能以缩短跨度避开终点");
       parsed = enforceLifespan(parsed, state);
       parsed.story = alignProtagonistAge(parsed.story, state.basic.age + parsed.timePassed);
       addUsage(usageRaw);
@@ -80,13 +88,10 @@ export async function* streamNextEvent(state: LifeState, choice?: LifeChoice, re
       addUsage(usageRaw);
       lastError = toModelError(error);
       if (!lastError.retryable) throw lastError;
-      if (!lastFailureReason) {
-        lastFailureReason = lastError.message.includes("无法解析为 JSON")
-          ? "JSON 无法解析（可能被截断或混入多余文字）"
-          : lastError.message.startsWith("模型返回内容未满足")
-            ? lastError.message
-            : "";
-      }
+      failedOutput = generatedText;
+      lastFailureReason = lastError.message.includes("无法解析为 JSON")
+        ? "JSON 无法解析（可能被截断或混入多余文字）"
+        : lastError.message;
       logModelDiagnostic("event-attempt-fail", { age: state.basic.age, phase: expectChoices ? "decision" : "childhood", attempt, error: lastError.message, raw: generatedText });
     }
     if (attempt < MAX_MODEL_ATTEMPTS) yield { retry: true, reason: lastFailureReason };

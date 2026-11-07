@@ -47,3 +47,54 @@ it("flags stale childhood facts in adult turns without prescribing a career", ()
  expect(task.state_gaps).toContain("education");
  expect(task.pacing).toContain("跨年");
 });
+
+it("exposes recent elapsed years in both request paths so pacing can escape annual turns", () => {
+  const state = { ...createStarterLife({ age: 26 }), experienceVersion: 3 as const };
+  state.basic.education = "大学在读（城乡规划）";
+  state.career.occupation = "助理规划师";
+  state.history = Array.from({ length: 7 }, (_, index) => event(index));
+  for (const content of [buildModelPrompt(state), buildTranscriptUserContent(state)]) {
+    const task = JSON.parse(content).turn_task;
+    expect(task.recent_progress).toEqual([
+      { age: 23, yearsPassed: 1, type: "career", title: "工作3" },
+      { age: 24, yearsPassed: 1, type: "career", title: "工作4" },
+      { age: 25, yearsPassed: 1, type: "career", title: "工作5" },
+      { age: 26, yearsPassed: 1, type: "career", title: "工作6" },
+    ]);
+    expect(task.state_gaps).toContain("careerStage");
+    expect(task.state_gaps).toContain("companyType");
+  }
+});
+
+it("distinguishes same-age results, multiyear transitions and an unknown opening interval", () => {
+  const state = createStarterLife({ age: 25 });
+  state.history = [event(0), { ...event(1), age: 20 }, { ...event(2), age: 25 }];
+  const task = JSON.parse(buildTranscriptUserContent(state)).turn_task;
+  expect(task.recent_progress.map((item: { yearsPassed: number | null }) => item.yearsPassed)).toEqual([null, 0, 5]);
+});
+
+it("requests a final scene whenever the endpoint is reachable within the next turn", () => {
+  const state = { ...createStarterLife({ age: 76 }), experienceVersion: 3 as const, lifespan: 81 };
+  state.history = [event(0)];
+  const task = JSON.parse(buildTranscriptUserContent(state)).turn_task;
+  expect(task.final_stage).toMatchObject({ last_year: 81 });
+  expect(task.age_window).toMatchObject({ fromAge: 76, maxSceneAge: 81 });
+});
+
+it("asks ordinary lives to widen after a work loop while preserving trial follow-ups", () => {
+  const state = { ...createStarterLife({ age: 35 }), experienceVersion: 3 as const };
+  state.history = Array.from({ length: 6 }, (_, index) => event(index));
+  expect(JSON.parse(buildTranscriptUserContent(state)).turn_task.breadth_needed).toBe(true);
+  expect(JSON.parse(buildTranscriptUserContent(state, { id: "A", text: "先试一个月", requiresFollowUp: true })).turn_task.breadth_needed).toBe(false);
+  state.scenario = { mode: "theme", theme: "career" };
+  expect(JSON.parse(buildTranscriptUserContent(state)).turn_task.breadth_needed).toBe(false);
+});
+
+it("keeps snapshot facts unambiguous in full-history continuation requests", () => {
+  const state = { ...createStarterLife({ age: 35 }), experienceVersion: 3 as const };
+  state.history = [{ ...event(0), stateUpdate: { physical: 80, cashFlow: { received: 800, paid: 0 } }, objectiveChanges: { physical: -12, cash: 800, occupation: "工程师" } }];
+  const history = JSON.parse(buildModelPrompt(state)).history;
+  expect(history[0].stateUpdate.physical).toBe(80);
+  expect(history[0].objectiveChanges).toEqual({ occupation: "工程师" });
+  expect(state.history[0].objectiveChanges?.physical).toBe(-12);
+});

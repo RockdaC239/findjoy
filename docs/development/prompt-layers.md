@@ -29,7 +29,8 @@
 | --- | --- | --- | --- |
 | 通用叙事 | `craft.md` | 怎么写得清楚、有戏、有人物、有代价 | v3 全部事件与开篇 |
 | 事件协议 | `two-scene.md` | 这一轮 `narration`/`story` 怎么分工，时间、死亡、JSON、状态怎么处理 | v3 全部事件 |
-| 开篇 overlay | `opening.md` | 普通/主题开局的两个念头、五件事、3～4 段结构、第一个选择 | v3 普通/主题开局 |
+| 开篇 overlay | `opening.md` | 普通/主题开局的两个念头、五件事、篇幅与第一个选择（不再固定四段） | v3 普通/主题开局 |
+| 开局方向 | `opening-plan.json` | 本局的主要关系、推动力、故事机制、代价类型，以及最近几局用过的组合 | v3 普通模式开局或开篇恢复 |
 | 回顾 | `ending.md` | 一生结束后怎么回望、怎么取证据、怎么给分享句 | 回顾 |
 | 默认时代 | `era.json` | 普通/主题/ForU 的时代质感与禁用旧物 | 普通/主题（含 v2 兼容）；v3 ForU |
 | 剧本时代 | `mode-catalog.json` | 每个剧本自己的年代、地点、技术边界 | 剧本 |
@@ -59,14 +60,15 @@
   6. 防重与近期处境（storyline.json）
   7. 旧版开场/过渡（仅 v2）
   8. 开篇 overlay（opening.md，仅 v3 普通/主题开局或恢复）
-  9. 未完成开篇恢复（v3 recoveryHint）
+  9. 开局方向（opening-plan.json，仅 v3 普通模式开局或恢复；主题/剧本/ForU 不注入）
+  10. 未完成开篇恢复（v3 recoveryHint）
 ```
 
 ### 四种玩法
 
 | 场景 | 实际组成 |
 | --- | --- |
-| 普通/主题开局 | `craft + two-scene + era + birth + tone + opening` |
+| 普通/主题开局 | `craft + two-scene + era + birth + tone + opening`（普通再加 opening-plan） |
 | 普通/主题后续 | `craft + two-scene + era + birth + tone + axis/storyline` |
 | 剧本 | `craft + two-scene + scenario.directive`（年代在 directive 内，不再加默认 era） |
 | ForU | `craft + two-scene + era + foruScenario`（v2 ForU 保持旧行为，不加 era） |

@@ -1,3 +1,4 @@
+import { objectiveChangesForModel } from "./event-facts";
 import turn from "./prompts/turn.json";
 import { renderPrompt } from "./prompts/template";
 import { familyAges } from "../birth/ages";
@@ -17,8 +18,32 @@ export interface TranscriptMessage {
   content: string;
 }
 
+function historyForModel(state: LifeState) {
+  return state.experienceVersion === 3 ? state.history.map(event => event.stateUpdate
+    ? { ...event, objectiveChanges: objectiveChangesForModel(event.objectiveChanges, true) } : event) : state.history;
+}
+
+function familyFacts(state: LifeState, age: number) {
+  const facts = familyAges(state.birth, age);
+  if (!facts) return null;
+  return { ...facts, members: facts.members.map(member => ({
+    ...member,
+    status: member.role === "父亲" ? state.relationships.parents.fatherStatus
+      : member.role === "母亲" ? state.relationships.parents.motherStatus : undefined,
+  })) };
+}
+
 function buildTurnTask(state: LifeState, choice?: LifeChoice) {
   const pending = state.history.at(-1);
+  const mode = getLifeScenario(state).mode;
+  const opening = state.history.length === 0 || needsOpeningRecovery(state);
+  const maxSpan = opening ? (mode === "normal" || mode === "theme" ? CHILDHOOD_BOUNDARY - state.basic.age : 0)
+    : mode === "script" || mode === "foru" ? 5 : 8;
+  const maxSceneAge = Math.max(state.basic.age, Math.min(state.basic.age + (choice?.requiresFollowUp ? 0 : maxSpan), state.lifespan ?? Infinity));
+  const recent = state.history.slice(-6);
+  const workLoop = recent.filter(event => event.type === "career" || event.type === "finance").length >= 4;
+  const careLoop = recent.filter(event => event.type === "family" || event.type === "health").length >= 4;
+  const breadthNeeded = mode === "normal" && !choice?.requiresFollowUp && !(state.lifespan && maxSceneAge >= state.lifespan) && (workLoop || careLoop);
   return {
     ...(needsOpeningRecovery(state) ? { opening_recovery: {
       from_age: state.basic.age, to_age: CHILDHOOD_BOUNDARY, timePassed: CHILDHOOD_BOUNDARY - state.basic.age,
@@ -29,12 +54,26 @@ function buildTurnTask(state: LifeState, choice?: LifeChoice) {
     recent_decisions: state.history.filter(event => event.choiceText).slice(-4).map(event => ({
       eventId: event.id, age: event.age, situation: event.title, action: event.choiceText,
     })),
+    recent_progress: state.history.slice(-4).map((event, index) => {
+      const previous = state.history[state.history.length - Math.min(4, state.history.length) + index - 1];
+      return { age: event.age, yearsPassed: previous ? event.age - previous.age : null, type: event.type, title: event.title };
+    }),
+    age_window: { fromAge: state.basic.age, maxSceneAge },
+    family_by_scene_age: state.birth ? Array.from({ length: maxSceneAge - state.basic.age + 1 }, (_, index) => familyFacts(state, state.basic.age + index)) : [],
+    recent_life: recent.map(event => ({ age: event.age, type: event.type, title: event.title, memory: event.memory })),
+    recent_domains: Object.fromEntries([...new Set(recent.map(event => event.type))].map(type => [type, recent.filter(event => event.type === type).length])),
+    commitments_allowed: choice?.commitments ?? null,
+    choice_boundary: renderPrompt(choice?.requiresFollowUp ? turn.trialBoundary : turn.choiceBoundary),
+    breadth_needed: breadthNeeded,
+    life_breadth: renderPrompt(breadthNeeded ? turn.lifeBreadthReset : turn.lifeBreadth),
     recent_situations: buildRecentSituationHint(state),
     state_gaps: [
       ...(state.basic.age >= 15 && state.career?.occupation === "婴儿" ? ["occupation"] : []),
+      ...(state.basic.age >= 18 && state.career?.careerStage === "childhood" ? ["careerStage"] : []),
+      ...(state.basic.age >= 18 && state.career?.companyType === "家庭" && state.career.occupation !== "婴儿" ? ["companyType"] : []),
       ...(state.basic.age >= 7 && state.basic.education === "未开始" ? ["education"] : []),
     ],
-    final_stage: state.lifespan && state.basic.age >= state.lifespan - 2
+    final_stage: state.lifespan && maxSceneAge >= state.lifespan
       ? { last_year: state.lifespan, instruction: renderPrompt(turn.finalStage) }
       : null,
     pacing: renderPrompt(turn.pacing),
@@ -64,7 +103,7 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
       internal_conflicts: state.psychology.internalConflicts,
     },
     major_memories: state.majorMemories,
-    history: state.history,
+    history: historyForModel(state),
     current_state: {
       age: state.basic.age,
       gender: state.basic.gender,
@@ -76,7 +115,7 @@ export function buildModelPrompt(state: LifeState, choice?: LifeChoice) {
       relationships: state.relationships,
       flags: state.flags,
       dead: state.dead,
-      family_ages: familyAges(state.birth, state.basic.age) ?? null,
+      family_ages: familyFacts(state, state.basic.age),
     },
     // 出生档案由系统提示词中的【程序出生事实】承载；每轮用户消息不重复发送，
     // 避免同一份出生资料在系统前缀与每轮 user 中各出现一次。
@@ -105,7 +144,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
       internal_conflicts: state.psychology.internalConflicts,
     };
     payload.major_memories = state.majorMemories;
-    if (state.history.length) payload.history = state.history;
+    if (state.history.length) payload.history = historyForModel(state);
   }
   payload.current_state = {
     age: state.basic.age,
@@ -118,7 +157,7 @@ export function buildTranscriptUserContent(state: LifeState, choice?: LifeChoice
     relationships: state.relationships,
     flags: state.flags,
     dead: state.dead,
-    family_ages: familyAges(state.birth, state.basic.age) ?? null,
+    family_ages: familyFacts(state, state.basic.age),
   };
   // 出生档案固定在 system 的【程序出生事实】中，避免每轮 user 重复携带。
   payload.narrative = state.narrative ?? null;
@@ -151,10 +190,11 @@ export function buildNextEventMessages(
 
 // 重试时给模型带回失败原因，避免"同样的错再犯一遍"（盲重试）。
 // guidance 按场景给出该契约的字段要点。
-export function withRetryCorrection(attempt: number, messages: NextEventMessage[], failureReason: string, guidance: string): NextEventMessage[] {
+export function withRetryCorrection(attempt: number, messages: NextEventMessage[], failureReason: string, guidance: string, failedOutput?: string): NextEventMessage[] {
   if (attempt === 1 || !failureReason) return messages;
   return [
     ...messages,
+    ...(failedOutput ? [{ role: "assistant" as const, content: failedOutput }] : []),
     { role: "user", content: renderPrompt(turn.retryCorrection, { failureReason, guidance }) },
   ];
 }
@@ -182,7 +222,9 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
     const left = leftStorylines(state);
     return avoidStorylines.length > 0 || left.length > 0 ? { avoidStorylines, leftStorylines: left } : undefined;
   })();
+  const finalStage = Boolean(buildTurnTask(state, choice).final_stage);
   const systemPrompt = buildSystemPrompt(expectChoices, {
+    isTerminal: state.experienceVersion === 3 && finalStage,
     experienceVersion: state.experienceVersion,
     openingRecoveryAge: needsOpeningRecovery(state) ? state.basic.age : undefined,
     birth: state.birth,
@@ -192,10 +234,11 @@ export function prepareEventRequest(state: LifeState, choice?: LifeChoice, trans
     storylineGuards,
     scenario,
     isOpening,
+    openingPlan: state.openingPlan,
     themeHint: buildThemeTurnHint(scenario, state),
   });
   const messages = buildNextEventMessages(systemPrompt, state, choice, transcript);
-  return { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages };
+  return { scenario, openingAtCurrentAge, expectChoices, previousChoices, storylineGuards, messages, finalStage };
 }
 
 export function buildEndingMessages(state: LifeState): NextEventMessage[] {
@@ -214,7 +257,7 @@ export function buildEndingMessages(state: LifeState): NextEventMessage[] {
     major_memories: state.majorMemories,
     behavioral_summary: state.psychology.behaviorPatterns,
     current_age: state.basic.age,
-    family_ages: familyAges(state.birth, state.basic.age) ?? null,
+    family_ages: familyFacts(state, state.basic.age),
     death_cause: state.flags.deathCause ?? "natural",
   });
   const evidenceRule = renderPrompt(turn.evidenceRule);

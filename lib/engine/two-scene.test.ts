@@ -53,25 +53,22 @@ describe('two scene engine',()=>{
  expect(prepareEventRequest(state).messages[0].content).toContain('narration必须非空');
  expect(prepareEventRequest(createStarterLife()).messages[0].content).not.toContain('narration必须非空');
  });
- it('enforces lifespan without exposing a terminal decision',()=>{
- const state={...createStarterLife({age:80}),experienceVersion:3 as const,lifespan:81};
- const terminal=enforceLifespan({...output,timePassed:1,event:{type:'relationship',title:'见面',importance:0.7}},state);
- expect(terminal.outcome).toBe('death');expect(terminal.story).toBe('');expect(terminal.narration).toContain('离世');expect(terminal.choices).toEqual([]);
- });
- it('allows same-age responses below the lifespan and ends at the cap without advancing past it',()=>{
+ it('requires a complete generated death at the lifespan cap and never fabricates one',()=>{
  const state={...createStarterLife({age:80}),experienceVersion:3 as const,lifespan:81};
  const event={...output,event:{type:'relationship' as const,title:'见面',importance:0.7}};
  expect(enforceLifespan(event,state).outcome).toBe('continue');
+ expect(()=>enforceLifespan({...event,timePassed:1},state)).toThrow('完整终幕');
  expect(()=>enforceLifespan({...event,timePassed:2},state)).toThrow('超过本局生命终点');
- const capped=enforceLifespan(event,{...state,basic:{...state.basic,age:81}});
- expect(capped.outcome).toBe('death');expect(capped.timePassed).toBe(0);expect(capped.story).toBe('');
+ expect(()=>enforceLifespan(event,{...state,basic:{...state.basic,age:81}})).toThrow('完整终幕');
+ const death={...event,timePassed:1,outcome:'death' as const,deathCause:'natural' as const,story:'',choices:[],narration:'你与家人告别，在家中离世。'};
+ expect(enforceLifespan(death,state)).toEqual(death);
  });
  it('generates opening in one call and refuses a fabricated fallback',async()=>{
  const original=globalThis.fetch;
  const state=createStartLife(resolveStartPlan({mode:'normal'}, {random:()=>0.5}),'female');
  const config={providerId:'deepseek',apiKey:'synthetic',model:'deepseek-chat'};
  try {
- const fetchMock=vi.fn(async()=>new Response('data: '+JSON.stringify({choices:[{delta:{content:JSON.stringify({...output,timePassed:15})}}]})+'\n\ndata: [DONE]\n\n'));
+ const fetchMock=vi.fn(async()=>new Response('data: '+JSON.stringify({choices:[{delta:{content:JSON.stringify({...output,timePassed:15,lifeChanges:[],timeline:{resultAge:null,sceneAge:15},stateUpdate:{},objectiveChanges:{occupation:"学生",careerStage:"student",education:"初中在读"},choices:output.choices.map(choice=>({...choice,requiresFollowUp:false,commitments:[]}))})}}]})+'\n\ndata: [DONE]\n\n'));
  globalThis.fetch=fetchMock as typeof fetch;
  const event=await generateNextEvent(state,undefined,config);
  expect(event.timePassed).toBe(15);expect(event.narration).toBe(output.narration);expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -80,4 +77,27 @@ describe('two scene engine',()=>{
  expect(state.history).toHaveLength(0);
  } finally {globalThis.fetch=original;}
  });
+});
+
+it("persists graduation and employment facts through model normalization and state application", () => {
+  const state = {
+    ...applyNextEvent(createStarterLife({ age: 23 }), {
+      ...output, event: { ...output.event, type: "relationship" }, objectiveChanges: {},
+    }),
+    experienceVersion: 3 as const,
+  };
+  state.basic.education = "大学在读（城乡规划）";
+  const event = normalizeGeneratedEvent({
+    ...output,
+    objectiveChanges: {
+      education: "本科毕业（城乡规划）", occupation: "助理规划师", companyType: "规划院",
+      careerStage: "early", cash: 800, assets: 800,
+    },
+  }, true, undefined, undefined, state)!;
+  const next = applyNextEvent(state, event);
+  expect(next.basic.education).toBe("本科毕业（城乡规划）");
+  expect(next.career).toMatchObject({ occupation: "助理规划师", companyType: "规划院", careerStage: "early" });
+  expect(next.finance.cash).toBe(8800);
+  expect(next.finance.assets).toBe(8800);
+  expect(state.career.companyType).toBe("家庭");
 });

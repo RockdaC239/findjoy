@@ -51,7 +51,9 @@ export const POST = withApiGuard(async (request: Request) => {
       const usesBackground=selection.mode === "normal" || selection.mode === "theme";
       const recentAvoid=usesBackground ? await lifeStore.recentBackgroundAvoid(6,user.id) : undefined;
       const recentStorylines=selection.mode === "normal" ? await lifeStore.recentStorylines(6,3,user.id) : [];
-      plan=resolveStartPlan(selection,{backgroundAvoid:recentAvoid});
+      // 开局方向只在普通模式、非 Mock 时抽样；Mock 局不写计划，避免开发样本污染真实体验的近期样本。
+      const recentOpenings=selection.mode === "normal" && !mock ? await lifeStore.recentOpeningPlans(6,user.id) : [];
+      plan=resolveStartPlan(selection,{backgroundAvoid:recentAvoid, recentOpenings, sampleOpening: !mock});
       state=createStartLife(plan,parsed.gender,{recentStorylines});
       if (mock) state.flags.developerMock = true;
       await commerceStore.grantTrial(user.id, Number(process.env.FINDJOY_TRIAL_CREDITS ?? SIGNUP_POINTS));

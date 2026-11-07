@@ -133,3 +133,30 @@ it("restores birth facts and collects only their recent region and parent jobs",
  expect(recent.occupationIds).toEqual(expect.arrayContaining(state.birth!.parents.map(parent=>parent.occupation.id)));
  expect((await lifeStore.recentBackgroundAvoid(6,"other-owner")).provinceCodes).toEqual([]);
 });
+
+it("collects recent opening directions per user and skips mock or planless lives", async () => {
+  const owner = createStartLife(resolveStartPlan({ mode: "normal" }, { random: () => 0.41 }), "female");
+  await lifeStore.set(owner, "opening-owner");
+  const plans = await lifeStore.recentOpeningPlans(6, "opening-owner");
+  expect(plans).toHaveLength(1);
+  expect(plans[0]).toEqual(owner.openingPlan);
+
+  expect(await lifeStore.recentOpeningPlans(6, "other-owner")).toEqual([]);
+
+  const mocked = createStartLife(resolveStartPlan({ mode: "normal" }, { random: () => 0.42 }), "female");
+  mocked.flags.developerMock = true;
+  await lifeStore.set(mocked, "opening-owner");
+  const planless = createStarterLife();
+  await lifeStore.set(planless, "opening-owner");
+  const filtered = await lifeStore.recentOpeningPlans(6, "opening-owner");
+  expect(filtered).toEqual([owner.openingPlan]);
+});
+
+it("drops an unknown opening plan instead of feeding it into the prompt", async () => {
+  const state = createStarterLife();
+  (state as unknown as { openingPlan: unknown }).openingPlan = { version: 1, relationship: "peer", driver: "curiosity", mechanism: "not-in-catalog" };
+  await lifeStore.set(state, "opening-owner");
+  const loaded = await lifeStore.get(state.lifeId, "opening-owner");
+  expect(loaded?.openingPlan).toBeUndefined();
+  expect(await lifeStore.recentOpeningPlans(6, "opening-owner")).toEqual([]);
+});

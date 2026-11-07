@@ -8,6 +8,7 @@ import path from "node:path";
 import { buildBackgroundDirective, buildOpeningToneDirective, type LifeBackground } from "../../background";
 import { buildStorylinePromptHint, type StorylineGuards } from "../../storyline";
 import { buildOpeningDirective, buildScenarioDirective } from "../../modes/scenario";
+import { renderOpeningDirective, type OpeningPlan } from "../../opening-plan";
 import type { LifeScenario } from "../../modes/types";
 import { CHILDHOOD_BOUNDARY } from "../phase";
 
@@ -23,6 +24,7 @@ function readPrompt(name: string): string {
 }
 
 const CRAFT_PROMPT = readPrompt("craft");
+const TERMINAL_SYSTEM_PROMPT = readPrompt("terminal");
 const TWO_SCENE_SYSTEM_PROMPT = readPrompt("two-scene");
 const V3_SYSTEM_PROMPT = `${CRAFT_PROMPT}\n\n${TWO_SCENE_SYSTEM_PROMPT}`;
 const CHILDHOOD_OPENING_SYSTEM_PROMPT = readPrompt("opening");
@@ -37,6 +39,7 @@ export const ENDING_SYSTEM_PROMPT = readPrompt("ending");
 // 时间已过去、写落地年龄的你、严禁复述上一条童年事件——修"14 岁节点内容在 18 岁重生成"。
 export interface SystemPromptOptions {
   experienceVersion?: 3;
+  isTerminal?: boolean;
   openingRecoveryAge?: number;
   birth?: BirthProfile;
   background?: LifeBackground;
@@ -47,6 +50,8 @@ export interface SystemPromptOptions {
   scenario?: LifeScenario;
   /** 首轮开场；剧本/ForU 会强制 timePassed=0。 */
   isOpening?: boolean;
+  /** 普通模式的开局创作方向；只在本轮是开局（或开篇恢复）时注入。 */
+  openingPlan?: OpeningPlan;
   /** 主题模式逐轮动态提醒，放在固定情境之后。 */
   themeHint?: string;
 }
@@ -93,7 +98,13 @@ export function buildSystemPrompt(expectChoices: boolean, options: SystemPromptO
   const childhoodOpening = options.experienceVersion === 3
     && (scenario?.mode === "normal" || scenario?.mode === "theme")
     && (isOpening || options.openingRecoveryAge !== undefined) ? CHILDHOOD_OPENING_SYSTEM_PROMPT : "";
-  const suffixes = [eraContext, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint, childhoodOpening, recoveryHint].filter(
+  // 开局方向只在普通模式的开局（含开篇恢复）轮次追加；之后的轮次、主题、剧本、ForU 都不注入，
+  // 避免"照护者/守住秘密"这类开局约束一路污染成年剧情。
+  const openingPlanHint = options.experienceVersion === 3
+    && scenario?.mode === "normal"
+    && (isOpening || options.openingRecoveryAge !== undefined)
+    ? renderOpeningDirective(options.openingPlan) : "";
+  const suffixes = [eraContext, birth ? buildBirthDirective(birth) : "", profile, scenarioDirective, themeHint, axisHint, storylineHint, openingHint, transitionHint, childhoodOpening, openingPlanHint, recoveryHint, options.isTerminal ? TERMINAL_SYSTEM_PROMPT : ""].filter(
     (part): part is string => Boolean(part && part.trim()),
   );
   return suffixes.length > 0 ? `${base}\n\n${suffixes.join("\n\n")}` : base;
