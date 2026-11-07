@@ -5,11 +5,11 @@ import { readJsonObject, withApiGuard } from "../../../lib/api-request";
 import { isDeveloper } from "../../../lib/developer";
 import { DEVELOPER_MODE_COOKIE, MOCK_MODE_COOKIE, readDeveloperMode } from "../../../lib/developer-mode";
 
-export const GET = withApiGuard(async (request?: Request) => {
+export const GET = withApiGuard(async (request: Request) => {
   const user = await currentUser();
   if (!user) return Response.json({ error: "请先登录" }, { status: 401 });
   if (!await isDeveloper(user)) return Response.json({ error: "没有调试权限" }, { status: 403 });
-  return Response.json({ allowed: true, ...readDeveloperMode(request?.headers.get("cookie") ?? null) }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ allowed: true, ...readDeveloperMode(request.headers.get("cookie")) }, { headers: { "Cache-Control": "no-store" } });
 });
 export const POST = withApiGuard(async (request: Request) => {
   const user = await currentUser();

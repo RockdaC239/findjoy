@@ -11,6 +11,7 @@ import { GET } from "../app/api/developer/route";
 import { POST } from "../app/api/developer/credits/route";
 beforeEach(() => mocks.user.mockResolvedValue(null));
 const request = (key = randomUUID(), origin = "https://findfire.club") => new Request("https://findfire.club/findjoy/api/developer/credits", { method: "POST", headers: { origin, "Idempotency-Key": key }, body: JSON.stringify({ credits: 999999, userId: "someone-else", phone: "15200297440" }) });
+const developerRequest = () => new Request("https://findfire.club/findjoy/api/developer");
 it("checks only the verified server account phone, including the country prefix", async () => {
   const owner = await identityStore.resolveUser("test", "owner", "owner", "+8615200297440");
   const stranger = await identityStore.resolveUser("test", "stranger", "15200297440");
@@ -29,11 +30,11 @@ it("只在本人的调试模式开启时才放开开发能力", async () => {
   expect(await hasDeveloperAccess(null, "findjoy_developer=1")).toBe(false);
 });
 it("rejects guests, other users and cross-site grants", async () => {
-  expect((await GET()).status).toBe(401);
+  expect((await GET(developerRequest())).status).toBe(401);
   expect((await POST(request())).status).toBe(401);
   const stranger = await identityStore.resolveUser("test", "stranger");
   mocks.user.mockResolvedValue(stranger);
-  expect((await GET()).status).toBe(403);
+  expect((await GET(developerRequest())).status).toBe(403);
   expect((await POST(request())).status).toBe(403);
   const owner = await identityStore.resolveUser("test", "owner", "owner", "15200297440");
   mocks.user.mockResolvedValue(owner);
